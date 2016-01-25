@@ -11,7 +11,7 @@ import android.javax.sip.SipProvider;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.message.Request;
 
-public abstract class SipRequester {
+public class SipRequester {
 	
 	private String localIpAddress;
 	private int localSipPort;
