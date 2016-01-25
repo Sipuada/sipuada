@@ -25,6 +25,21 @@
  */
 package android.gov.nist.gnjvx.sip;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.net.InetAddress;
+import java.util.Hashtable;
+import java.util.LinkedList;
+import java.util.Properties;
+import java.util.StringTokenizer;
+
+import org.apache.log4j.Appender;
+import org.apache.log4j.Logger;
+
 import android.gov.nist.core.LogWriter;
 import android.gov.nist.core.net.AddressResolver;
 import android.gov.nist.core.net.NetworkLayer;
@@ -38,20 +53,6 @@ import android.gov.nist.gnjvx.sip.stack.DefaultRouter;
 import android.gov.nist.gnjvx.sip.stack.MessageProcessor;
 import android.gov.nist.gnjvx.sip.stack.SIPTransactionStack;
 import android.gov.nist.gnjvx.sip.stack.ServerLog;
-
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.net.InetAddress;
-import java.util.Hashtable;
-import java.util.LinkedList;
-import java.util.Properties;
-import java.util.StringTokenizer;
-
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.ListeningPoint;
 import android.javax.sip.ObjectInUseException;
@@ -65,10 +66,6 @@ import android.javax.sip.TransportNotSupportedException;
 import android.javax.sip.address.Router;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.Request;
-import android.util.Log;
-
-import org.apache.log4j.Appender;
-import org.apache.log4j.Logger;
 
 /**
  * Implementation of SipStack.

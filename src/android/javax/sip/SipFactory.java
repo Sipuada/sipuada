@@ -25,13 +25,17 @@
 
 package android.javax.sip;
 
-import android.javax.sip.address.AddressFactory;
-import android.javax.sip.message.MessageFactory;
-import android.javax.sip.header.HeaderFactory;
-import android.util.Log;
-
-import java.util.*;
 import java.lang.reflect.Constructor;
+import java.util.Hashtable;
+import java.util.LinkedList;
+import java.util.Properties;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.javax.sip.address.AddressFactory;
+import android.javax.sip.header.HeaderFactory;
+import android.javax.sip.message.MessageFactory;
 
 /**
  * The SipFactory is a singleton class which applications can use a single
@@ -104,6 +108,8 @@ import java.lang.reflect.Constructor;
 
 public class SipFactory {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(SipFactory.class);
+	
 	/**
 	 * Returns an instance of a SipFactory. This is a singleton class so this
 	 * method is the global access point for the SipFactory.
@@ -143,8 +149,8 @@ public class SipFactory {
 
 		String ipAddress = properties.getProperty("android.javax.sip.IP_ADDRESS");
 		String name = properties.getProperty("android.javax.sip.STACK_NAME");
-		Log.d("SipStack", "createSipStack(Properties properties) - ipAddress:" + (ipAddress != null ? ipAddress : "null"));
-		Log.d("SipStack", "createSipStack(Properties properties) - name:" + (name != null ? name : "null"));
+		LOGGER.debug("SipStack: createSipStack(Properties properties) - ipAddress:" + (ipAddress != null ? ipAddress : "null"));
+		LOGGER.debug("SipStack: createSipStack(Properties properties) - name:" + (name != null ? name : "null"));
 		if (name == null ) throw new PeerUnavailableException("Missing android.javax.sip.STACK_NAME property");
 		// IP address was not specified in the properties.
 		// This means that the architecture supports a single sip stack 

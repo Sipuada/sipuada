@@ -28,6 +28,16 @@
  ******************************************************************************/
 package android.gov.nist.gnjvx.sip;
 
+import java.io.IOException;
+import java.text.ParseException;
+import java.util.EventObject;
+import java.util.Iterator;
+import java.util.TooManyListenersException;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.core.InternalErrorHandler;
 import android.gov.nist.gnjvx.sip.address.RouterExt;
 import android.gov.nist.gnjvx.sip.header.CallID;
@@ -43,14 +53,6 @@ import android.gov.nist.gnjvx.sip.stack.SIPServerTransaction;
 import android.gov.nist.gnjvx.sip.stack.SIPTransaction;
 import android.gov.nist.gnjvx.sip.stack.SIPTransactionErrorEvent;
 import android.gov.nist.gnjvx.sip.stack.SIPTransactionEventListener;
-
-import java.io.IOException;
-import java.text.ParseException;
-import java.util.EventObject;
-import java.util.Iterator;
-import java.util.TooManyListenersException;
-import java.util.concurrent.ConcurrentHashMap;
-
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
 import android.javax.sip.DialogState;
@@ -73,7 +75,6 @@ import android.javax.sip.address.Hop;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
-import android.util.Log;
 
 /*
  * Contributions (bug fixes) made by: Daniel J. Martinez Manzano, Hagai Sela.
@@ -92,6 +93,8 @@ import android.util.Log;
 public final class SipProviderImpl implements android.javax.sip.SipProvider,
 		SIPTransactionEventListener {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(SipProviderImpl.class);
+	
 	protected SipListener sipListener;
 
 	protected SipStackImpl sipStack;
@@ -627,8 +630,8 @@ public final class SipProviderImpl implements android.javax.sip.SipProvider,
 	 * @see android.javax.sip.SipProvider#removeSipListener(android.javax.sip.SipListener)
 	 */
 	public void removeSipListener(SipListener sipListener) {
-		Log.d("SipProviderImpl", "THIS " + this.sipListener.toString());
-		Log.d("SipProviderImpl", "ANOTHER " + sipListener.toString());
+		LOGGER.debug("SipProviderImpl: THIS " + this.sipListener.toString());
+		LOGGER.debug("SipProviderImpl: ANOTHER " + sipListener.toString());
 		if (sipListener.equals(this.sipListener)) {
 			this.sipListener = null;
 		}

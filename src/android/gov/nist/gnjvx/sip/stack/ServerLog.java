@@ -30,22 +30,19 @@
 package android.gov.nist.gnjvx.sip.stack;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.FileWriter;
-import java.io.PrintStream;
+import java.io.IOException;
 import java.io.PrintWriter;
-
-import android.gov.nist.gnjvx.sip.LogRecord;
-import android.gov.nist.gnjvx.sip.message.*;
-import android.gov.nist.gnjvx.sip.header.*;
-import android.gov.nist.core.*;
-
 import java.util.Properties;
 
-import android.javax.sip.header.TimeStampHeader;
-
-import org.apache.log4j.Logger;
 import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
+import android.gov.nist.core.LogWriter;
+import android.gov.nist.gnjvx.sip.LogRecord;
+import android.gov.nist.gnjvx.sip.header.CallID;
+import android.gov.nist.gnjvx.sip.message.SIPMessage;
+import android.javax.sip.header.TimeStampHeader;
 
 /**
  * Log file wrapper class. Log messages into the message trace file and also write the log into
