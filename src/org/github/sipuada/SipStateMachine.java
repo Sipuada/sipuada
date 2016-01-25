@@ -3,35 +3,44 @@ package org.github.sipuada;
 import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
 
+import android.javax.sip.message.Message;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
 
-public abstract class SipStateMachine {
-	
-	public abstract State getState();
+public class SipStateMachine extends AbstractSipStateMachine {
 
-	public abstract void requestSent(RequestVerb requestVerb);
-	public abstract void responseSent(ResponseCode responseCode, Response response);
+	State currentState;
 
-	public abstract void requestReceived(RequestVerb requestVerb, Request request);
-	public abstract void responseReceived(ResponseCode responseCode, Response response);
-	
-	//TODO make all 4 methods above call computeNextStep below, keep them as the public interface
-	//TODO the 2 methods above shall each call their corresponding handleNewStepAfter*Received method too
-	
-	private void computeNextStep() {
-		
+	@Override
+	public State getState() {
+		return currentState;
 	}
-	
-	private void handleNewStepAfterRequestReceived(RequestVerb requestVerb, Request request, State newState) {
+
+	@Override
+	protected boolean computeNextStep(MessageType type, MessageDirection direction, Message message) {
 		//...//
+		requestMustBeSent(new SendRequestEvent(RequestVerb.BYE, (Response) message));
+		//...//
+		responseMustBeSent(new SendResponseEvent(ResponseCode.RINGING, (Request) message));
+		//...//
+		return false;
+	}
+
+/*	@Override
+	protected void handleNewStepAfterRequestReceived(RequestVerb requestVerb, Request request, State newState) {
+		//...//
+		//FIXME we must check previous state indeed, otherwise no matter where I was or am now, I'll send a 180 if I get an INCOMING request.
 		if (requestVerb == RequestVerb.INVITE && newState == State.INCOMING) {
 			responseMustBeSent(new SendResponseEvent(ResponseCode.RINGING, request));
 		}
 		//...//
+		if (requestVerb == RequestVerb.BYE && newState == State.READY) {
+			responseMustBeSent(new SendResponseEvent(ResponseCode.BAD_REQUEST, request));
+		}
 	}
 
-	private void handleNewStepAfterResponseReceived(int responseCode, Response response, State newState) {
+	@Override
+	protected void handleNewStepAfterResponseReceived(int responseCode, Response response, State newState) {
 		//...//
 		boolean authIsRequired = responseCode == ResponseCode.PROXY_AUTHENTICATION_REQUIRED
 				|| responseCode == ResponseCode.UNAUTHORIZED;
@@ -40,14 +49,6 @@ public abstract class SipStateMachine {
 			requestMustBeSent(new SendRequestEvent(RequestVerb.INVITE, response));
 		}
 		//...//
-	}
-
-	private void requestMustBeSent(SendRequestEvent event) {
-		Sipuada.getEventBus().post(event);
-	}
-
-	private void responseMustBeSent(SendResponseEvent event) {
-		Sipuada.getEventBus().post(event);
-	}
+	}*/
 
 }

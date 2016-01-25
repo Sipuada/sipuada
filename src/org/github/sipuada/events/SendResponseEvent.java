@@ -5,11 +5,19 @@ import android.javax.sip.message.Request;
 public class SendResponseEvent {
 
 	private int responseCode;
-	private Request associatedRequest;
+	private Request responseRequest;
 	
-	public SendResponseEvent(int responseCode, Request associatedRequest) {
-		this.responseCode = responseCode;
-		this.associatedRequest = associatedRequest;
+	public SendResponseEvent(int code, Request request) {
+		responseCode = code;
+		responseRequest = request;
+	}
+
+	public int getCode() {
+		return responseCode;
+	}
+
+	public Request getRequest() {
+		return responseRequest;
 	}
 
 }

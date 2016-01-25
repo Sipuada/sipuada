@@ -7,11 +7,19 @@ import android.javax.sip.message.Response;
 public class SendRequestEvent {
 
 	private RequestVerb requestVerb;
-	private Response lastResponse;
+	private Response requestResponse;
 
-	public SendRequestEvent(RequestVerb requestVerb, Response lastResponse) {
-		this.requestVerb = requestVerb;
-		this.lastResponse = lastResponse;
+	public SendRequestEvent(RequestVerb verb, Response response) {
+		requestVerb = verb;
+		requestResponse = response;
+	}
+
+	public RequestVerb getVerb() {
+		return requestVerb;
+	}
+
+	public Response getResponse() {
+		return requestResponse;
 	}
 
 }

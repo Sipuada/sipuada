@@ -4,6 +4,4 @@ import android.javax.sip.SipListener;
 
 public interface ISipReceiver extends SipListener {
 
-	
-	
 }
