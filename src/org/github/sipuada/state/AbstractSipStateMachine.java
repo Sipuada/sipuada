@@ -1,5 +1,8 @@
-package org.github.sipuada;
+package org.github.sipuada.state;
 
+import org.github.sipuada.RequestVerb;
+import org.github.sipuada.Sipuada;
+import org.github.sipuada.State;
 import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
 import org.github.sipuada.events.StateChangedEvent;
@@ -20,11 +23,11 @@ public abstract class AbstractSipStateMachine {
 		return computeNextStep(MessageType.RESPONSE, MessageDirection.OUTGOING, response);
 	}
 
-	public boolean canRequestBeReceived(RequestVerb requestVerb, Request request) {
+	public boolean requestHasBeenReceived(RequestVerb requestVerb, Request request) {
 		return computeNextStep(MessageType.REQUEST, MessageDirection.INCOMING, request);
 	}
 
-	public boolean canResponseBeReceived(int responseCode, Response response) {
+	public boolean responseHasBeenReceived(int responseCode, Response response) {
 		return computeNextStep(MessageType.RESPONSE, MessageDirection.INCOMING, response);
 	}
 

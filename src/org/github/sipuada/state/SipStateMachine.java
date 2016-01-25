@@ -1,5 +1,8 @@
-package org.github.sipuada;
+package org.github.sipuada.state;
 
+import org.github.sipuada.RequestVerb;
+import org.github.sipuada.ResponseCode;
+import org.github.sipuada.State;
 import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
 

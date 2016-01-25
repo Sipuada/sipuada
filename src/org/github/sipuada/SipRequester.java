@@ -2,6 +2,7 @@ package org.github.sipuada;
 
 import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
+import org.github.sipuada.state.SipStateMachine;
 
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
@@ -13,6 +14,8 @@ import android.javax.sip.message.Request;
 
 public class SipRequester {
 	
+	private SipStateMachine stateMachine;
+	private SipReceiver receiver;
 	private String localIpAddress;
 	private int localSipPort;
 	private SipProvider provider;
@@ -24,11 +27,14 @@ public class SipRequester {
     private long callSequence = 1L;
     private Request lastRequest;
     
-	public SipRequester(String localIpAddress) {
+	public SipRequester(SipStateMachine machine, String localIpAddress) {
+		stateMachine = machine;
+		receiver = new SipReceiver(machine);
 		Sipuada.getEventBus().register(SendRequestEvent.class);
 		Sipuada.getEventBus().register(SendResponseEvent.class);
 		//TODO setup the Provider and Listening Point, as well as both Server and Client transactions.
 		//TODO also create the current Call Id Header and current Dialog here?
+		//TODO register SipReceiver as a SipListener in the SipProvider: provider.addSipListener(receiver)
 	}
 	
 	public Request getLastRequest() {
