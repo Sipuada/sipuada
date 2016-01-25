@@ -5,6 +5,9 @@
 
 # Package Files #
 *.jar
+!/lib/guava-19.0.jar
+!/lib/log4j-1.2.16.jar
+!/lib/slf4j-api-1.7.13.jar
 *.war
 *.ear
 
