@@ -21,12 +21,12 @@ public abstract class AbstractSipStateMachine {
 		return handleResponseComputingNextStep(MessageDirection.OUTGOING, code, response);
 	}
 
-	public boolean requestHasBeenReceived(SipRequestVerb verb, Request request) {
-		return handleRequestComputingNextStep(MessageDirection.INCOMING, verb, request);
+	public void requestHasBeenReceived(SipRequestVerb verb, Request request) {
+		handleRequestComputingNextStep(MessageDirection.INCOMING, verb, request);
 	}
 
-	public boolean responseHasBeenReceived(int code, Response response) {
-		return handleResponseComputingNextStep(MessageDirection.INCOMING, code, response);
+	public void responseHasBeenReceived(int code, Response response) {
+		handleResponseComputingNextStep(MessageDirection.INCOMING, code, response);
 	}
 
 	protected enum MessageDirection {
