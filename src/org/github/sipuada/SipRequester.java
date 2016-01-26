@@ -9,10 +9,20 @@ import android.javax.sip.Dialog;
 import android.javax.sip.ListeningPoint;
 import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipProvider;
+import android.javax.sip.SipStack;
+import android.javax.sip.address.AddressFactory;
 import android.javax.sip.header.CallIdHeader;
+import android.javax.sip.header.HeaderFactory;
+import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
 
 public class SipRequester {
+	
+	private static String TAG = "tSipRequester";
+	private AddressFactory addressFactory;
+	private MessageFactory messageFactory;
+	private HeaderFactory headerFactory;
+	private SipStack sipStack;
 	
 	private SipStateMachine stateMachine;
 	private SipReceiver receiver;
@@ -26,6 +36,8 @@ public class SipRequester {
     private Dialog currentDialog;
     private long callSequence = 1L;
     private Request lastRequest;
+    
+    
     
 	public SipRequester(SipStateMachine machine, String localIpAddress) {
 		stateMachine = machine;
@@ -41,7 +53,7 @@ public class SipRequester {
 		return lastRequest;
 	}
 
-	private void sendRegister() {
+	private void sendRegister(SipRequestState state) {
 		
 	}
 	
