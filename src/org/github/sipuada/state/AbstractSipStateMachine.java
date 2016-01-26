@@ -7,7 +7,6 @@ import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
 import org.github.sipuada.events.StateChangedEvent;
 
-import android.javax.sip.message.Message;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
 
@@ -15,31 +14,29 @@ public abstract class AbstractSipStateMachine {
 	
 	public abstract State getState();
 
-	public boolean canRequestBeSent(RequestVerb requestVerb, Request request) {
-		return computeNextStep(MessageType.REQUEST, MessageDirection.OUTGOING, request);
+	public boolean canRequestBeSent(RequestVerb verb, Request request) {
+		return handleRequestComputingNextStep(MessageDirection.OUTGOING, verb, request);
 	}
 
-	public boolean canResponseBeSent(int responseCode, Response response) {
-		return computeNextStep(MessageType.RESPONSE, MessageDirection.OUTGOING, response);
+	public boolean canResponseBeSent(int code, Response response) {
+		return handleResponseComputingNextStep(MessageDirection.OUTGOING, code, response);
 	}
 
-	public boolean requestHasBeenReceived(RequestVerb requestVerb, Request request) {
-		return computeNextStep(MessageType.REQUEST, MessageDirection.INCOMING, request);
+	public boolean requestHasBeenReceived(RequestVerb verb, Request request) {
+		return handleRequestComputingNextStep(MessageDirection.INCOMING, verb, request);
 	}
 
-	public boolean responseHasBeenReceived(int responseCode, Response response) {
-		return computeNextStep(MessageType.RESPONSE, MessageDirection.INCOMING, response);
-	}
-
-	protected enum MessageType {
-		REQUEST, RESPONSE
+	public boolean responseHasBeenReceived(int code, Response response) {
+		return handleResponseComputingNextStep(MessageDirection.INCOMING, code, response);
 	}
 
 	protected enum MessageDirection {
 		INCOMING, OUTGOING
 	}
 
-	protected abstract boolean computeNextStep(MessageType type, MessageDirection direction, Message message);
+	protected abstract boolean handleRequestComputingNextStep(MessageDirection direction, RequestVerb verb, Request request);
+	
+	protected abstract boolean handleResponseComputingNextStep(MessageDirection direction, int code, Response response);
 	
 	protected void stateHasChanged(State oldState, State newState) {
 		Sipuada.getEventBus().post(new StateChangedEvent(oldState, newState));
