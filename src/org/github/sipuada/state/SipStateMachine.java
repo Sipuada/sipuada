@@ -4,11 +4,10 @@ import static org.github.sipuada.state.SipStateMachineBehavior.computeNextStepAf
 import static org.github.sipuada.state.SipStateMachineBehavior.computeNextStepAfterResponse;
 import static org.github.sipuada.state.SipStateMachineBehavior.during;
 
-import org.github.sipuada.RequestVerb;
-import org.github.sipuada.ResponseCode;
-import org.github.sipuada.State;
 import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
+import org.github.sipuada.requester.SipRequestVerb;
+import org.github.sipuada.requester.SipResponseCode;
 import org.github.sipuada.state.SipStateMachineBehavior.Step;
 
 import android.javax.sip.message.Request;
@@ -40,25 +39,25 @@ public class SipStateMachine extends AbstractSipStateMachine {
 	
 	public SipStateMachine() {
 		currentState = State.IDLE;
-		during(State.IDLE).whenRequest(MessageDirection.OUTGOING).with(RequestVerb.REGISTER)
+		during(State.IDLE).whenRequest(MessageDirection.OUTGOING).with(SipRequestVerb.REGISTER)
 			.goTo(State.REGISTERING).andAllowAction();
-		during(State.IDLE).whenRequest(MessageDirection.OUTGOING).with(RequestVerb.UNREGISTER)
-			.goTo(State.IDLE).andDontAllowAction().thenSendResponse(ResponseCode.BAD_REQUEST);
-		during(State.READY).whenRequest(MessageDirection.INCOMING).with(RequestVerb.INVITE)
-			.goTo(State.INCOMING).andAllowAction().thenSendResponse(ResponseCode.RINGING);
-		during(State.READY).whenRequest(MessageDirection.INCOMING).with(RequestVerb.BYE)
-			.goTo(State.READY).andDontAllowAction().thenSendResponse(ResponseCode.BAD_REQUEST);
-		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(ResponseCode.PROXY_AUTHENTICATION_REQUIRED)
-			.goTo(State.CALLING).thenSendRequest(RequestVerb.INVITE);
-		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(ResponseCode.UNAUTHORIZED)
-			.goTo(State.CALLING).thenSendRequest(RequestVerb.INVITE);
-		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(ResponseCode.RINGING)
+		during(State.IDLE).whenRequest(MessageDirection.OUTGOING).with(SipRequestVerb.UNREGISTER)
+			.goTo(State.IDLE).andDontAllowAction().thenSendResponse(SipResponseCode.BAD_REQUEST);
+		during(State.READY).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INVITE)
+			.goTo(State.INCOMING).andAllowAction().thenSendResponse(SipResponseCode.RINGING);
+		during(State.READY).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.BYE)
+			.goTo(State.READY).andDontAllowAction().thenSendResponse(SipResponseCode.BAD_REQUEST);
+		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.PROXY_AUTHENTICATION_REQUIRED)
+			.goTo(State.CALLING).thenSendRequest(SipRequestVerb.INVITE);
+		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.UNAUTHORIZED)
+			.goTo(State.CALLING).thenSendRequest(SipRequestVerb.INVITE);
+		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.RINGING)
 			.goTo(State.RINGING).andAllowAction();
-		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(ResponseCode.OK)
+		during(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.OK)
 			.goTo(State.ESTABLISHED).andAllowAction();
-		during(State.RINGING).whenResponse(MessageDirection.INCOMING).with(ResponseCode.DECLINE)
+		during(State.RINGING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.DECLINE)
 			.goTo(State.FINISHED).andAllowAction();
-		during(State.RINGING).whenResponse(MessageDirection.INCOMING).with(ResponseCode.OK)
+		during(State.RINGING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.OK)
 			.goTo(State.ESTABLISHED).andAllowAction();
 	}
 	
@@ -68,7 +67,7 @@ public class SipStateMachine extends AbstractSipStateMachine {
 	}
 
 	@Override
-	protected boolean handleRequestComputingNextStep(MessageDirection direction, RequestVerb requestVerb, Request request) {
+	protected boolean handleRequestComputingNextStep(MessageDirection direction, SipRequestVerb requestVerb, Request request) {
 		Step nextStep = computeNextStepAfterRequest(currentState, direction, requestVerb);
 		currentState = nextStep.getNextState();
 		if (nextStep.hasFollowUpResponse()) {

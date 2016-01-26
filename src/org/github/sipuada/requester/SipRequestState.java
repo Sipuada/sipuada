@@ -1,4 +1,4 @@
-package org.github.sipuada;
+package org.github.sipuada.requester;
 
 public enum SipRequestState {
 	

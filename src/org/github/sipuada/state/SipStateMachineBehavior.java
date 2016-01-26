@@ -3,20 +3,19 @@ package org.github.sipuada.state;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.github.sipuada.RequestVerb;
-import org.github.sipuada.State;
+import org.github.sipuada.requester.SipRequestVerb;
 import org.github.sipuada.state.AbstractSipStateMachine.MessageDirection;
 
 public class SipStateMachineBehavior {
 
-	private static Map<State, Map<MessageDirection, Map<RequestVerb, Step>>> requestBehavior;
+	private static Map<State, Map<MessageDirection, Map<SipRequestVerb, Step>>> requestBehavior;
 	private static Map<State, Map<MessageDirection, Map<Integer, Step>>> responseBehavior;
 	{
 		requestBehavior = new HashMap<>();
 		for (State state : State.values()) {
-			Map<MessageDirection, Map<RequestVerb, Step>> partialBehavior = new HashMap<>();
-			partialBehavior.put(MessageDirection.INCOMING, new HashMap<RequestVerb, Step>());
-			partialBehavior.put(MessageDirection.OUTGOING, new HashMap<RequestVerb, Step>());
+			Map<MessageDirection, Map<SipRequestVerb, Step>> partialBehavior = new HashMap<>();
+			partialBehavior.put(MessageDirection.INCOMING, new HashMap<SipRequestVerb, Step>());
+			partialBehavior.put(MessageDirection.OUTGOING, new HashMap<SipRequestVerb, Step>());
 			requestBehavior.put(state, partialBehavior);
 		}
 		responseBehavior = new HashMap<>();
@@ -56,7 +55,7 @@ public class SipStateMachineBehavior {
 			requestDirection = direction;
 		}
 		
-		public WithVerb with(RequestVerb verb) {
+		public WithVerb with(SipRequestVerb verb) {
 			return new WithVerb(currentState, requestDirection, verb);
 		}
 
@@ -82,9 +81,9 @@ public class SipStateMachineBehavior {
 
 		private final State currentState;
 		private final MessageDirection requestDirection;
-		private final RequestVerb requestVerb;
+		private final SipRequestVerb requestVerb;
 
-		public WithVerb(State current, MessageDirection direction, RequestVerb verb) {
+		public WithVerb(State current, MessageDirection direction, SipRequestVerb verb) {
 			currentState = current;
 			requestDirection = direction;
 			requestVerb = verb;
@@ -119,13 +118,13 @@ public class SipStateMachineBehavior {
 		private final State currentState;
 		private final MessageDirection actionDirection;
 		private final State newState;
-		private RequestVerb requestVerb;
+		private SipRequestVerb requestVerb;
 		private Integer responseCode;
 		private boolean allowAction;
-		private RequestVerb followUpRequestVerb;
+		private SipRequestVerb followUpRequestVerb;
 		private Integer followUpResponseCode;
 		
-		public Step(State current, MessageDirection direction, RequestVerb verb, State brandnew) {
+		public Step(State current, MessageDirection direction, SipRequestVerb verb, State brandnew) {
 			this(current, direction, brandnew, verb, null, true, null,  null);
 		}
 		
@@ -133,8 +132,8 @@ public class SipStateMachineBehavior {
 			this(current, direction, brandnew, null, code, true, null,  null);
 		}
 		
-		private Step(State current, MessageDirection direction, State brandnew, RequestVerb verb,
-				Integer code, boolean allow, RequestVerb followUpRequest, Integer followUpResponse) {
+		private Step(State current, MessageDirection direction, State brandnew, SipRequestVerb verb,
+				Integer code, boolean allow, SipRequestVerb followUpRequest, Integer followUpResponse) {
 			currentState = current;
 			actionDirection = direction;
 			newState = brandnew;
@@ -158,7 +157,7 @@ public class SipStateMachineBehavior {
 			return this;
 		}
 		
-		public Step thenSendRequest(RequestVerb followUpRequest) {
+		public Step thenSendRequest(SipRequestVerb followUpRequest) {
 			followUpRequestVerb = followUpRequest;
 			updateBehavior();
 			return this;
@@ -187,7 +186,7 @@ public class SipStateMachineBehavior {
 			return followUpRequestVerb != null;
 		}
 		
-		public RequestVerb getFollowUpRequestVerb() {
+		public SipRequestVerb getFollowUpRequestVerb() {
 			return followUpRequestVerb;
 		}
 		
@@ -209,7 +208,7 @@ public class SipStateMachineBehavior {
 		return new During(currentState);
 	}
 	
-	public static Step computeNextStepAfterRequest(State currentState, MessageDirection direction, RequestVerb requestVerb) {
+	public static Step computeNextStepAfterRequest(State currentState, MessageDirection direction, SipRequestVerb requestVerb) {
 		return requestBehavior.get(currentState).get(direction).get(requestVerb);
 	}
 	

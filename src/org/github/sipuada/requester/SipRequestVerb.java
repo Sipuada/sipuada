@@ -1,6 +1,6 @@
-package org.github.sipuada;
+package org.github.sipuada.requester;
 
-public enum RequestVerb {
+public enum SipRequestVerb {
 
 	INVITE,
 	REGISTER,

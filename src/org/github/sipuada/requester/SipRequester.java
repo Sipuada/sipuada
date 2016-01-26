@@ -1,5 +1,7 @@
-package org.github.sipuada;
+package org.github.sipuada.requester;
 
+import org.github.sipuada.SipReceiver;
+import org.github.sipuada.Sipuada;
 import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
 import org.github.sipuada.state.SipStateMachine;
@@ -63,7 +65,7 @@ public class SipRequester {
 		
 	}
 	
-	private void sendRequest(RequestVerb verb) {
+	private void sendRequest(SipRequestVerb verb) {
 		
 	}
 

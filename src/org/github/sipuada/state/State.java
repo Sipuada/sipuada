@@ -1,4 +1,4 @@
-package org.github.sipuada;
+package org.github.sipuada.state;
 
 public enum State {
 

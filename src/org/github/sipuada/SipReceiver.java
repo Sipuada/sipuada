@@ -1,5 +1,7 @@
 package org.github.sipuada;
 
+import org.github.sipuada.requester.SipRequestVerb;
+import org.github.sipuada.requester.SipResponseCode;
 import org.github.sipuada.state.SipStateMachine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +28,7 @@ public class SipReceiver implements SipListener {
 	@Override
 	public void processRequest(RequestEvent requestEvent) {
 		Request request = requestEvent.getRequest();
-		RequestVerb requestVerb = RequestVerb.valueOf(request.getMethod().toUpperCase());
+		SipRequestVerb requestVerb = SipRequestVerb.valueOf(request.getMethod().toUpperCase());
 		stateMachine.requestHasBeenReceived(requestVerb, request);
 	}
 
@@ -38,7 +40,7 @@ public class SipReceiver implements SipListener {
 
 	@Override
 	public void processTimeout(TimeoutEvent timeoutEvent) {
-		stateMachine.responseHasBeenReceived(ResponseCode.REQUEST_TIMEOUT, null);
+		stateMachine.responseHasBeenReceived(SipResponseCode.REQUEST_TIMEOUT, null);
 	}
 
 	@Override

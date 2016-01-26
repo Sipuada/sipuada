@@ -1,10 +1,10 @@
-package org.github.sipuada.messages;
+package org.github.sipuada.requester.messages;
 
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.github.sipuada.SipRequestState;
+import org.github.sipuada.requester.SipRequestState;
 
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.PeerUnavailableException;

@@ -1,11 +1,10 @@
 package org.github.sipuada.state;
 
-import org.github.sipuada.RequestVerb;
 import org.github.sipuada.Sipuada;
-import org.github.sipuada.State;
 import org.github.sipuada.events.SendRequestEvent;
 import org.github.sipuada.events.SendResponseEvent;
 import org.github.sipuada.events.StateChangedEvent;
+import org.github.sipuada.requester.SipRequestVerb;
 
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
@@ -14,7 +13,7 @@ public abstract class AbstractSipStateMachine {
 	
 	public abstract State getState();
 
-	public boolean canRequestBeSent(RequestVerb verb, Request request) {
+	public boolean canRequestBeSent(SipRequestVerb verb, Request request) {
 		return handleRequestComputingNextStep(MessageDirection.OUTGOING, verb, request);
 	}
 
@@ -22,7 +21,7 @@ public abstract class AbstractSipStateMachine {
 		return handleResponseComputingNextStep(MessageDirection.OUTGOING, code, response);
 	}
 
-	public boolean requestHasBeenReceived(RequestVerb verb, Request request) {
+	public boolean requestHasBeenReceived(SipRequestVerb verb, Request request) {
 		return handleRequestComputingNextStep(MessageDirection.INCOMING, verb, request);
 	}
 
@@ -34,7 +33,7 @@ public abstract class AbstractSipStateMachine {
 		INCOMING, OUTGOING
 	}
 
-	protected abstract boolean handleRequestComputingNextStep(MessageDirection direction, RequestVerb verb, Request request);
+	protected abstract boolean handleRequestComputingNextStep(MessageDirection direction, SipRequestVerb verb, Request request);
 	
 	protected abstract boolean handleResponseComputingNextStep(MessageDirection direction, int code, Response response);
 	

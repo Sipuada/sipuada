@@ -1,6 +1,6 @@
-package org.github.sipuada;
+package org.github.sipuada.requester;
 
-public class ResponseCode {
+public class SipResponseCode {
 
     public static final int TRYING = 100;
  

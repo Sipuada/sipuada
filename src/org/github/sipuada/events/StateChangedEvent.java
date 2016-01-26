@@ -1,6 +1,6 @@
 package org.github.sipuada.events;
 
-import org.github.sipuada.State;
+import org.github.sipuada.state.State;
 
 public class StateChangedEvent {
 
