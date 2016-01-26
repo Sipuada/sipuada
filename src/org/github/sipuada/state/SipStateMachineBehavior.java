@@ -8,26 +8,26 @@ import org.github.sipuada.state.AbstractSipStateMachine.MessageDirection;
 
 public class SipStateMachineBehavior {
 
-	private static Map<State, Map<MessageDirection, Map<SipRequestVerb, Step>>> requestBehavior;
-	private static Map<State, Map<MessageDirection, Map<Integer, Step>>> responseBehavior;
+	private static Map<State, Map<MessageDirection, Map<SipRequestVerb, Step>>> resetRequestBehavior;
+	private static Map<State, Map<MessageDirection, Map<Integer, Step>>> resetResponseBehavior;
 	{
-		requestBehavior = new HashMap<>();
+		resetRequestBehavior = new HashMap<>();
 		for (State state : State.values()) {
 			Map<MessageDirection, Map<SipRequestVerb, Step>> partialBehavior = new HashMap<>();
 			partialBehavior.put(MessageDirection.INCOMING, new HashMap<SipRequestVerb, Step>());
 			partialBehavior.put(MessageDirection.OUTGOING, new HashMap<SipRequestVerb, Step>());
-			requestBehavior.put(state, partialBehavior);
+			resetRequestBehavior.put(state, partialBehavior);
 		}
-		responseBehavior = new HashMap<>();
+		resetResponseBehavior = new HashMap<>();
 		for (State state : State.values()) {
 			Map<MessageDirection, Map<Integer, Step>> partialBehavior = new HashMap<>();
 			partialBehavior.put(MessageDirection.INCOMING, new HashMap<Integer, Step>());
 			partialBehavior.put(MessageDirection.OUTGOING, new HashMap<Integer, Step>());
-			responseBehavior.put(state, partialBehavior);
+			resetResponseBehavior.put(state, partialBehavior);
 		}
 	}
 	
-	protected static class During {
+	protected class During {
 		
 		private final State currentState;
 		
@@ -45,7 +45,7 @@ public class SipStateMachineBehavior {
 		
 	}
 
-	protected static class WhenRequest {
+	protected class WhenRequest {
 
 		private final State currentState;
 		private final MessageDirection requestDirection;
@@ -61,7 +61,7 @@ public class SipStateMachineBehavior {
 
 	}
 	
-	protected static class WhenResponse {
+	protected class WhenResponse {
 
 		private final State currentState;
 		private final MessageDirection responseDirection;
@@ -77,7 +77,7 @@ public class SipStateMachineBehavior {
 
 	}
 	
-	protected static class WithVerb {
+	protected class WithVerb {
 
 		private final State currentState;
 		private final MessageDirection requestDirection;
@@ -95,7 +95,7 @@ public class SipStateMachineBehavior {
 
 	}
 
-	protected static class WithCode {
+	protected class WithCode {
 
 		private final State currentState;
 		private final MessageDirection responseDirection;
@@ -113,7 +113,7 @@ public class SipStateMachineBehavior {
 
 	}
 	
-	protected static class Step {
+	protected class Step {
 
 		private final State currentState;
 		private final MessageDirection actionDirection;
@@ -171,10 +171,10 @@ public class SipStateMachineBehavior {
 		
 		private void updateBehavior() {
 			if (requestVerb != null) {
-				requestBehavior.get(currentState).get(actionDirection).put(requestVerb, this);
+				SipStateMachineBehavior.this.record(currentState, actionDirection, requestVerb, this);
 			}
 			else if (responseCode != null) {
-				responseBehavior.get(currentState).get(actionDirection).put(responseCode, this);
+				SipStateMachineBehavior.this.record(currentState, actionDirection, responseCode, this);
 			}
 		}
 		
@@ -204,15 +204,33 @@ public class SipStateMachineBehavior {
 
 	}
 	
-	public static During during(State currentState) {
+	private Map<State, Map<MessageDirection, Map<SipRequestVerb, Step>>> requestBehavior;
+	private Map<State, Map<MessageDirection, Map<Integer, Step>>> responseBehavior;
+	
+	public SipStateMachineBehavior(){
+		requestBehavior = new HashMap<>();
+		requestBehavior.putAll(resetRequestBehavior);
+		responseBehavior = new HashMap<>();
+		responseBehavior.putAll(resetResponseBehavior);
+	}
+	
+	public During during(State currentState) {
 		return new During(currentState);
 	}
 	
-	public static Step computeNextStepAfterRequest(State currentState, MessageDirection direction, SipRequestVerb requestVerb) {
+	public void record(State currentState, MessageDirection actionDirection, SipRequestVerb requestVerb, Step nextStep) {
+		requestBehavior.get(currentState).get(actionDirection).put(requestVerb, nextStep);
+	}
+
+	public void record(State currentState, MessageDirection actionDirection, int responseCode, Step nextStep) {
+		responseBehavior.get(currentState).get(actionDirection).put(responseCode, nextStep);
+	}
+	
+	public Step computeNextStepAfterRequest(State currentState, MessageDirection direction, SipRequestVerb requestVerb) {
 		return requestBehavior.get(currentState).get(direction).get(requestVerb);
 	}
 	
-	public static Step computeNextStepAfterResponse(State currentState, MessageDirection direction, int responseCode) {
+	public Step computeNextStepAfterResponse(State currentState, MessageDirection direction, int responseCode) {
 		return requestBehavior.get(currentState).get(direction).get(responseCode);
 	}
 
