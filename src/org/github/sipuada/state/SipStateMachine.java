@@ -38,28 +38,8 @@ public class SipStateMachine extends AbstractSipStateMachine {
 	public SipStateMachine() {
 		currentState = State.IDLE;
 		currentBehavior = new SipStateMachineBehavior();
-		whileIn(State.ESTABLISHED).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.BYE)
-			.goTo(State.FINISHED).thenSendResponse(SipResponseCode.OK);
-		whileIn(State.IDLE).whenRequest(MessageDirection.OUTGOING).with(SipRequestVerb.REGISTER)
-			.goTo(State.REGISTERING).andAllowAction();
-		whileIn(State.IDLE).whenRequest(MessageDirection.OUTGOING).with(SipRequestVerb.UNREGISTER)
-			.goTo(State.IDLE).andDontAllowAction().thenSendResponse(SipResponseCode.BAD_REQUEST);
-		whileIn(State.READY).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INVITE)
-			.goTo(State.INCOMING).andAllowAction().thenSendResponse(SipResponseCode.RINGING);
-		whileIn(State.READY).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.BYE)
-			.goTo(State.READY).andDontAllowAction().thenSendResponse(SipResponseCode.BAD_REQUEST);
-		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.PROXY_AUTHENTICATION_REQUIRED)
-			.goTo(State.CALLING).thenSendRequest(SipRequestVerb.INVITE);
-		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.UNAUTHORIZED)
-			.goTo(State.CALLING).thenSendRequest(SipRequestVerb.INVITE);
-		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.RINGING)
-			.goTo(State.RINGING).andAllowAction();
-		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.OK)
-			.goTo(State.ESTABLISHED).andAllowAction();
-		whileIn(State.RINGING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.DECLINE)
-			.goTo(State.FINISHED).andAllowAction();
-		whileIn(State.RINGING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.OK)
-			.goTo(State.ESTABLISHED).andAllowAction();
+		whileIn(State.ESTABLISHED).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INVITE)
+			.goTo(State.ESTABLISHED).thenSendResponse(SipResponseCode.BUSY_HERE);
 	}
 	
 	@Override
@@ -70,6 +50,9 @@ public class SipStateMachine extends AbstractSipStateMachine {
 	@Override
 	protected boolean handleRequestComputingNextStep(MessageDirection direction, SipRequestVerb requestVerb, Request request) {
 		Step nextStep = currentBehavior.computeNextStepAfterRequest(currentState, direction, requestVerb);
+		if (nextStep == null) {
+			return false;
+		}
 		currentState = nextStep.getNextState();
 		if (nextStep.hasFollowUpResponse()) {
 			responseMustBeSent(new SendResponseEvent(nextStep.getFollowUpResponseCode(), request));
@@ -80,6 +63,9 @@ public class SipStateMachine extends AbstractSipStateMachine {
 	@Override
 	protected boolean handleResponseComputingNextStep(MessageDirection direction, int responseCode, Response response) {
 		Step nextStep = currentBehavior.computeNextStepAfterResponse(currentState, direction, responseCode);
+		if (nextStep == null) {
+			return false;
+		}
 		currentState = nextStep.getNextState();
 		if (nextStep.hasFollowUpRequest()) {
 			requestMustBeSent(new SendRequestEvent(nextStep.getFollowUpRequestVerb(), response));
@@ -87,7 +73,7 @@ public class SipStateMachine extends AbstractSipStateMachine {
 		return nextStep.actionIsAllowed();
 	}
 	
-	private During whileIn(State currentState) {
+	public During whileIn(State currentState) {
 		return currentBehavior.during(currentState);
 	}
 	
