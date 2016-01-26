@@ -120,16 +120,16 @@ public class SipStateMachineBehavior {
 		private final State newState;
 		private SipRequestVerb requestVerb;
 		private Integer responseCode;
-		private boolean allowAction;
+		private boolean allowOutgoingRequest;
 		private SipRequestVerb followUpRequestVerb;
 		private Integer followUpResponseCode;
 		
 		public Step(State current, MessageDirection direction, SipRequestVerb verb, State brandnew) {
-			this(current, direction, brandnew, verb, null, true, null,  null);
+			this(current, direction, brandnew, verb, null, false, null,  null);
 		}
 		
 		public Step(State current, MessageDirection direction, int code, State brandnew) {
-			this(current, direction, brandnew, null, code, true, null,  null);
+			this(current, direction, brandnew, null, code, false, null,  null);
 		}
 		
 		private Step(State current, MessageDirection direction, State brandnew, SipRequestVerb verb,
@@ -139,25 +139,25 @@ public class SipStateMachineBehavior {
 			newState = brandnew;
 			requestVerb = verb;
 			responseCode = code;
-			allowAction = allow;
+			allowOutgoingRequest = allow;
 			followUpRequestVerb = followUpRequest;
 			followUpResponseCode = followUpResponse;
 			updateBehavior();
 		}
 		
-		public Step andAllowAction() {
-			allowAction = true;
+		public Step andAllowThisOutgoingRequest() {
+			allowOutgoingRequest = true;
 			updateBehavior();
 			return this;
 		}
 		
-		public Step andDontAllowAction() {
-			allowAction = false;
+		public Step andDontAllowThisOutgoingRequest() {
+			allowOutgoingRequest = false;
 			updateBehavior();
 			return this;
 		}
 		
-		public Step thenSendRequest(SipRequestVerb followUpRequest) {
+		public Step thenSendFollowUpRequest(SipRequestVerb followUpRequest) {
 			followUpRequestVerb = followUpRequest;
 			updateBehavior();
 			return this;
@@ -178,8 +178,8 @@ public class SipStateMachineBehavior {
 			}
 		}
 		
-		public boolean actionIsAllowed() {
-			return allowAction;
+		public boolean outgoingRequestIsAllowed() {
+			return allowOutgoingRequest;
 		}
 		
 		public boolean hasFollowUpRequest() {

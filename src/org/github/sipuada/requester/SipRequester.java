@@ -71,11 +71,12 @@ public class SipRequester {
 
 	public void onEvent(SendRequestEvent event) {
 		//TODO send a new request of type event.getVerb() using last response in event.getResponse().
+		//Important, DON'T CHECK WITH THE MACHINE STATE WHETHER THE REQUEST CAN BE SENT with canRequestBeSent() before sending, send right away.
 	}
 
 	public void onEvent(SendResponseEvent event) {
 		//TODO send a new response with code event.getCode() to answer request in event.getRequest().
-		
+		//Important, DON'T CHECK WITH THE MACHINE STATE WHETHER THE REQUEST CAN BE SENT with canResponseBeSent() before sending, send right away.
 	}
 
 }
