@@ -19,9 +19,11 @@ public class TestSipStateMachine {
 	@Test
 	public void test() {
 		SipStateMachine machine = new SipStateMachine();
+
 		assertTrue(machine.getState() == State.IDLE);
 		machine.requestHasBeenReceived(SipRequestVerb.INVITE, null);
 		assertTrue(machine.getState() == State.READY);
+		
 		SipStateMachine machine2 = new SipStateMachine();
 		assertTrue(machine2.getState() == State.IDLE);
 		machine2.requestHasBeenReceived(SipRequestVerb.INVITE, null);

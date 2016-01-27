@@ -1,6 +1,8 @@
 package org.github.sipuada.state;
 
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import org.github.sipuada.requester.SipRequestVerb;
@@ -120,16 +122,16 @@ public class SipStateMachineBehavior {
 		private final State newState;
 		private SipRequestVerb requestVerb;
 		private Integer responseCode;
-		private boolean allowAction;
-		private SipRequestVerb followUpRequestVerb;
+		private boolean allowOutgoingRequest;
+		private List<SipRequestVerb> followUpRequestVerbs = new LinkedList<>();
 		private Integer followUpResponseCode;
 		
 		public Step(State current, MessageDirection direction, SipRequestVerb verb, State brandnew) {
-			this(current, direction, brandnew, verb, null, true, null,  null);
+			this(current, direction, brandnew, verb, null, false, null,  null);
 		}
 		
 		public Step(State current, MessageDirection direction, int code, State brandnew) {
-			this(current, direction, brandnew, null, code, true, null,  null);
+			this(current, direction, brandnew, null, code, false, null,  null);
 		}
 		
 		private Step(State current, MessageDirection direction, State brandnew, SipRequestVerb verb,
@@ -139,26 +141,30 @@ public class SipStateMachineBehavior {
 			newState = brandnew;
 			requestVerb = verb;
 			responseCode = code;
-			allowAction = allow;
-			followUpRequestVerb = followUpRequest;
+			allowOutgoingRequest = allow;
+			if (followUpRequest != null) {
+				followUpRequestVerbs.add(followUpRequest);
+			}
 			followUpResponseCode = followUpResponse;
 			updateBehavior();
 		}
 		
-		public Step andAllowAction() {
-			allowAction = true;
+		public Step andAllowThisOutgoingRequest() {
+			allowOutgoingRequest = true;
 			updateBehavior();
 			return this;
 		}
 		
-		public Step andDontAllowAction() {
-			allowAction = false;
+		public Step andDontAllowThisOutgoingRequest() {
+			allowOutgoingRequest = false;
 			updateBehavior();
 			return this;
 		}
 		
-		public Step thenSendRequest(SipRequestVerb followUpRequest) {
-			followUpRequestVerb = followUpRequest;
+		public Step thenSendFollowUpRequest(SipRequestVerb followUpRequest) {
+			if (followUpRequest != null) {
+				followUpRequestVerbs.add(followUpRequest);
+			}
 			updateBehavior();
 			return this;
 		}
@@ -178,16 +184,16 @@ public class SipStateMachineBehavior {
 			}
 		}
 		
-		public boolean actionIsAllowed() {
-			return allowAction;
+		public boolean outgoingRequestIsAllowed() {
+			return allowOutgoingRequest;
 		}
 		
-		public boolean hasFollowUpRequest() {
-			return followUpRequestVerb != null;
+		public boolean hasFollowUpRequests() {
+			return !followUpRequestVerbs.isEmpty();
 		}
 		
-		public SipRequestVerb getFollowUpRequestVerb() {
-			return followUpRequestVerb;
+		public List<SipRequestVerb> getFollowUpRequestVerbs() {
+			return followUpRequestVerbs;
 		}
 		
 		public boolean hasFollowUpResponse() {

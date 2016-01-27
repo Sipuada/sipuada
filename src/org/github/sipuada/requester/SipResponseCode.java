@@ -2,6 +2,18 @@ package org.github.sipuada.requester;
 
 public class SipResponseCode {
 
+	public static final int ANY_PROVISIONAL = 1000;
+	
+	public static final int ANY_SUCCESS = 2000;
+	
+	public static final int ANY_REDIRECTION = 3000;
+	
+	public static final int ANY_CLIENT_ERROR = 4000;
+	
+	public static final int ANY_SERVER_ERROR = 5000;
+	
+	public static final int ANY_GLOBAL_ERROR = 6000;
+	
     public static final int TRYING = 100;
  
     public static final int RINGING = 180;
@@ -78,7 +90,7 @@ public class SipResponseCode {
 
 //    public static final int REQUEST_TERMINATED = 487;
     
-//    public static final int NOT_ACCEPTABLE_HERE = 488;    
+    public static final int NOT_ACCEPTABLE_HERE = 488;
     
 //    public static final int BAD_EVENT = 489;     
     
