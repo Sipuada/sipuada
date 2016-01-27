@@ -1,19 +1,10 @@
 package org.github.sipuada.sip;
 
-import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.github.sipuada.requester.SipRequestState;
 import org.github.sipuada.sip.SupportedMediaFormat.SupportedMediaType;
-
-import android.javax.sip.InvalidArgumentException;
-import android.javax.sip.PeerUnavailableException;
-import android.javax.sip.SipProvider;
-import android.javax.sip.address.AddressFactory;
-import android.javax.sip.header.HeaderFactory;
-import android.javax.sip.message.MessageFactory;
 
 public class SipProfile {
 	
@@ -23,6 +14,7 @@ public class SipProfile {
 	private String displayName;
 	private String tag;
 	private String localIpAddress;
+	private boolean isLocalNetworkProfile = false;
 	private int localSipPort;
 	private String transport;
 	private String realm;
@@ -83,6 +75,14 @@ public class SipProfile {
 	
 	public void setLocalIpAddress(String localIpAddress) {
 		this.localIpAddress = localIpAddress;
+	}
+	
+	public boolean isLocalNetworkProfile() {
+		return isLocalNetworkProfile;
+	}
+	
+	public void setIsLocalNetworkProfile(boolean isLocalNetworkProfile) {
+		this.isLocalNetworkProfile = isLocalNetworkProfile;
 	}
 	
 	public int getLocalSipPort() {
@@ -191,9 +191,3 @@ public class SipProfile {
 
 }
 
-
-
-//public Message(SipRequestState state,
-//		final String transport, final String toUsername, final String toDisplayName, final String toSipDomain, int toSipPort,
-//		AddressFactory addressFactory, HeaderFactory headerFactory, MessageFactory messageFactory, SipProvider sipProvider, String requestMethod, Long callSequence, Integer maxForwards)
-//				throws PeerUnavailableException, ParseException, InvalidArgumentException 

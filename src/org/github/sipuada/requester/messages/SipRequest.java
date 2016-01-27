@@ -30,7 +30,7 @@ import android.javax.sip.header.ViaHeader;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
 
-public class Message {
+public class SipRequest {
 
 	// Request method
 	private String requestMethod;
@@ -71,10 +71,10 @@ public class Message {
 	 * @throws NullPointerException
 	 * @throws SdpException
 	 */
-	public Message(SipRequestState state, SipProfile sipProfile, SipContact sipContact, AddressFactory addressFactory,
+	public SipRequest(SipRequestState state, SipProfile sipProfile, SipContact sipContact, AddressFactory addressFactory,
 			HeaderFactory headerFactory, MessageFactory messageFactory, SipProvider sipProvider, String requestMethod,
 			Long callSequence, Integer maxForwards, Integer expirationTimeout, String textMessage)
-					throws ParseException, InvalidArgumentException, NullPointerException, SipException, SdpException {
+					throws ParseException, InvalidArgumentException, SipException, SdpException {
 
 		// Request method
 		this.requestMethod = requestMethod;
@@ -83,9 +83,9 @@ public class Message {
 		this.textMessage = textMessage;
 
 		// create To and From headers
-		this.fromHeader = MessageUtils.createFromHeader(addressFactory, headerFactory, sipProfile.getUsername(),
+		this.fromHeader = SipRequestUtils.createFromHeader(addressFactory, headerFactory, sipProfile.getUsername(),
 				sipProfile.getSipDomain(), sipProfile.getDisplayName(), sipProfile.getTag());
-		this.toHeader = MessageUtils.createToHeader(addressFactory, headerFactory, sipContact.getUsername(),
+		this.toHeader = SipRequestUtils.createToHeader(addressFactory, headerFactory, sipContact.getUsername(),
 				sipContact.getSipDomain(), sipContact.getDisplayName());
 
 		// create a new Request URI
@@ -152,7 +152,7 @@ public class Message {
 			}
 
 			if (state.equals(SipRequestState.AUTHORIZATION) || state.equals(SipRequestState.UNREGISTER_AUTHORIZATION)) {
-				request.addHeader(MessageUtils.getAuthorizationHeader(headerFactory, sipProfile));
+				request.addHeader(SipRequestUtils.getAuthorizationHeader(headerFactory, sipProfile));
 			}
 
 		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod) {
@@ -177,12 +177,12 @@ public class Message {
 			request.addHeader(contactHeader);
 
 			if (state.equals(SipRequestState.AUTHORIZATION)) {
-				request.addHeader(MessageUtils.getProxyAuthorizationHeader(headerFactory, sipProfile));
+				request.addHeader(SipRequestUtils.getProxyAuthorizationHeader(headerFactory, sipProfile));
 			}
 
 			if (Request.INVITE == requestMethod) {
 				ContentTypeHeader contentTypeHeader = headerFactory.createContentTypeHeader("application", "sdp");
-				SessionDescription sdp = MessageUtils.createSDP(null, sipProfile);
+				SessionDescription sdp = SipRequestUtils.createSDP(null, sipProfile);
 				request.setContent(sdp, contentTypeHeader);
 			} else if (Request.MESSAGE == requestMethod) {
 				ContentTypeHeader contentTypeHeader = headerFactory

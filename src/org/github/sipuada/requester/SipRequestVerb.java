@@ -8,6 +8,7 @@ public enum SipRequestVerb {
 	BYE,
 	CANCEL,
 	MESSAGE,
-	INFO
+	INFO, 
+	ACK
 
 }

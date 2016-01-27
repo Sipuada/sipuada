@@ -30,7 +30,7 @@ import android.javax.sip.header.ProxyAuthorizationHeader;
 import android.javax.sip.header.ToHeader;
 import android.javax.sip.message.Request;
 
-public class MessageUtils {
+public class SipRequestUtils {
 	
 	public static FromHeader createFromHeader(AddressFactory addressFactory, HeaderFactory headerFactory,
 			String username, String sipDomain, String displayName, String tag)
