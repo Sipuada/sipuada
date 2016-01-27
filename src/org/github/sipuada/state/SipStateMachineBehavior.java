@@ -1,6 +1,8 @@
 package org.github.sipuada.state;
 
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import org.github.sipuada.requester.SipRequestVerb;
@@ -121,7 +123,7 @@ public class SipStateMachineBehavior {
 		private SipRequestVerb requestVerb;
 		private Integer responseCode;
 		private boolean allowOutgoingRequest;
-		private SipRequestVerb followUpRequestVerb;
+		private List<SipRequestVerb> followUpRequestVerbs = new LinkedList<>();
 		private Integer followUpResponseCode;
 		
 		public Step(State current, MessageDirection direction, SipRequestVerb verb, State brandnew) {
@@ -140,7 +142,9 @@ public class SipStateMachineBehavior {
 			requestVerb = verb;
 			responseCode = code;
 			allowOutgoingRequest = allow;
-			followUpRequestVerb = followUpRequest;
+			if (followUpRequest != null) {
+				followUpRequestVerbs.add(followUpRequest);
+			}
 			followUpResponseCode = followUpResponse;
 			updateBehavior();
 		}
@@ -158,7 +162,9 @@ public class SipStateMachineBehavior {
 		}
 		
 		public Step thenSendFollowUpRequest(SipRequestVerb followUpRequest) {
-			followUpRequestVerb = followUpRequest;
+			if (followUpRequest != null) {
+				followUpRequestVerbs.add(followUpRequest);
+			}
 			updateBehavior();
 			return this;
 		}
@@ -182,12 +188,12 @@ public class SipStateMachineBehavior {
 			return allowOutgoingRequest;
 		}
 		
-		public boolean hasFollowUpRequest() {
-			return followUpRequestVerb != null;
+		public boolean hasFollowUpRequests() {
+			return !followUpRequestVerbs.isEmpty();
 		}
 		
-		public SipRequestVerb getFollowUpRequestVerb() {
-			return followUpRequestVerb;
+		public List<SipRequestVerb> getFollowUpRequestVerbs() {
+			return followUpRequestVerbs;
 		}
 		
 		public boolean hasFollowUpResponse() {

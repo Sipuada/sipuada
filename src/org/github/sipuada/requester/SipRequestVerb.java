@@ -2,12 +2,13 @@ package org.github.sipuada.requester;
 
 public enum SipRequestVerb {
 
-	INVITE,
 	REGISTER,
 	UNREGISTER,
-	BYE,
+	INVITE,
+	ACK,
 	CANCEL,
 	MESSAGE,
-	INFO
+	INFO,
+	BYE
 
 }

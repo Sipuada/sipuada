@@ -25,8 +25,8 @@ public abstract class AbstractSipStateMachine {
 		handleRequestComputingNextStep(MessageDirection.INCOMING, verb, request);
 	}
 
-	public void responseHasBeenReceived(int code, Response response) {
-		handleResponseComputingNextStep(MessageDirection.INCOMING, code, response);
+	public boolean responseHasBeenReceived(int code, Response response) {
+		return handleResponseComputingNextStep(MessageDirection.INCOMING, code, response);
 	}
 
 	protected enum MessageDirection {
@@ -41,7 +41,7 @@ public abstract class AbstractSipStateMachine {
 		Sipuada.getEventBus().post(new StateChangedEvent(oldState, newState));
 	}
 	
-	protected void requestMustBeSent(SendRequestEvent event) {
+	protected void requestsMustBeSent(SendRequestEvent event) {
 		Sipuada.getEventBus().post(event);
 	}
 

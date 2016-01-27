@@ -35,12 +35,17 @@ public class SipReceiver implements SipListener {
 	@Override
 	public void processResponse(ResponseEvent responseEvent) {
 		Response response = responseEvent.getResponse();
-		stateMachine.responseHasBeenReceived(response.getStatusCode(), response);
+		if (!stateMachine.responseHasBeenReceived(response.getStatusCode(), response)) {
+			int responseClass = (response.getStatusCode() / 100) * 1000;
+			stateMachine.responseHasBeenReceived(responseClass, response);
+		}
 	}
 
 	@Override
 	public void processTimeout(TimeoutEvent timeoutEvent) {
-		stateMachine.responseHasBeenReceived(SipResponseCode.REQUEST_TIMEOUT, null);
+		if (!stateMachine.responseHasBeenReceived(SipResponseCode.REQUEST_TIMEOUT, null)) {
+			stateMachine.responseHasBeenReceived(SipResponseCode.ANY_CLIENT_ERROR, null);
+		}
 	}
 
 	@Override

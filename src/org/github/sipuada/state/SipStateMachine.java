@@ -90,15 +90,23 @@ public class SipStateMachine extends AbstractSipStateMachine {
 		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.RINGING)
 			.goTo(State.RINGING);
 		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.PROXY_AUTHENTICATION_REQUIRED)
-			.goTo(State.CALLING).thenSendFollowUpRequest(SipRequestVerb.INVITE);
+			.goTo(State.CALLING).thenSendFollowUpRequest(SipRequestVerb.ACK).thenSendFollowUpRequest(SipRequestVerb.INVITE);
 		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.UNAUTHORIZED)
-			.goTo(State.CALLING).thenSendFollowUpRequest(SipRequestVerb.INVITE);
+			.goTo(State.CALLING).thenSendFollowUpRequest(SipRequestVerb.ACK).thenSendFollowUpRequest(SipRequestVerb.INVITE);
 		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.BUSY_HERE)
-			.goTo(State.READY);
-		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.REQUEST_TIMEOUT)
-			.goTo(State.READY);
+			.goTo(State.READY).thenSendFollowUpRequest(SipRequestVerb.ACK);
 		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.NOT_FOUND)
-			.goTo(State.READY);
+			.goTo(State.READY).thenSendFollowUpRequest(SipRequestVerb.ACK);
+		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.REQUEST_TIMEOUT)
+			.goTo(State.READY).thenSendFollowUpRequest(SipRequestVerb.ACK);
+		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.ANY_CLIENT_ERROR)
+			.goTo(State.READY).thenSendFollowUpRequest(SipRequestVerb.ACK);
+		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.BUSY_EVERYWHERE)
+			.goTo(State.READY).thenSendFollowUpRequest(SipRequestVerb.ACK);
+		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.DECLINE)
+			.goTo(State.READY).thenSendFollowUpRequest(SipRequestVerb.ACK);
+		whileIn(State.CALLING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.ANY_GLOBAL_ERROR)
+			.goTo(State.READY).thenSendFollowUpRequest(SipRequestVerb.ACK);
 
 		whileIn(State.RINGING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INVITE)
 			.goTo(State.RINGING).thenSendResponse(SipResponseCode.BUSY_HERE);
@@ -124,12 +132,25 @@ public class SipStateMachine extends AbstractSipStateMachine {
 		whileIn(State.INCOMING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.BYE)
 			.goTo(State.INCOMING).thenSendResponse(SipResponseCode.BAD_REQUEST);
 		whileIn(State.INCOMING).whenResponse(MessageDirection.OUTGOING).with(SipResponseCode.OK)
-			.goTo(State.ESTABLISHED);
+			.goTo(State.CONFIRMING);
 		whileIn(State.INCOMING).whenResponse(MessageDirection.OUTGOING).with(SipResponseCode.DECLINE)
 			.goTo(State.FINISHED);
+		
+		whileIn(State.CONFIRMING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INVITE)
+			.goTo(State.CONFIRMING).thenSendResponse(SipResponseCode.BUSY_HERE);
+		whileIn(State.CONFIRMING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INFO)
+			.goTo(State.CONFIRMING).thenSendResponse(SipResponseCode.BAD_REQUEST);
+		whileIn(State.CONFIRMING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.BYE)
+			.goTo(State.FINISHED).thenSendResponse(SipResponseCode.OK);
+		whileIn(State.CONFIRMING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.ACK)
+			.goTo(State.ESTABLISHED);
+		whileIn(State.CONFIRMING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.CANCEL)
+			.goTo(State.FINISHED).thenSendResponse(SipResponseCode.OK);
 
+		whileIn(State.ESTABLISHED).whenRequest(MessageDirection.OUTGOING).with(SipRequestVerb.INVITE)
+			.goTo(State.MODIFYING).andAllowThisOutgoingRequest();
 		whileIn(State.ESTABLISHED).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INVITE)
-			.goTo(State.ESTABLISHED).thenSendResponse(SipResponseCode.BUSY_HERE);
+			.goTo(State.MODIFYING);
 		whileIn(State.ESTABLISHED).whenRequest(MessageDirection.OUTGOING).with(SipRequestVerb.INFO)
 			.goTo(State.ESTABLISHED).andAllowThisOutgoingRequest();
 		whileIn(State.ESTABLISHED).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INFO)
@@ -141,6 +162,23 @@ public class SipStateMachine extends AbstractSipStateMachine {
 		whileIn(State.ESTABLISHED).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.BYE)
 			.goTo(State.FINISHED).thenSendResponse(SipResponseCode.OK);
 
+		whileIn(State.MODIFYING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.ACK)
+			.goTo(State.ESTABLISHED);
+		whileIn(State.MODIFYING).whenResponse(MessageDirection.OUTGOING).with(SipResponseCode.OK)
+			.goTo(State.MODIFYING);
+		whileIn(State.MODIFYING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.OK)
+			.goTo(State.ESTABLISHED).thenSendFollowUpRequest(SipRequestVerb.ACK);
+		whileIn(State.MODIFYING).whenResponse(MessageDirection.OUTGOING).with(SipResponseCode.NOT_ACCEPTABLE_HERE)
+			.goTo(State.MODIFYING);
+		whileIn(State.MODIFYING).whenResponse(MessageDirection.INCOMING).with(SipResponseCode.NOT_ACCEPTABLE_HERE)
+			.goTo(State.ESTABLISHED).thenSendFollowUpRequest(SipRequestVerb.ACK);
+		whileIn(State.MODIFYING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INFO)
+			.goTo(State.MODIFYING).thenSendResponse(SipResponseCode.BAD_REQUEST);
+		whileIn(State.MODIFYING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.CANCEL)
+			.goTo(State.MODIFYING).thenSendResponse(SipResponseCode.BAD_REQUEST);
+		whileIn(State.MODIFYING).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.BYE)
+			.goTo(State.MODIFYING).thenSendResponse(SipResponseCode.BAD_REQUEST);
+		
 		whileIn(State.FINISHED).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INVITE)
 			.goTo(State.FINISHED).thenSendResponse(SipResponseCode.BUSY_HERE);
 		whileIn(State.FINISHED).whenRequest(MessageDirection.INCOMING).with(SipRequestVerb.INFO)
@@ -186,8 +224,8 @@ public class SipStateMachine extends AbstractSipStateMachine {
 			return false;
 		}
 		currentState = nextStep.getNextState();
-		if (nextStep.hasFollowUpRequest()) {
-			requestMustBeSent(new SendRequestEvent(nextStep.getFollowUpRequestVerb(), response));
+		if (nextStep.hasFollowUpRequests()) {
+			requestsMustBeSent(new SendRequestEvent(nextStep.getFollowUpRequestVerbs(), response));
 		}
 		return true;
 	}
