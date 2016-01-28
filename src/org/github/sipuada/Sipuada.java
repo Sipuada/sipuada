@@ -10,26 +10,31 @@ import android.javax.sip.SipFactory;
 
 public class Sipuada {
 
+	
 	public static final String sipuadaInstanceName = "sipuada";
+	public static final String sipuadaInstanceLocalIpAddress = "192.168.1.10";
+	public static final int sipuadaInstanceLocalSipPort = 5060;
+	public static final String sipuadaInstanceTransport = "TCP";
 	
 	private static EventBus eventBus;
 	private SipFactory sipFactory;
 	private SipStateMachine sipStateMachine;
-	private SipConnection sipConnection;
 	private SipRequester sipRequester;
 	private SipReceiver sipReceiver;
+	private SipConnection sipConnection;
 	
 	public Sipuada() throws Exception {
 		eventBus = new EventBus();
 		sipFactory = SipFactory.getInstance();
-		sipStateMachine = new SipStateMachine(); 
-		sipConnection = new SipConnection(sipuadaInstanceName);
-		sipRequester = new SipRequester(sipFactory, sipStateMachine, sipConnection);
+		sipStateMachine = new SipStateMachine();
 		sipReceiver = new SipReceiver(sipStateMachine);
+		sipConnection = new SipConnection(sipuadaInstanceName, sipuadaInstanceLocalIpAddress, sipuadaInstanceLocalSipPort, sipuadaInstanceTransport, sipReceiver);
+		sipRequester = new SipRequester(sipFactory, sipStateMachine, sipConnection);
+		
 	}
 	
 	public static EventBus getEventBus() {
 		return eventBus;
 	}
-
+	
 }
