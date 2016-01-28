@@ -155,121 +155,173 @@ public class SipRequester {
 		return createSipRequest(sipRequestVerb, state, sipProfile, sipContact, null);
 	}
 
-	private void sendRegister(final SipRequestState state, final SipProfile sipProfile) {
+	public boolean sendRegister(final SipRequestState state, final SipProfile sipProfile) {
+		
 		SipRequest sipRequest = createSipRequest(SipRequestVerb.REGISTER, state, sipProfile, null);
-		sipConnection.setCurrentCallId(sipRequest.getCallIdHeader());
-		sendRequest(SipRequestVerb.REGISTER, sipRequest.getRequest());
-
+		
+		if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.REGISTER, sipRequest.getRequest())) {
+			sipConnection.setCurrentCallId(sipRequest.getCallIdHeader());
+			sendRequest(SipRequestVerb.REGISTER, sipRequest.getRequest());
+			return true;
+		}
+		return false;
 	}
 
-	private void sendInvite(final SipRequestState state, final SipProfile sipProfile, final SipContact sipContact) {
+	public boolean sendInvite(final SipRequestState state, final SipProfile sipProfile, final SipContact sipContact) {
 		SipRequest sipRequest = createSipRequest(SipRequestVerb.INVITE, state, sipProfile, sipContact);
-		sipConnection.setCurrentCallId(sipRequest.getCallIdHeader());
-		sendRequest(SipRequestVerb.INVITE, sipRequest.getRequest());
+		
+		if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.INVITE, sipRequest.getRequest())) {
+			sipConnection.setCurrentCallId(sipRequest.getCallIdHeader());
+			sendRequest(SipRequestVerb.INVITE, sipRequest.getRequest());
+			return true;
+		}
+		return false;
 	}
 
-	private void sendMessage(final SipRequestState state, final SipProfile sipProfile, final SipContact sipContact,
+	public boolean sendMessage(final SipRequestState state, final SipProfile sipProfile, final SipContact sipContact,
 			final String textMessage) {
-		SipRequest sipRequest = createSipRequest(SipRequestVerb.INVITE, state, sipProfile, sipContact, textMessage);
-		sendRequest(SipRequestVerb.INVITE, sipRequest.getRequest());
+		
+		SipRequest sipRequest = createSipRequest(SipRequestVerb.MESSAGE, state, sipProfile, sipContact, textMessage);
+		
+		if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.MESSAGE, sipRequest.getRequest())) {
+			sendRequest(SipRequestVerb.MESSAGE, sipRequest.getRequest());
+			return true;
+		}
+		return false;
+		
 	}
 
 	// ...//
 
-	private void sendBye(final SipRequestState state) {
+	public boolean sendBye(final SipRequestState state) {
 		try {
 			// create Request from dialog
 			Request request = sipConnection.getCurrentDialog().createRequest(Request.BYE);
-			sendRequest(SipRequestVerb.BYE, request);
+			if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.BYE, request)) {
+				sendRequest(SipRequestVerb.BYE, request);
+				return true;
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendCancel(final SipRequestState state) {
+	public boolean sendCancel(final SipRequestState state) {
 		try {
 			// create Request from dialog
 			Request request = sipConnection.getClientTransaction().createCancel();
-			sendRequest(SipRequestVerb.CANCEL, request);
+			if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.CANCEL, request)) {
+				sendRequest(SipRequestVerb.CANCEL, request);
+				return true;
+			}
+			
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendDecline(final SipRequestState state, final Request incomingRequest) {
+	public boolean sendDecline(final SipRequestState state, final Request incomingRequest) {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.DECLINE, incomingRequest);
-			sendResponse(SipResponseCode.DECLINE, incomingRequest, response);
+			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.DECLINE, response)) {
+				sendResponse(SipResponseCode.DECLINE, incomingRequest, response);
+				return true;
+			}
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendBusyHere(final SipRequestState state, final Request incomingRequest) {
+	public boolean sendBusyHere(final SipRequestState state, final Request incomingRequest) {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.BUSY_HERE, incomingRequest);
-			sendResponse(SipResponseCode.BUSY_HERE, incomingRequest, response);
+			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.BUSY_HERE, response)) {
+				sendResponse(SipResponseCode.BUSY_HERE, incomingRequest, response);
+				return true;
+			}
+			
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendNotFound(final SipRequestState state, final Request incomingRequest) {
+	public boolean sendNotFound(final SipRequestState state, final Request incomingRequest) {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.NOT_FOUND, incomingRequest);
-			sendResponse(SipResponseCode.NOT_FOUND, incomingRequest, response);
+			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.NOT_FOUND, response)) {
+				sendResponse(SipResponseCode.NOT_FOUND, incomingRequest, response);
+				return true;
+			}
+			
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendRinging(final SipRequestState state, final Request incomingRequest) {
+	public boolean sendRinging(final SipRequestState state, final Request incomingRequest) {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.RINGING, incomingRequest);
-			sendResponse(SipResponseCode.RINGING, incomingRequest, response);
+			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.RINGING, response)) {
+				sendResponse(SipResponseCode.RINGING, incomingRequest, response);
+				return true;
+			}
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendAck(final SipRequestState state) {
+	public boolean sendAck(final SipRequestState state) {
 		// create new response for the request
 		try {
 			Request request = sipConnection.getCurrentDialog().createAck(sipConnection.incrementCallSequence());
+			if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.ACK, request)) {
+				sendRequest(SipRequestVerb.ACK, request);
+				return true;
+			}
 			sendRequest(SipRequestVerb.ACK, request);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendOK(SipRequestVerb verb, Request incomingRequest,
+	private boolean sendOK(SipRequestVerb verb, Request incomingRequest,
 			ServerTransaction associatedTransactionWithIncomingRequest, SipProfile sipProfile) {
 		
 		try {
 			Response response = messageFactory.createResponse(Response.OK, incomingRequest);
-			sendResponse(verb, SipResponseCode.OK, incomingRequest, response, associatedTransactionWithIncomingRequest,
-					sipProfile);
+			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.OK, response)) {
+				sendResponse(verb, SipResponseCode.OK, incomingRequest, response, associatedTransactionWithIncomingRequest, sipProfile);
+				return true;
+			}
 			
 		} catch (ParseException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		return false;
 	}
 
-	private void sendInviteOK(Request incomingRequest, ServerTransaction associatedTransactionWithIncomingRequest,
+	public boolean sendInviteOK(Request incomingRequest, ServerTransaction associatedTransactionWithIncomingRequest,
 			SipProfile sipProfile) {
 		
-		sendOK(SipRequestVerb.INVITE, incomingRequest, associatedTransactionWithIncomingRequest, sipProfile);
+		return sendOK(SipRequestVerb.INVITE, incomingRequest, associatedTransactionWithIncomingRequest, sipProfile);
 	}
 
-	private void sendMessageOK(Request incomingRequest, ServerTransaction associatedTransactionWithIncomingRequest,
+	public boolean sendMessageOK(Request incomingRequest, ServerTransaction associatedTransactionWithIncomingRequest,
 			SipProfile sipProfile) {
 		
-		sendOK(SipRequestVerb.MESSAGE, incomingRequest, associatedTransactionWithIncomingRequest, sipProfile);
+		return sendOK(SipRequestVerb.MESSAGE, incomingRequest, associatedTransactionWithIncomingRequest, sipProfile);
 	}
 
 	private void sendResponse(SipRequestVerb verb, final int sipResponseCode, final Request incomingRequest,
