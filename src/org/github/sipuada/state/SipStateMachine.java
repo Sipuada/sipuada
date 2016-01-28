@@ -1,12 +1,15 @@
 package org.github.sipuada.state;
 
-import org.github.sipuada.events.SendRequestEvent;
-import org.github.sipuada.events.SendResponseEvent;
+import java.util.EventObject;
+
+import org.github.sipuada.events.SendFollowUpRequestsEvent;
+import org.github.sipuada.events.SendFollowUpResponseEvent;
 import org.github.sipuada.requester.SipRequestVerb;
 import org.github.sipuada.requester.SipResponseCode;
 import org.github.sipuada.state.SipStateMachineBehavior.During;
 import org.github.sipuada.state.SipStateMachineBehavior.Step;
 
+import android.javax.sip.RequestEvent;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
 
@@ -197,35 +200,63 @@ public class SipStateMachine extends AbstractSipStateMachine {
 	}
 
 	/**
-	 * Computes next step in the state machine by feeding it with new incoming/outgoing request.
-	 * @return true if the machine compute a new state and, if the desired request is outgoing, if it is allowed, false otherwise
+	 * Computes next step in the state machine by feeding it with new outgoing request.
+	 * @return true if the machine compute a new state and if the desired outgoing request is allowed, false otherwise
 	 */
 	@Override
-	protected boolean handleRequestComputingNextStep(MessageDirection direction, SipRequestVerb requestVerb, Request request) {
-		Step nextStep = currentBehavior.computeNextStepAfterRequest(currentState, direction, requestVerb);
+	protected boolean handleOutgoingRequestComputingNextStep(SipRequestVerb requestVerb, Request request) {
+		Step nextStep = currentBehavior.computeNextStepAfterRequest(currentState, MessageDirection.OUTGOING, requestVerb);
+		if (nextStep == null) {
+			return false;
+		}
+		currentState = nextStep.getNextState();
+		return nextStep.outgoingRequestIsAllowed();
+	}
+	
+	/**
+	 * Computes next step in the state machine by feeding it with new incoming request.
+	 * @return true if the machine compute a new state, false otherwise
+	 */
+	@Override
+	protected boolean handleIncomingRequestComputingNextStep(SipRequestVerb requestVerb, RequestEvent requestEvent) {
+		Step nextStep = currentBehavior.computeNextStepAfterRequest(currentState, MessageDirection.OUTGOING, requestVerb);
 		if (nextStep == null) {
 			return false;
 		}
 		currentState = nextStep.getNextState();
 		if (nextStep.hasFollowUpResponse()) {
-			responseMustBeSent(new SendResponseEvent(nextStep.getFollowUpResponseCode(), request));
+			responseMustBeSent(new SendFollowUpResponseEvent(nextStep.getFollowUpResponseCode(), requestEvent));
 		}
-		return direction == MessageDirection.OUTGOING ? nextStep.outgoingRequestIsAllowed() : true;
+		return true;
 	}
 
 	/**
-	 * Computes next step in the state machine by feeding it with new incoming/outgoing response.
+	 * Computes next step in the state machine by feeding it with new outgoing response.
 	 * @return true if the machine compute a new state, false otherwise
 	 */
 	@Override
-	protected boolean handleResponseComputingNextStep(MessageDirection direction, int responseCode, Response response) {
-		Step nextStep = currentBehavior.computeNextStepAfterResponse(currentState, direction, responseCode);
+	protected boolean handleOutgoingResponseComputingNextStep(int responseCode, Response response) {
+		Step nextStep = currentBehavior.computeNextStepAfterResponse(currentState, MessageDirection.INCOMING, responseCode);
+		if (nextStep == null) {
+			return false;
+		}
+		currentState = nextStep.getNextState();
+		return true;
+	}
+	
+	/**
+	 * Computes next step in the state machine by feeding it with new incoming response.
+	 * @return true if the machine compute a new state, false otherwise
+	 */
+	@Override
+	protected boolean handleIncomingResponseComputingNextStep(int responseCode, EventObject responseEvent) {
+		Step nextStep = currentBehavior.computeNextStepAfterResponse(currentState, MessageDirection.INCOMING, responseCode);
 		if (nextStep == null) {
 			return false;
 		}
 		currentState = nextStep.getNextState();
 		if (nextStep.hasFollowUpRequests()) {
-			requestsMustBeSent(new SendRequestEvent(nextStep.getFollowUpRequestVerbs(), response));
+			requestsMustBeSent(new SendFollowUpRequestsEvent(nextStep.getFollowUpRequestVerbs(), responseEvent));
 		}
 		return true;
 	}

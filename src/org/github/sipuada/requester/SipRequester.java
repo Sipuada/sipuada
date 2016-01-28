@@ -4,8 +4,8 @@ import java.text.ParseException;
 
 import org.github.sipuada.SipReceiver;
 import org.github.sipuada.Sipuada;
-import org.github.sipuada.events.SendRequestEvent;
-import org.github.sipuada.events.SendResponseEvent;
+import org.github.sipuada.events.SendFollowUpRequestsEvent;
+import org.github.sipuada.events.SendFollowUpResponseEvent;
 import org.github.sipuada.requester.messages.SipRequest;
 import org.github.sipuada.requester.messages.SipRequestUtils;
 import org.github.sipuada.sip.SipContact;
@@ -15,18 +15,14 @@ import org.github.sipuada.state.SipStateMachine;
 import android.javax.sdp.SdpException;
 import android.javax.sdp.SessionDescription;
 import android.javax.sip.ClientTransaction;
-import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
-import android.javax.sip.ListeningPoint;
+import android.javax.sip.ResponseEvent;
 import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipException;
-import android.javax.sip.SipProvider;
-import android.javax.sip.SipStack;
-import android.javax.sip.TransactionUnavailableException;
+import android.javax.sip.TimeoutEvent;
 import android.javax.sip.address.Address;
 import android.javax.sip.address.AddressFactory;
 import android.javax.sip.address.SipURI;
-import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.HeaderFactory;
@@ -49,8 +45,8 @@ public class SipRequester {
 		stateMachine = machine;
 		receiver = new SipReceiver(machine);
 		this.sipConnection = sipConnection;
-		Sipuada.getEventBus().register(SendRequestEvent.class);
-		Sipuada.getEventBus().register(SendResponseEvent.class);
+		Sipuada.getEventBus().register(SendFollowUpRequestsEvent.class);
+		Sipuada.getEventBus().register(SendFollowUpResponseEvent.class);
 		// TODO setup the Provider and Listening Point, as well as both Server
 		// and Client transactions.
 		// TODO also create the current Call Id Header and current Dialog here?
@@ -444,14 +440,23 @@ public class SipRequester {
 
 	}
 
-	public void onEvent(SendRequestEvent event) {
-		//TODO send new requests in the order specified in event.getVerbs() using last response in event.getResponse().
+	public void onEvent(SendFollowUpRequestsEvent event) {
+		//TODO send new requests in the order specified in event.getVerbs() using the associated response event in event.getResponseEvent().
+		//IMPORTANT: 
 		//Important, DON'T CHECK WITH THE MACHINE STATE WHETHER THE REQUESTS CAN BE SENT with canRequestBeSent() before sending, send them right away.
+		if (event.getResponseEvent() instanceof TimeoutEvent) {
+			//The response for the initial request is a timeout. The state machine want's event.getVerbs() to be sent then.
+			TimeoutEvent responseEvent = (TimeoutEvent) event.getResponseEvent();
+		}
+		else {
+			//The response event for the initial request. The state machine want's event.getVerbs() to be sent as follow up to the response.
+			ResponseEvent responseEvent = (ResponseEvent) event.getResponseEvent();
+		}
 	}
 
-	public void onEvent(SendResponseEvent event) {
-		//TODO send a new response with code event.getCode() to answer request in event.getRequest().
-		//Important, DON'T CHECK WITH THE MACHINE STATE WHETHER THE REQUEST CAN BE SENT with canResponseBeSent() before sending, send it right away.
+	public void onEvent(SendFollowUpResponseEvent event) {
+		//TODO send a new response with code event.getCode() to answer request in event.getRequestEvent().
+		//Important, DON'T CHECK WITH THE MACHINE STATE WHETHER THE RESPONSE CAN BE SENT with canResponseBeSent() before sending, send it right away.
 	}
 
 }

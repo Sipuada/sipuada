@@ -29,22 +29,22 @@ public class SipReceiver implements SipListener {
 	public void processRequest(RequestEvent requestEvent) {
 		Request request = requestEvent.getRequest();
 		SipRequestVerb requestVerb = SipRequestVerb.valueOf(request.getMethod().toUpperCase());
-		stateMachine.requestHasBeenReceived(requestVerb, request);
+		stateMachine.requestHasBeenReceived(requestVerb, requestEvent);
 	}
 
 	@Override
 	public void processResponse(ResponseEvent responseEvent) {
 		Response response = responseEvent.getResponse();
-		if (!stateMachine.responseHasBeenReceived(response.getStatusCode(), response)) {
+		if (!stateMachine.responseHasBeenReceived(response.getStatusCode(), responseEvent)) {
 			int responseClass = (response.getStatusCode() / 100) * 1000;
-			stateMachine.responseHasBeenReceived(responseClass, response);
+			stateMachine.responseHasBeenReceived(responseClass, responseEvent);
 		}
 	}
 
 	@Override
 	public void processTimeout(TimeoutEvent timeoutEvent) {
-		if (!stateMachine.responseHasBeenReceived(SipResponseCode.REQUEST_TIMEOUT, null)) {
-			stateMachine.responseHasBeenReceived(SipResponseCode.ANY_CLIENT_ERROR, null);
+		if (!stateMachine.responseHasBeenReceived(SipResponseCode.REQUEST_TIMEOUT, timeoutEvent)) {
+			stateMachine.responseHasBeenReceived(SipResponseCode.ANY_CLIENT_ERROR, timeoutEvent);
 		}
 	}
 
