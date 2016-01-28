@@ -16,9 +16,11 @@ import android.javax.sdp.SdpException;
 import android.javax.sdp.SessionDescription;
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.InvalidArgumentException;
+import android.javax.sip.PeerUnavailableException;
 import android.javax.sip.ResponseEvent;
 import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipException;
+import android.javax.sip.SipFactory;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.address.Address;
 import android.javax.sip.address.AddressFactory;
@@ -41,7 +43,11 @@ public class SipRequester {
 	private SipReceiver receiver;
 	private SipConnection sipConnection;
 
-	public SipRequester(SipStateMachine machine, SipConnection sipConnection) {
+	public SipRequester(SipFactory sipFactory, SipStateMachine machine, SipConnection sipConnection) throws PeerUnavailableException {
+		headerFactory = sipFactory.createHeaderFactory();
+		addressFactory = sipFactory.createAddressFactory();
+		messageFactory = sipFactory.createMessageFactory();
+
 		stateMachine = machine;
 		receiver = new SipReceiver(machine);
 		this.sipConnection = sipConnection;
@@ -152,10 +158,10 @@ public class SipRequester {
 	}
 
 	public boolean sendRegister(final SipRequestState state, final SipProfile sipProfile) {
-		
+
 		SipRequest sipRequest = createSipRequest(SipRequestVerb.REGISTER, state, sipProfile, null);
-		
-		if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.REGISTER, sipRequest.getRequest())) {
+
+		if (null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.REGISTER, sipRequest.getRequest())) {
 			sipConnection.setCurrentCallId(sipRequest.getCallIdHeader());
 			sendRequest(SipRequestVerb.REGISTER, sipRequest.getRequest());
 			return true;
@@ -165,8 +171,8 @@ public class SipRequester {
 
 	public boolean sendInvite(final SipRequestState state, final SipProfile sipProfile, final SipContact sipContact) {
 		SipRequest sipRequest = createSipRequest(SipRequestVerb.INVITE, state, sipProfile, sipContact);
-		
-		if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.INVITE, sipRequest.getRequest())) {
+
+		if (null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.INVITE, sipRequest.getRequest())) {
 			sipConnection.setCurrentCallId(sipRequest.getCallIdHeader());
 			sendRequest(SipRequestVerb.INVITE, sipRequest.getRequest());
 			return true;
@@ -176,15 +182,15 @@ public class SipRequester {
 
 	public boolean sendMessage(final SipRequestState state, final SipProfile sipProfile, final SipContact sipContact,
 			final String textMessage) {
-		
+
 		SipRequest sipRequest = createSipRequest(SipRequestVerb.MESSAGE, state, sipProfile, sipContact, textMessage);
-		
-		if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.MESSAGE, sipRequest.getRequest())) {
+
+		if (null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.MESSAGE, sipRequest.getRequest())) {
 			sendRequest(SipRequestVerb.MESSAGE, sipRequest.getRequest());
 			return true;
 		}
 		return false;
-		
+
 	}
 
 	// ...//
@@ -193,7 +199,7 @@ public class SipRequester {
 		try {
 			// create Request from dialog
 			Request request = sipConnection.getCurrentDialog().createRequest(Request.BYE);
-			if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.BYE, request)) {
+			if (null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.BYE, request)) {
 				sendRequest(SipRequestVerb.BYE, request);
 				return true;
 			}
@@ -207,11 +213,11 @@ public class SipRequester {
 		try {
 			// create Request from dialog
 			Request request = sipConnection.getClientTransaction().createCancel();
-			if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.CANCEL, request)) {
+			if (null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.CANCEL, request)) {
 				sendRequest(SipRequestVerb.CANCEL, request);
 				return true;
 			}
-			
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -222,7 +228,7 @@ public class SipRequester {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.DECLINE, incomingRequest);
-			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.DECLINE, response)) {
+			if (null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.DECLINE, response)) {
 				sendResponse(SipResponseCode.DECLINE, incomingRequest, response);
 				return true;
 			}
@@ -236,11 +242,11 @@ public class SipRequester {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.BUSY_HERE, incomingRequest);
-			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.BUSY_HERE, response)) {
+			if (null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.BUSY_HERE, response)) {
 				sendResponse(SipResponseCode.BUSY_HERE, incomingRequest, response);
 				return true;
 			}
-			
+
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
@@ -251,11 +257,11 @@ public class SipRequester {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.NOT_FOUND, incomingRequest);
-			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.NOT_FOUND, response)) {
+			if (null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.NOT_FOUND, response)) {
 				sendResponse(SipResponseCode.NOT_FOUND, incomingRequest, response);
 				return true;
 			}
-			
+
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
@@ -266,7 +272,7 @@ public class SipRequester {
 		// create new response for the request
 		try {
 			Response response = messageFactory.createResponse(Response.RINGING, incomingRequest);
-			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.RINGING, response)) {
+			if (null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.RINGING, response)) {
 				sendResponse(SipResponseCode.RINGING, incomingRequest, response);
 				return true;
 			}
@@ -280,7 +286,7 @@ public class SipRequester {
 		// create new response for the request
 		try {
 			Request request = sipConnection.getCurrentDialog().createAck(sipConnection.incrementCallSequence());
-			if(null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.ACK, request)) {
+			if (null != stateMachine && stateMachine.canRequestBeSent(SipRequestVerb.ACK, request)) {
 				sendRequest(SipRequestVerb.ACK, request);
 				return true;
 			}
@@ -293,16 +299,16 @@ public class SipRequester {
 
 	private boolean sendOK(SipRequestVerb verb, Request incomingRequest,
 			ServerTransaction associatedTransactionWithIncomingRequest, SipProfile sipProfile) {
-		
+
 		try {
 			Response response = messageFactory.createResponse(Response.OK, incomingRequest);
-			if(null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.OK, response)) {
-				sendResponse(verb, SipResponseCode.OK, incomingRequest, response, associatedTransactionWithIncomingRequest, sipProfile);
+			if (null != stateMachine && stateMachine.canResponseBeSent(SipResponseCode.OK, response)) {
+				sendResponse(verb, SipResponseCode.OK, incomingRequest, response,
+						associatedTransactionWithIncomingRequest, sipProfile);
 				return true;
 			}
-			
+
 		} catch (ParseException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return false;
@@ -310,13 +316,13 @@ public class SipRequester {
 
 	public boolean sendInviteOK(Request incomingRequest, ServerTransaction associatedTransactionWithIncomingRequest,
 			SipProfile sipProfile) {
-		
+
 		return sendOK(SipRequestVerb.INVITE, incomingRequest, associatedTransactionWithIncomingRequest, sipProfile);
 	}
 
 	public boolean sendMessageOK(Request incomingRequest, ServerTransaction associatedTransactionWithIncomingRequest,
 			SipProfile sipProfile) {
-		
+
 		return sendOK(SipRequestVerb.MESSAGE, incomingRequest, associatedTransactionWithIncomingRequest, sipProfile);
 	}
 
@@ -340,7 +346,7 @@ public class SipRequester {
 
 				ContentTypeHeader contentTypeHeader = null;
 				Object content = null;
-				if(SipRequestVerb.INVITE == verb) {
+				if (SipRequestVerb.INVITE == verb) {
 					contentTypeHeader = headerFactory.createContentTypeHeader("application", "sdp");
 					SessionDescription sdp = SipRequestUtils.createSDP(incomingRequest, sipProfile);
 					content = sdp.toString();
@@ -389,7 +395,6 @@ public class SipRequester {
 			public void run() {
 				try {
 					// Create the client transaction
-					// TODO put this in Connection class
 					ServerTransaction serverTransaction = sipConnection.getServerTransaction();
 					if (null == serverTransaction) {
 						serverTransaction = sipConnection.getProvider().getNewServerTransaction(incomingRequest);
@@ -407,8 +412,6 @@ public class SipRequester {
 	}
 
 	private void sendRequest(final SipRequestVerb verb, final Request request) {
-
-		// TODO SE DEU CERTO currentCallId = message.getCallIdHeader();
 
 		Thread transactionHandler = new Thread() {
 			public void run() {

@@ -1,15 +1,19 @@
 package org.github.sipuada.requester;
 
+import java.util.Properties;
+
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
 import android.javax.sip.ListeningPoint;
 import android.javax.sip.ServerTransaction;
+import android.javax.sip.SipFactory;
 import android.javax.sip.SipProvider;
 import android.javax.sip.SipStack;
 import android.javax.sip.header.CallIdHeader;
 
 public class SipConnection {
 	
+	private String sipStackName;
 	private SipStack sipStack;
 	private String localIpAddress;
 	private int localSipPort;
@@ -21,6 +25,26 @@ public class SipConnection {
 	private Dialog currentDialog;
 	private long callSequence = 1L;
 	
+	private static final int MIN_PORT = 5000, MAX_PORT = 6000;
+	
+	public SipConnection(final String sipStackName) throws Exception {
+		
+		if(null != sipStackName || sipStackName.trim().length() == 0) {
+			throw new Exception("Invalid name for sip stack.");
+		}
+		this.sipStackName = sipStackName;
+		// Create SipFactory
+        SipFactory sipFactory = SipFactory.getInstance();
+
+        // Create unique name properties for SipStack
+        Properties properties = new Properties();
+        properties.setProperty("android.javax.sip.STACK_NAME", sipStackName);
+        
+        // Create SipStack object
+        sipStack = sipFactory.createSipStack(properties);
+        
+        
+	}
 	
 	public SipStack getSipStack() {
 		return sipStack;
