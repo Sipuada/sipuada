@@ -3,7 +3,7 @@ package org.github.sipuada.state;
 import static org.junit.Assert.assertTrue;
 
 import org.github.sipuada.Sipuada;
-import org.github.sipuada.events.SendResponseEvent;
+import org.github.sipuada.events.SendFollowUpResponseEvent;
 import org.github.sipuada.requester.SipRequestVerb;
 import org.junit.After;
 import org.junit.Before;
@@ -29,7 +29,7 @@ public class TestSipStateMachine {
 		machine2.requestHasBeenReceived(SipRequestVerb.INVITE, null);
 	}
 	
-	public void onEvent(SendResponseEvent event) {
+	public void onEvent(SendFollowUpResponseEvent event) {
 		
 	}
 	
