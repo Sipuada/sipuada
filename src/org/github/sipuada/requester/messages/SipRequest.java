@@ -19,6 +19,7 @@ import android.javax.sip.address.SipURI;
 import android.javax.sip.header.CSeqHeader;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
+import android.javax.sip.header.ContentLengthHeader;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.ExpiresHeader;
 import android.javax.sip.header.FromHeader;
@@ -55,9 +56,30 @@ public class SipRequest {
 	private MaxForwardsHeader maxFowardsHeader;
 	
 	private String textMessage;
+	private int dtmfSignalDigit;
+	private int dtmfDuration;
 
 	// Request
 	private Request request;
+	
+	
+	public SipRequest(SipRequestState state, SipProfile sipProfile, SipContact sipContact, AddressFactory addressFactory,
+			HeaderFactory headerFactory, MessageFactory messageFactory, SipProvider sipProvider, String requestMethod,
+			Long callSequence, Integer maxForwards, Integer expirationTimeout, String textMessage, int dtmfSignalDigit, int dtmfDuration )
+					throws ParseException, InvalidArgumentException, SipException, SdpException {
+		
+		this(state, sipProfile, sipContact, addressFactory,
+				headerFactory, messageFactory, sipProvider, requestMethod,
+				callSequence, maxForwards, expirationTimeout, textMessage);
+		
+		this.dtmfSignalDigit = dtmfSignalDigit;
+		this.dtmfDuration = dtmfDuration;
+		
+		ContentTypeHeader contentTypeHeader = headerFactory
+                .createContentTypeHeader("application", "dtmf-relay");
+        request.setContent("Signal=" + dtmfSignalDigit + "\r\nDuration="+ dtmfDuration +"\r\n", contentTypeHeader);
+		
+	}
 
 	/**
 	 * Constructor
@@ -68,7 +90,6 @@ public class SipRequest {
 	 * @throws ParseException
 	 * @throws InvalidArgumentException
 	 * @throws SipException
-	 * @throws NullPointerException
 	 * @throws SdpException
 	 */
 	public SipRequest(SipRequestState state, SipProfile sipProfile, SipContact sipContact, AddressFactory addressFactory,
@@ -91,7 +112,8 @@ public class SipRequest {
 		// create a new Request URI
 		if (Request.REGISTER == requestMethod) {
 			requestURI = addressFactory.createSipURI(sipProfile.getUsername(), sipProfile.getSipDomain());
-		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod) {
+		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod
+				|| Request.INFO == requestMethod) {
 			requestURI = addressFactory.createSipURI(sipContact.getUsername(), sipContact.getSipDomain());
 			if (sipContact.isLocalNetworkContact()) {
 				requestURI.setPort(sipContact.getSipPort());
@@ -104,7 +126,8 @@ public class SipRequest {
 
 		if (Request.REGISTER == requestMethod) {
 			viaHeader.setRPort();
-		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod) {
+		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod
+				|| Request.INFO == requestMethod) {
 			if (!sipContact.isLocalNetworkContact()) {
 				viaHeader.setRPort();
 			}
@@ -114,7 +137,8 @@ public class SipRequest {
 		// create a new CallId header
 		if (Request.REGISTER == requestMethod) {
 			callIdHeader = sipProvider.getNewCallId();
-		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod) {
+		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod
+				|| Request.INFO == requestMethod) {
 			if (state.equals(SipRequestState.REGISTER))
 				callIdHeader = sipProvider.getNewCallId();
 		}
@@ -155,7 +179,8 @@ public class SipRequest {
 				request.addHeader(SipRequestUtils.getAuthorizationHeader(headerFactory, sipProfile));
 			}
 
-		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod) {
+		} else if (Request.INVITE == requestMethod || Request.MESSAGE == requestMethod
+				|| Request.INFO == requestMethod) {
 
 			if (Request.MESSAGE == requestMethod) {
 				SupportedHeader supportedHeader = headerFactory.createSupportedHeader("replaces, outbound");
@@ -180,6 +205,11 @@ public class SipRequest {
 				request.addHeader(SipRequestUtils.getProxyAuthorizationHeader(headerFactory, sipProfile));
 			}
 
+			if(Request.INFO == requestMethod) {
+				ContentLengthHeader contentLengthHeader = headerFactory.createContentLengthHeader(24);
+	            request.addHeader(contentLengthHeader);
+			}
+			
 			if (Request.INVITE == requestMethod) {
 				ContentTypeHeader contentTypeHeader = headerFactory.createContentTypeHeader("application", "sdp");
 				SessionDescription sdp = SipRequestUtils.createSDP(null, sipProfile);
@@ -197,6 +227,7 @@ public class SipRequest {
 	public Request makeRequest(MessageFactory messageFactory, SipURI requestURI, String requestMethod,
 			CallIdHeader callIdHeader, CSeqHeader cSeqHeader, FromHeader fromHeader, ToHeader toHeader,
 			List<ViaHeader> viaHeaders, MaxForwardsHeader maxForwardsHeader) throws ParseException {
+		
 		return messageFactory.createRequest(requestURI, requestMethod, callIdHeader, cSeqHeader, fromHeader, toHeader,
 				viaHeaders, maxForwardsHeader);
 	}
