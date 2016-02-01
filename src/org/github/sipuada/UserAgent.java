@@ -1,5 +1,7 @@
 package org.github.sipuada;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import android.javax.sip.DialogTerminatedEvent;
@@ -17,22 +19,33 @@ import android.javax.sip.SipStack;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.TransportNotSupportedException;
+import android.javax.sip.header.HeaderFactory;
+import android.javax.sip.message.MessageFactory;
 
 public class UserAgent implements SipListener {
 
 	private final int MIN_PORT = 5000;
 	private final int MAX_PORT = 6000;
-	
-	SipProvider provider;
-	UserAgentClient uac;
-	UserAgentServer uas;
-	
-	public UserAgent() {
+
+	private final Map<String, Map<String, String>> noncesCache;
+	{
+		noncesCache = new HashMap<>();
+	}
+	private UserAgentClient uac;
+	private UserAgentServer uas;
+
+	public UserAgent(String username, String domain, String password) {
+		SipProvider provider;
+		MessageFactory messenger;
+		HeaderFactory headerMaker;
 		Properties properties = new Properties();
 		properties.setProperty("android.javax.sip.STACK_NAME", "UserAgent");
 		SipStack stack;
 		try {
-			stack = SipFactory.getInstance().createSipStack(properties);
+			SipFactory factory = SipFactory.getInstance();
+			stack = factory.createSipStack(properties);
+			messenger = factory.createMessageFactory();
+			headerMaker = factory.createHeaderFactory();
 			ListeningPoint listeningPoint;
 			boolean listeningPointBound = false;
 			int localPort = 5060;
@@ -42,6 +55,9 @@ public class UserAgent implements SipListener {
 					listeningPointBound = true;
 					try {
 						provider = stack.createSipProvider(listeningPoint);
+						uac = new UserAgentClient(provider, messenger, headerMaker,
+								noncesCache, username, domain, password);
+						uas = new UserAgentServer(provider, messenger, headerMaker);
 					} catch (ObjectInUseException e) {
 						e.printStackTrace();
 					}
@@ -51,8 +67,6 @@ public class UserAgent implements SipListener {
 				}
 			}
 		} catch (PeerUnavailableException ignore) {}
-		uac = new UserAgentClient(provider);
-		uas = new UserAgentServer(provider);
 	}
 	
 	@Override
