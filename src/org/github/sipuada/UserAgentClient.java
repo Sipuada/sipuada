@@ -295,10 +295,23 @@ public class UserAgentClient {
 			}
 			
 			if (worthAuthenticating) {
-				doSendRequest(request, clientTransaction.getDialog());
+				try {
+					doSendRequest(request, clientTransaction.getDialog());
+				} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
+					//Request that would authenticate could not be sent.
+					//TODO report 401/407 error back to application layer.
+				} catch (SipException requestCouldNotBeSent) {
+					//Request that would authenticate could not be sent.
+					//TODO report 401/407 error back to application layer.
+				}
+			}
+			else {
+				//Not worth authenticating because server already denied
+				//this exact request.
+				//TODO report 401/407 error back to application layer.
 			}
 		} catch (ParseException parseException) {
-			
+			//TODO report 401/407 error back to application layer.
 		}
 	}
 	
@@ -430,7 +443,18 @@ public class UserAgentClient {
 			}
 		}
 		if (overlappingEncodingsFound && overlappingContentTypesFound) {
-			doSendRequest(request, clientTransaction.getDialog());
+			try {
+				doSendRequest(request, clientTransaction.getDialog());
+			} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
+				//Request that would amend this situation could not be sent.
+				//TODO report 415 error back to application layer.
+			} catch (SipException requestCouldNotBeSent) {
+				//Request that would amend this situation could not be sent.
+				//TODO report 415 error back to application layer.
+			}
+		}
+		else {
+			//TODO report 415 error back to application layer.
 		}
 	}
 
@@ -478,20 +502,15 @@ public class UserAgentClient {
 		request.setHeader(cseq);
 	}
 
-	private void doSendRequest(Request request, Dialog dialog) {
-		try {
-			ClientTransaction newClientTransaction =
-					provider.getNewClientTransaction(request);
-			if (dialog != null) {
-				dialog.sendRequest(newClientTransaction);
-			}
-			else {
-				newClientTransaction.sendRequest();
-			}
-		} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
-
-		} catch (SipException requestCouldNotBeSent) {
-
+	private void doSendRequest(Request request, Dialog dialog)
+			throws TransactionUnavailableException, SipException {
+		ClientTransaction newClientTransaction =
+				provider.getNewClientTransaction(request);
+		if (dialog != null) {
+			dialog.sendRequest(newClientTransaction);
+		}
+		else {
+			newClientTransaction.sendRequest();
 		}
 	}
 
