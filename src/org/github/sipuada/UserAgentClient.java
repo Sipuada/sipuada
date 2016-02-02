@@ -120,6 +120,16 @@ public class UserAgentClient {
 				handleAuthorizationRequired(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
+			/*
+			 * case Response.REQUEST_ENTITY_TOO_LARGE:
+			 */
+				//TODO handle this by retrying omitting the body or using one of
+				//smaller length.
+				//If the condition is temporary, the server SHOULD include a
+				//Retry-After header field to indicate that it is temporary and after
+				//what time the client MAY try again.
+				//No method-specific handling is required.
+				//return false;
 			case Response.UNSUPPORTED_MEDIA_TYPE:
 				//TODO handle this by retrying after filtering any media types not listed in
 				//the Accept header field in the response, with encodings listed in the
@@ -128,10 +138,12 @@ public class UserAgentClient {
 				//No method-specific handling is required.
 				handleUnsupportedMediaTypes(response, clientTransaction);
 				return false;
-			case Response.UNSUPPORTED_URI_SCHEME:
+			/*
+			 * case Response.UNSUPPORTED_URI_SCHEME: 
+			 */
 				//TODO handle this by retrying, this time using a SIP(S) URI.
 				//No method-specific handling is required.
-				return false;
+				//return false;
 			case Response.BAD_EXTENSION:
 				//TODO handle this by retrying, this time omitting any extensions listed in
 				//the Unsupported header field in the response.
