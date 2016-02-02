@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import org.github.sipuada.Constants.ResponseClass;
 
@@ -20,6 +22,7 @@ import android.javax.sip.ResponseEvent;
 import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
 import android.javax.sip.TimeoutEvent;
+import android.javax.sip.TransactionDoesNotExistException;
 import android.javax.sip.TransactionUnavailableException;
 import android.javax.sip.header.AcceptEncodingHeader;
 import android.javax.sip.header.AcceptHeader;
@@ -35,6 +38,7 @@ import android.javax.sip.header.ProxyAuthenticateHeader;
 import android.javax.sip.header.ProxyAuthorizationHeader;
 import android.javax.sip.header.ProxyRequireHeader;
 import android.javax.sip.header.RequireHeader;
+import android.javax.sip.header.RetryAfterHeader;
 import android.javax.sip.header.ToHeader;
 import android.javax.sip.header.UnsupportedHeader;
 import android.javax.sip.header.ViaHeader;
@@ -127,16 +131,16 @@ public class UserAgentClient {
 				handleAuthorizationRequired(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
-			/*
-			 * case Response.REQUEST_ENTITY_TOO_LARGE:
-			 */
+			case Response.REQUEST_ENTITY_TOO_LARGE:
 				//TODO handle this by retrying omitting the body or using one of
 				//smaller length.
 				//If the condition is temporary, the server SHOULD include a
 				//Retry-After header field to indicate that it is temporary and after
 				//what time the client MAY try again.
+				//For now just checking whether simple rescheduling is applicable.
+				handleUnsupportedExtension(response, clientTransaction);
 				//No method-specific handling is required.
-				//return false;
+				return false;
 			case Response.UNSUPPORTED_MEDIA_TYPE:
 				//TODO handle this by retrying after filtering any media types not listed in
 				//the Accept header field in the response, with encodings listed in the
@@ -145,62 +149,55 @@ public class UserAgentClient {
 				handleUnsupportedMediaTypes(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
-			/*
-			 * case Response.UNSUPPORTED_URI_SCHEME: 
-			 */
-				//TODO handle this by retrying, this time using a SIP(S) URI.
-				//No method-specific handling is required.
-				//return false;
 			case Response.BAD_EXTENSION:
 				//TODO handle this by retrying, this time omitting any extensions listed in
 				//the Unsupported header field in the response.
 				handleUnsupportedExtension(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
-
-			//FIXME In all of the above cases, the request is retried by creating
-			//a new request with the appropriate modifications.
-			//This new request constitutes a new transaction and SHOULD have the same value
-			//of the Call-ID, To, and From of the previous request, but the CSeq
-			//should contain a new sequence number that is one higher than the previous.
-
-			case Response.REQUEST_TIMEOUT:
-			case Response.SERVER_TIMEOUT:
-				//FIXME I think no method-specific handling is required.
-				//TODO handle this by retrying the same request after a while.
-				return false;
-
-			case Response.ADDRESS_INCOMPLETE:
-				//FIXME I think no method-specific handling is required.
-				//TODO figure out how to handle this by doing overlapped dialing(?)
-				//until the response no longer is a 484 (Address Incomplete).
-				return false;
-				
-			case Response.AMBIGUOUS:
-				//FIXME I think no method-specific handling is required.
-				//TODO figure out how to handle this by prompting for user intervention
-				//for deciding which of the choices provided is to be used in the retry.
-				return false;
-
+			case Response.NOT_FOUND:
 			case Response.BUSY_HERE:
 			case Response.BUSY_EVERYWHERE:
 			case Response.DECLINE:
-				//No method-specific handling is required.
 				//TODO handle this by retrying if a better time to call is indicated in
 				//the Retry-After header field.
+				handleByReschedulingIfApplicable(response, clientTransaction, false);
+				//No method-specific handling is required.
 				return false;
-				
 			case Response.SERVER_INTERNAL_ERROR:
 			case Response.SERVICE_UNAVAILABLE:
-				//No method-specific handling is required.
-				//TODO handle this by retrying if a better time to call is indicated in
+				//TODO handle this by retrying if expected available time is indicated in
 				//the Retry-After header field.
+				handleByReschedulingIfApplicable(response, clientTransaction, false);
+				//No method-specific handling is required.
 				return false;
-				
-			case Response.TRYING:
-				//FIXME what about these? Is a method-specific handling required?
-				//TODO handle these situations.
-				return true;
+			case Response.REQUEST_TIMEOUT:
+			case Response.SERVER_TIMEOUT:
+				//TODO handle this by retrying the same request after a while if it is
+				//outside of a dialog, otherwise consider the dialog and session terminated.
+				handleByReschedulingIfApplicable(response, clientTransaction, true);
+				//No method-specific handling is required.
+				return false;
+			/*
+			 * case Response.ADDRESS_INCOMPLETE:
+			 */
+				//TODO figure out how to handle this by doing overlapped dialing(?)
+				//until the response no longer is a 484 (Address Incomplete).
+				//No method-specific handling is required.
+				//return false;
+			/*
+			 * case Response.UNSUPPORTED_URI_SCHEME: 
+			 */
+				//TODO handle this by retrying, this time using a SIP(S) URI.
+				//No method-specific handling is required.
+				//return false;
+			/*
+			 * case Response.AMBIGUOUS:
+			 */
+				//FIXME I think no method-specific handling is required.
+				//TODO figure out how to handle this by prompting for user intervention
+				//for deciding which of the choices provided is to be used in the retry.
+				//return false;
 		}
 		switch (Constants.getResponseClass(statusCode)) {
 			case PROVISIONAL:
@@ -210,11 +207,12 @@ public class UserAgentClient {
 				return true;
 			case REDIRECT:
 				//TODO perform redirect request(s) transparently.
+				//When implementing this, remember to implement the AMBIGUOUS case above.
 				return false;
 			case CLIENT_ERROR:
 			case SERVER_ERROR:
 			case GLOBAL_ERROR:
-				//TODO give the application layer feedback on this error.
+				//TODO report this response error back to the application layer.
 				return false;
 			case UNKNOWN:
 				//Handle this by simply discarding this unknown response.
@@ -317,9 +315,6 @@ public class UserAgentClient {
 			if (worthAuthenticating) {
 				try {
 					doSendRequest(request, clientTransaction.getDialog());
-				} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
-					//Request that would authenticate could not be sent.
-					//TODO report 401/407 error back to application layer.
 				} catch (SipException requestCouldNotBeSent) {
 					//Request that would authenticate could not be sent.
 					//TODO report 401/407 error back to application layer.
@@ -465,9 +460,6 @@ public class UserAgentClient {
 		if (overlappingEncodingsFound && overlappingContentTypesFound) {
 			try {
 				doSendRequest(request, clientTransaction.getDialog());
-			} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
-				//Request that would amend this situation could not be sent.
-				//TODO report 415 error back to application layer.
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would amend this situation could not be sent.
 				//TODO report 415 error back to application layer.
@@ -538,16 +530,56 @@ public class UserAgentClient {
 		}
 		try {
 			doSendRequest(request, clientTransaction.getDialog());
-		} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
-			//Request that would amend this situation could not be sent.
-			//TODO report 420 error back to application layer.
 		} catch (SipException requestCouldNotBeSent) {
 			//Request that would amend this situation could not be sent.
 			//TODO report 420 error back to application layer.
 		}
 	}
 
+	private void handleByReschedulingIfApplicable(Response response,
+			final ClientTransaction clientTransaction, boolean abortIfInDialog) {
+		if (abortIfInDialog) {
+			Dialog dialog = clientTransaction.getDialog();
+			if (dialog != null) {
+				dialog.delete();
+				//TODO report response error back to application layer.
+				return;
+			}
+		}
+
+		final Request request = cloneRequest(clientTransaction.getRequest());
+		incrementCSeq(request);
+
+		RetryAfterHeader retryAfterHeader =
+				(RetryAfterHeader) response.getHeader(RetryAfterHeader.NAME);
+		if (retryAfterHeader != null) {
+			int retryAfterSeconds = retryAfterHeader.getRetryAfter();
+			int durationSeconds = retryAfterHeader.getDuration();
+			if (durationSeconds == 0 || durationSeconds > 300) {
+				Timer timer = new Timer();
+				timer.schedule(new TimerTask() {
+					
+					@Override
+					public void run() {
+						try {
+							doSendRequest(request, clientTransaction.getDialog());
+						} catch (SipException requestCouldNotBeSent) {
+							//Could not reschedule request.
+							//TODO report response error back to application layer.
+						}
+					}
+
+				}, retryAfterSeconds * 1000);
+				return;
+			}
+		}
+		//Request is not allowed to reschedule or it would be pointless to do so
+		//because availability frame is too short.
+		//TODO report response error back to application layer.
+	}
+	
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
+		boolean shouldSaveDialog = false;
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			Dialog dialog = clientTransaction.getDialog();
 			if (dialog != null) {
@@ -558,7 +590,18 @@ public class UserAgentClient {
 					dialog.sendAck(ackRequest);
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
+				shouldSaveDialog = true;
 			}
+		}
+		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
+			if (statusCode == Response.RINGING) {
+				//TODO report response status code back to the application layer.
+			}
+			shouldSaveDialog = true;
+		}
+		if (shouldSaveDialog) {
+			//TODO figure out how to properly save this dialog so that future request intents will
+			//know how to properly fetch it in order to properly build requests.
 		}
 	}
 	
@@ -596,7 +639,10 @@ public class UserAgentClient {
 		ClientTransaction newClientTransaction =
 				provider.getNewClientTransaction(request);
 		if (dialog != null) {
-			dialog.sendRequest(newClientTransaction);
+			try {
+				dialog.sendRequest(newClientTransaction);
+			}
+			catch (TransactionDoesNotExistException ignore) {}
 		}
 		else {
 			newClientTransaction.sendRequest();
