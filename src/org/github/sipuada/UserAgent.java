@@ -16,6 +16,7 @@ import android.javax.sip.SipFactory;
 import android.javax.sip.SipListener;
 import android.javax.sip.SipProvider;
 import android.javax.sip.SipStack;
+import android.javax.sip.Timeout;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.TransportNotSupportedException;
@@ -80,8 +81,13 @@ public class UserAgent implements SipListener {
 	}
 
 	@Override
-	public void processTimeout(TimeoutEvent timeoutEvent) {
-		uac.processTimeout(timeoutEvent);
+	public void processTimeout(TimeoutEvent timeoutOrRetransmissionEvent) {
+		if (timeoutOrRetransmissionEvent.getTimeout() == Timeout.TRANSACTION) {
+			uac.processTimeout(timeoutOrRetransmissionEvent);
+		}
+		else if (timeoutOrRetransmissionEvent.getTimeout() == Timeout.RETRANSMIT) {
+			uas.processRetransmission(timeoutOrRetransmissionEvent);
+		}
 	}
 
 	@Override
