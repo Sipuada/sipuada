@@ -1,6 +1,7 @@
 package org.github.sipuada;
 
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -11,8 +12,12 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
 
+import android.gov.nist.gnjvx.sip.Utils;
+import android.gov.nist.gnjvx.sip.address.AddressImpl;
+import android.gov.nist.gnjvx.sip.address.GenericURI;
 import android.gov.nist.gnjvx.sip.address.SipUri;
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
@@ -24,6 +29,9 @@ import android.javax.sip.SipProvider;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionDoesNotExistException;
 import android.javax.sip.TransactionUnavailableException;
+import android.javax.sip.address.Address;
+import android.javax.sip.address.SipURI;
+import android.javax.sip.address.URI;
 import android.javax.sip.header.AcceptEncodingHeader;
 import android.javax.sip.header.AcceptHeader;
 import android.javax.sip.header.AuthorizationHeader;
@@ -39,6 +47,7 @@ import android.javax.sip.header.ProxyAuthorizationHeader;
 import android.javax.sip.header.ProxyRequireHeader;
 import android.javax.sip.header.RequireHeader;
 import android.javax.sip.header.RetryAfterHeader;
+import android.javax.sip.header.RouteHeader;
 import android.javax.sip.header.ToHeader;
 import android.javax.sip.header.UnsupportedHeader;
 import android.javax.sip.header.ViaHeader;
@@ -52,11 +61,18 @@ public class UserAgentClient {
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
+
 	private final String username;
 	private final String domain;
 	private final String password;
+	private final String localIp;
+	private final int localPort;
+	private final String transport;
 	private final Map<String, Map<String, String>> noncesCache;
-	
+
+	private long localCSeq = 1;
+	private final List<Address> routeSet = new LinkedList<>();
+
 	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
 			HeaderFactory headerFactory, Map<String, Map<String, String>> cache,
 			String... credentials) {
@@ -67,10 +83,121 @@ public class UserAgentClient {
 		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
 		domain = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
 		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
+		localIp = credentials.length > 3 && credentials[3] != null ? credentials[3] : "";
+		localPort = credentials.length > 4 && credentials[4] != null ?
+				Integer.parseInt(credentials[4]) : 5060;
+		transport = credentials.length > 5 && credentials[5] != null ? credentials[5] : "";
 	}
 
-	public void sendRequest() {
+	public void sendRequest(RequestMethod method, String addressee) {
+		sendRequest(method, addressee, null);
+	}
+	
+	public void sendRequest(RequestMethod method, Dialog dialog) {
+		sendRequest(method, dialog.getRemoteParty().getURI().toString(), dialog);
+	}
+	
+	public void sendCancelRequest(ClientTransaction clientTransaction) {
 		
+	}
+
+	private void sendRequest(RequestMethod method, String addressee, Dialog dialog) {
+		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
+				|| method == RequestMethod.UNKNOWN) {
+			//This method is meant for the INVITE request and
+			//the following NON-INVITE requests: REGISTER, OPTIONS and BYE.
+			//(In the future, INFO and MESSAGE as well.)
+			//TODO log this wrong usage condition back to the application layer.
+			return;
+		}
+		URI requestUri, addresserUri, addresseeUri;
+		try {
+			String rawRequestUri = method == RequestMethod.REGISTER ?
+					addressee.split("@")[1] : addressee;
+			requestUri = new GenericURI(rawRequestUri);
+			addresserUri = new GenericURI(String.format("sip://%s@%s", username, domain));
+			addresseeUri = new GenericURI(addressee);
+		} catch (ParseException parseException) {
+			//Could not properly parse the recipient. Must be a valid URI.
+			//TODO report error condition back to the application layer.
+			return;
+		}
+		URI remoteTargetUri = requestUri;
+		List<Address> modifiedRouteSet = new LinkedList<>();
+		if (!routeSet.isEmpty()) {
+			if (((SipURI)routeSet.get(0).getURI()).hasLrParam()) {
+				for (Address address : routeSet) {
+					modifiedRouteSet.add(address);
+				}
+			}
+			else {
+				requestUri = routeSet.get(0).getURI();
+				for (int i=1; i<routeSet.size(); i++) {
+					modifiedRouteSet.add(routeSet.get(i));
+				}
+				Address remoteTargetAddress = new AddressImpl();
+				remoteTargetAddress.setURI(remoteTargetUri);
+				modifiedRouteSet.add(remoteTargetAddress);
+			}
+		}
+
+		String callId, fromTag, toTag;
+		long cseq;
+		Address from = new AddressImpl(), to = new AddressImpl();
+
+		if (dialog != null) {
+			callId = dialog.getCallId().getCallId();
+			cseq = dialog.getLocalSeqNumber() + 1;
+			if (localCSeq < cseq) {
+				localCSeq = cseq;
+			}
+			from.setURI(dialog.getLocalParty().getURI());
+			fromTag = dialog.getLocalTag();
+			to.setURI(dialog.getRemoteParty().getURI());
+			toTag = dialog.getRemoteTag();
+		}
+		else {
+			callId = null;
+			cseq = ++localCSeq;
+			from.setURI(addresserUri);
+			fromTag = Utils.getInstance().generateTag();
+			to.setURI(addresseeUri);
+			toTag = null;
+		}
+
+		try {
+			ViaHeader viaHeader = headerMaker
+					.createViaHeader(localIp, localPort, transport, null);
+			viaHeader.setRPort();
+			Request request = messenger.createRequest(requestUri, method.toString(),
+					callId == null ? provider.getNewCallId() :
+						headerMaker.createCallIdHeader(callId),
+					headerMaker.createCSeqHeader(cseq, method.toString()),
+					headerMaker.createFromHeader(from, fromTag),
+					headerMaker.createToHeader(to, toTag),
+					Collections.singletonList(viaHeader),
+					headerMaker.createMaxForwardsHeader(70));
+			if (!modifiedRouteSet.isEmpty()) {
+				routeSet.clear();
+				routeSet.addAll(modifiedRouteSet);
+				for (Address routeAddress : modifiedRouteSet) {
+					RouteHeader routeHeader = headerMaker.createRouteHeader(routeAddress);
+					request.addHeader(routeHeader);
+				}
+			}
+			ClientTransaction clientTransaction = provider
+					.getNewClientTransaction(request);
+			viaHeader.setBranch(clientTransaction.getBranchId());
+			doSendRequest(request, clientTransaction, clientTransaction.getDialog());
+			//TODO propagate this clientTransaction back to the application layer,
+			//so that it can later cancel it if desired.
+		} catch (ParseException requestCouldNotBeBuilt) {
+			//Could not properly build this request.
+			//TODO report this error condition back to the application layer.
+		} catch (SipException requestCouldNotBeSent) {
+			//This request could not be sent.
+			//TODO report this error condition back to the application layer.
+		} catch (InvalidArgumentException ignore) {}
 	}
 	
 	public void processResponse(ResponseEvent responseEvent) {
@@ -130,6 +257,7 @@ public class UserAgentClient {
 				//Handle this by performing authorization procedures.
 				handleAuthorizationRequired(response, clientTransaction);
 				//No method-specific handling is required.
+				//TODO TODO TODO if method is CANCEL, MUST NOT do these things.
 				return false;
 			case Response.REQUEST_ENTITY_TOO_LARGE:
 				//TODO handle this by retrying omitting the body or using one of
@@ -314,7 +442,7 @@ public class UserAgentClient {
 			
 			if (worthAuthenticating) {
 				try {
-					doSendRequest(request, clientTransaction.getDialog());
+					doSendRequest(request, null, clientTransaction.getDialog());
 				} catch (SipException requestCouldNotBeSent) {
 					//Request that would authenticate could not be sent.
 					//TODO report 401/407 error back to application layer.
@@ -459,7 +587,7 @@ public class UserAgentClient {
 		}
 		if (overlappingEncodingsFound && overlappingContentTypesFound) {
 			try {
-				doSendRequest(request, clientTransaction.getDialog());
+				doSendRequest(request, null, clientTransaction.getDialog());
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would amend this situation could not be sent.
 				//TODO report 415 error back to application layer.
@@ -529,7 +657,7 @@ public class UserAgentClient {
 			}
 		}
 		try {
-			doSendRequest(request, clientTransaction.getDialog());
+			doSendRequest(request, null, clientTransaction.getDialog());
 		} catch (SipException requestCouldNotBeSent) {
 			//Request that would amend this situation could not be sent.
 			//TODO report 420 error back to application layer.
@@ -562,7 +690,7 @@ public class UserAgentClient {
 					@Override
 					public void run() {
 						try {
-							doSendRequest(request, clientTransaction.getDialog());
+							doSendRequest(request, null, clientTransaction.getDialog());
 						} catch (SipException requestCouldNotBeSent) {
 							//Could not reschedule request.
 							//TODO report response error back to application layer.
@@ -580,8 +708,8 @@ public class UserAgentClient {
 	
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
 		boolean shouldSaveDialog = false;
+		Dialog dialog = clientTransaction.getDialog();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
-			Dialog dialog = clientTransaction.getDialog();
 			if (dialog != null) {
 				try {
 					CSeqHeader cseqHeader = (CSeqHeader) clientTransaction
@@ -600,11 +728,11 @@ public class UserAgentClient {
 			shouldSaveDialog = true;
 		}
 		if (shouldSaveDialog) {
-			//TODO figure out how to properly save this dialog so that future request intents will
-			//know how to properly fetch it in order to properly build requests.
+			//TODO propagate this dialog back to the application layer so that it can
+			//pass it back when desiring to perform subsequent dialog operations.
 		}
 	}
-	
+
 	private Request cloneRequest(Request original) {
 		Request clone = null;
 		List<ViaHeader> viaHeaders = new LinkedList<>();
@@ -634,10 +762,11 @@ public class UserAgentClient {
 		request.setHeader(cseq);
 	}
 
-	private void doSendRequest(Request request, Dialog dialog)
+	private void doSendRequest(Request request,
+			ClientTransaction clientTransaction, Dialog dialog)
 			throws TransactionUnavailableException, SipException {
-		ClientTransaction newClientTransaction =
-				provider.getNewClientTransaction(request);
+		ClientTransaction newClientTransaction = clientTransaction != null ?
+				provider.getNewClientTransaction(request) : clientTransaction;
 		if (dialog != null) {
 			try {
 				dialog.sendRequest(newClientTransaction);
