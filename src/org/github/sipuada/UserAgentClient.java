@@ -33,7 +33,10 @@ import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.MaxForwardsHeader;
 import android.javax.sip.header.ProxyAuthenticateHeader;
 import android.javax.sip.header.ProxyAuthorizationHeader;
+import android.javax.sip.header.ProxyRequireHeader;
+import android.javax.sip.header.RequireHeader;
 import android.javax.sip.header.ToHeader;
+import android.javax.sip.header.UnsupportedHeader;
 import android.javax.sip.header.ViaHeader;
 import android.javax.sip.header.WWWAuthenticateHeader;
 import android.javax.sip.message.MessageFactory;
@@ -72,6 +75,10 @@ public class UserAgentClient {
 			Response response = responseEvent.getResponse();
 			int statusCode = response.getStatusCode();
 			handleResponse(statusCode, response, clientTransaction);
+		}
+		else {
+			//No request made by this UAC is associated with this response.
+			//The response then is considered stray, so it simply discards it.
 		}
 	}
 
@@ -135,8 +142,8 @@ public class UserAgentClient {
 				//the Accept header field in the response, with encodings listed in the
 				//Accept-Encoding header field in the response, and with languages listed in
 				//the Accept-Language in the response.
-				//No method-specific handling is required.
 				handleUnsupportedMediaTypes(response, clientTransaction);
+				//No method-specific handling is required.
 				return false;
 			/*
 			 * case Response.UNSUPPORTED_URI_SCHEME: 
@@ -147,9 +154,10 @@ public class UserAgentClient {
 			case Response.BAD_EXTENSION:
 				//TODO handle this by retrying, this time omitting any extensions listed in
 				//the Unsupported header field in the response.
+				handleUnsupportedExtension(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
-				
+
 			//FIXME In all of the above cases, the request is retried by creating
 			//a new request with the appropriate modifications.
 			//This new request constitutes a new transaction and SHOULD have the same value
@@ -161,7 +169,7 @@ public class UserAgentClient {
 				//FIXME I think no method-specific handling is required.
 				//TODO handle this by retrying the same request after a while.
 				return false;
-				
+
 			case Response.ADDRESS_INCOMPLETE:
 				//FIXME I think no method-specific handling is required.
 				//TODO figure out how to handle this by doing overlapped dialing(?)
@@ -466,7 +474,76 @@ public class UserAgentClient {
 			}
 		}
 		else {
+			//Cannot satisfy the media type requirements since this UAC doesn't
+			//support any that are accepted by the UAS that sent this response.
 			//TODO report 415 error back to application layer.
+		}
+	}
+	
+	private void handleUnsupportedExtension(Response response,
+			ClientTransaction clientTransaction) {
+		Request request = cloneRequest(clientTransaction.getRequest());
+		incrementCSeq(request);
+		
+		UnsupportedHeader unsupportedHeader =
+				(UnsupportedHeader) response.getHeader(UnsupportedHeader.NAME);
+		String unsupportedOptionTags = unsupportedHeader.getOptionTag();
+		
+		RequireHeader requireHeader =
+				(RequireHeader) request.getHeader(RequireHeader.NAME);
+		ProxyRequireHeader proxyRequireHeader =
+				(ProxyRequireHeader) request.getHeader(ProxyRequireHeader.NAME);
+		StringBuilder allowedOptionTags = new StringBuilder();
+		if (requireHeader != null) {
+			String[] requiredOptionTags = requireHeader.getOptionTag().split(",");
+			for (String requiredOptionTag : requiredOptionTags) {
+				requiredOptionTag = requiredOptionTag.trim();
+				if (!unsupportedOptionTags.contains(requiredOptionTag)) {
+					if (allowedOptionTags.length() > 0) {
+						allowedOptionTags.append(", ");
+					}
+					allowedOptionTags.append(requiredOptionTag);
+				}
+			}
+			if (allowedOptionTags.length() > 0) {
+				try {
+					requireHeader.setOptionTag(allowedOptionTags.toString());
+				} catch (ParseException ignore) {}
+				request.setHeader(requireHeader);
+			}
+			else {
+				request.removeHeader(RequireHeader.NAME);
+			}
+		}
+		else if (proxyRequireHeader != null) {
+			String[] proxyRequiredOptionTags = proxyRequireHeader.getOptionTag().split(",");
+			for (String proxyRequiredOptionTag : proxyRequiredOptionTags) {
+				proxyRequiredOptionTag = proxyRequiredOptionTag.trim();
+				if (!unsupportedOptionTags.contains(proxyRequiredOptionTag)) {
+					if (allowedOptionTags.length() > 0) {
+						allowedOptionTags.append(", ");
+					}
+					allowedOptionTags.append(proxyRequiredOptionTag);
+				}
+			}
+			if (allowedOptionTags.length() > 0) {
+				try {
+					proxyRequireHeader.setOptionTag(allowedOptionTags.toString());
+				} catch (ParseException ignore) {}
+				request.setHeader(proxyRequireHeader);
+			}
+			else {
+				request.removeHeader(ProxyRequireHeader.NAME);
+			}
+		}
+		try {
+			doSendRequest(request, clientTransaction.getDialog());
+		} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
+			//Request that would amend this situation could not be sent.
+			//TODO report 420 error back to application layer.
+		} catch (SipException requestCouldNotBeSent) {
+			//Request that would amend this situation could not be sent.
+			//TODO report 420 error back to application layer.
 		}
 	}
 
