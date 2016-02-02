@@ -2,10 +2,12 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Set;
 
 import org.github.sipuada.Constants.ResponseClass;
 
@@ -18,11 +20,13 @@ import android.javax.sip.ResponseEvent;
 import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
 import android.javax.sip.TimeoutEvent;
-import android.javax.sip.TransactionAlreadyExistsException;
 import android.javax.sip.TransactionUnavailableException;
+import android.javax.sip.header.AcceptEncodingHeader;
+import android.javax.sip.header.AcceptHeader;
 import android.javax.sip.header.AuthorizationHeader;
 import android.javax.sip.header.CSeqHeader;
 import android.javax.sip.header.CallIdHeader;
+import android.javax.sip.header.ContentEncodingHeader;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.HeaderFactory;
@@ -44,7 +48,6 @@ public class UserAgentClient {
 	private final String username;
 	private final String domain;
 	private final String password;
-	
 	private final Map<String, Map<String, String>> noncesCache;
 	
 	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
@@ -114,16 +117,7 @@ public class UserAgentClient {
 			case Response.PROXY_AUTHENTICATION_REQUIRED:
 			case Response.UNAUTHORIZED:
 				//Handle this by performing authorization procedures.
-				handleAuthorizationRequired(statusCode, response, clientTransaction);
-				//No method-specific handling is required.
-				return false;
-			case Response.REQUEST_ENTITY_TOO_LARGE:
-				//TODO handle this by retrying omitting the body or using one of
-				//smaller length.
-				//If the condition is temporary, the server SHOULD include a
-				//Retry-After header field to indicate that it is temporary and after
-				//what time the client MAY try again.
-				handleRequestEntityTooLarge(clientTransaction);
+				handleAuthorizationRequired(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
 			case Response.UNSUPPORTED_MEDIA_TYPE:
@@ -132,6 +126,7 @@ public class UserAgentClient {
 				//Accept-Encoding header field in the response, and with languages listed in
 				//the Accept-Language in the response.
 				//No method-specific handling is required.
+				handleUnsupportedMediaTypes(response, clientTransaction);
 				return false;
 			case Response.UNSUPPORTED_URI_SCHEME:
 				//TODO handle this by retrying, this time using a SIP(S) URI.
@@ -208,15 +203,10 @@ public class UserAgentClient {
 		return true;
 	}
 	
-	private void handleAuthorizationRequired(int statusCode, Response response,
+	private void handleAuthorizationRequired(Response response,
 			ClientTransaction clientTransaction) {
-		Request originalRequest = clientTransaction.getRequest();
-		Request clonedRequest = cloneRequest(originalRequest);
-		CSeqHeader cseq = (CSeqHeader) originalRequest.getHeader(CSeqHeader.NAME);
-		try {
-			cseq.setSeqNumber(cseq.getSeqNumber() + 1);
-		} catch (InvalidArgumentException ignore) {}
-		clonedRequest.setHeader(cseq);
+		Request request = cloneRequest(clientTransaction.getRequest());
+		incrementCSeq(request);
 
 		try {
 			boolean worthAuthenticating = false;
@@ -232,15 +222,15 @@ public class UserAgentClient {
 				password = "";
 			}
 			
-			ToHeader toHeader = (ToHeader) clonedRequest.getHeader(ToHeader.NAME);
+			ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 			String toHeaderValue = toHeader.getAddress().getURI().toString();
 
 			@SuppressWarnings("rawtypes")
 			ListIterator wwwAuthenticateHeaders = response
 					.getHeaders(WWWAuthenticateHeader.NAME);
 			while (wwwAuthenticateHeaders.hasNext()) {
-				WWWAuthenticateHeader wwwAuthenticateHeader 
-					= (WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
+				WWWAuthenticateHeader wwwAuthenticateHeader =
+						(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
 				String realm = wwwAuthenticateHeader.getRealm();
 				String nonce = wwwAuthenticateHeader.getNonce();
 				if (noncesCache.containsKey(toHeaderValue)
@@ -251,7 +241,7 @@ public class UserAgentClient {
 					}
 				}
 				String responseDigest = AuthorizationDigest.getDigest(username, realm,
-						password, clonedRequest.getMethod(), domainUri.toString(), nonce);
+						password, request.getMethod(), domainUri.toString(), nonce);
 				AuthorizationHeader authorizationHeader = headerMaker
 						.createAuthorizationHeader("Digest");
 				authorizationHeader.setAlgorithm("MD5");
@@ -262,7 +252,7 @@ public class UserAgentClient {
 				authorizationHeader.setRealm(realm);
 				authorizationHeader.setNonce(nonce);
 				authorizationHeader.setResponse(responseDigest);
-				clonedRequest.addHeader(authorizationHeader);
+				request.addHeader(authorizationHeader);
 				if (!noncesCache.containsKey(toHeaderValue)) {
 					noncesCache.put(toHeaderValue, new HashMap<String, String>());
 				}
@@ -273,8 +263,8 @@ public class UserAgentClient {
 			ListIterator proxyAuthenticateHeaders = response
 					.getHeaders(ProxyAuthenticateHeader.NAME);
 			while (proxyAuthenticateHeaders.hasNext()) {
-				ProxyAuthenticateHeader proxyAuthenticateHeader
-					= (ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
+				ProxyAuthenticateHeader proxyAuthenticateHeader =
+						(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
 				String realm = proxyAuthenticateHeader.getRealm();
 				String nonce = proxyAuthenticateHeader.getNonce();
 				if (noncesCache.containsKey(toHeaderValue)
@@ -285,7 +275,7 @@ public class UserAgentClient {
 					}
 				}
 				String responseDigest = AuthorizationDigest.getDigest(username, realm,
-						password, clonedRequest.getMethod(), domainUri.toString(), nonce);
+						password, request.getMethod(), domainUri.toString(), nonce);
 				ProxyAuthorizationHeader proxyAuthorizationHeader = headerMaker
 						.createProxyAuthorizationHeader("Digest");
 				proxyAuthorizationHeader.setAlgorithm("MD5");
@@ -296,7 +286,7 @@ public class UserAgentClient {
 				proxyAuthorizationHeader.setRealm(realm);
 				proxyAuthorizationHeader.setNonce(nonce);
 				proxyAuthorizationHeader.setResponse(responseDigest);
-				clonedRequest.addHeader(proxyAuthorizationHeader);
+				request.addHeader(proxyAuthorizationHeader);
 				if (!noncesCache.containsKey(toHeaderValue)) {
 					noncesCache.put(toHeaderValue, new HashMap<String, String>());
 				}
@@ -305,23 +295,143 @@ public class UserAgentClient {
 			}
 			
 			if (worthAuthenticating) {
-				try {
-					ClientTransaction transaction = provider.getNewClientTransaction(clonedRequest);
-					transaction.sendRequest();
-				} catch (TransactionAlreadyExistsException ignore) {
-				} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
-					
-				} catch (SipException requestCouldNotBeSent) {
-					
-				}
+				doSendRequest(request, clientTransaction.getDialog());
 			}
 		} catch (ParseException parseException) {
 			
 		}
 	}
 	
-	private void handleRequestEntityTooLarge(ClientTransaction clientTransaction) {
+	private void handleUnsupportedMediaTypes(Response response,
+			ClientTransaction clientTransaction) {
+		Request request = cloneRequest(clientTransaction.getRequest());
+		incrementCSeq(request);
+
+		@SuppressWarnings("rawtypes")
+		ListIterator acceptEncodingHeaders =
+				response.getHeaders(AcceptEncodingHeader.NAME);
+		List<String> acceptedEncodings = new LinkedList<>();
+		while (acceptEncodingHeaders.hasNext()) {
+			AcceptEncodingHeader acceptEncodingHeader =
+					(AcceptEncodingHeader) acceptEncodingHeaders.next();
+			StringBuilder encoding =
+					new StringBuilder(acceptEncodingHeader.getEncoding());
+			float qValue = acceptEncodingHeader.getQValue();
+			if (qValue != -1) {
+				encoding.insert(0, String.format("q=%.2f, ", qValue));
+			}
+			acceptedEncodings.add(encoding.toString());
+		}
+		ContentEncodingHeader contentEncodingHeader =
+				request.getContentEncoding();
+		String definedEncoding = contentEncodingHeader.getEncoding();
+		StringBuilder overlappingEncodings = new StringBuilder();
+		for (String acceptedEncoding : acceptedEncodings) {
+			String encodingWithoutQValue = acceptedEncoding;
+			if (encodingWithoutQValue.contains(",")) {
+				encodingWithoutQValue = acceptedEncoding
+						.split(",")[1].trim();
+			}
+			if (definedEncoding.contains(encodingWithoutQValue)) {
+				if (overlappingEncodings.length() != 0) {
+					overlappingEncodings.append("; ");
+				}
+				overlappingEncodings.append(acceptedEncoding);
+			}
+		}
+		boolean overlappingEncodingsFound = false;
+		if (overlappingEncodings.length() > 0) {
+			try {
+				contentEncodingHeader
+					.setEncoding(overlappingEncodings.toString());
+				request.setContentEncoding(contentEncodingHeader);
+				overlappingEncodingsFound = true;
+			} catch (ParseException ignore) {}
+		}
 		
+		boolean shouldBypassContentTypesCheck = false;
+		@SuppressWarnings("rawtypes")
+		ListIterator acceptHeaders = response.getHeaders(AcceptHeader.NAME);
+		Map<String, String> typeSubtypeToQValue = new HashMap<>();
+		Map<String, Set<String>> typeToSubTypes = new HashMap<>();
+		while (acceptHeaders.hasNext()) {
+			AcceptHeader acceptHeader =
+					(AcceptHeader) acceptHeaders.next();
+			String contentType = acceptHeader.getContentType();
+			String contentSubType = acceptHeader.getContentSubType();
+			if (acceptHeader.allowsAllContentTypes()) {
+				shouldBypassContentTypesCheck = true;
+				break;
+			}
+			else if (acceptHeader.allowsAllContentSubTypes()) {
+				typeToSubTypes.put(contentType, new HashSet<String>());
+			}
+			else {
+				if (!typeToSubTypes.containsKey(contentType)) {
+					typeToSubTypes.put(contentType, new HashSet<String>());
+				}
+				typeToSubTypes.get(contentType).add(contentSubType);
+			}
+			float qValue = acceptHeader.getQValue();
+			if (qValue != -1) {
+				typeSubtypeToQValue.put(String.format("%s/%s", contentType,
+						contentSubType), Float.toString(qValue));
+			}
+		}
+		boolean overlappingContentTypesFound = false;
+		if (!shouldBypassContentTypesCheck) {
+			@SuppressWarnings("rawtypes")
+			ListIterator definedContentTypeHeaders =
+					request.getHeaders(ContentTypeHeader.NAME);
+			List<ContentTypeHeader> overlappingContentTypes
+					= new LinkedList<>();
+			while (definedContentTypeHeaders.hasNext()) {
+				ContentTypeHeader contentTypeHeader = (ContentTypeHeader)
+						definedContentTypeHeaders.next();
+				boolean addThisContentType = false;
+				String contentType = contentTypeHeader
+						.getContentType();
+				String contentSubType = contentTypeHeader
+						.getContentSubType();
+				if (typeToSubTypes.containsKey(contentType)) {
+					Set<String> acceptedSubTypes =
+							typeToSubTypes.get(contentType);
+					if (acceptedSubTypes.isEmpty()) {
+						addThisContentType = true;
+					}
+					else {
+						for (String acceptedSubType : acceptedSubTypes) {
+							if (acceptedSubType.equals(contentSubType)) {
+								addThisContentType = true;
+								break;
+							}
+						}
+					}
+				}
+				if (addThisContentType) {
+					String typeSubtype = String.format("%s/%s",
+							contentType, contentSubType);
+					if (typeSubtypeToQValue.containsKey(typeSubtype)) {
+						String qValue = typeSubtypeToQValue
+								.get(typeSubtype);
+						try {
+							contentTypeHeader.setParameter("q", qValue);
+						} catch (ParseException ignore) {}
+					}
+					overlappingContentTypes.add(contentTypeHeader);
+				}
+			}
+			if (overlappingContentTypes.size() > 0) {
+				for (ContentTypeHeader header
+						: overlappingContentTypes) {
+					request.addHeader(header);
+				}
+				overlappingContentTypesFound = true;
+			}
+		}
+		if (overlappingEncodingsFound && overlappingContentTypesFound) {
+			doSendRequest(request, clientTransaction.getDialog());
+		}
 	}
 
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
@@ -358,6 +468,31 @@ public class UserAgentClient {
 					original.getRawContent());
 		} catch (ParseException ignore) {}
 		return clone;
+	}
+
+	private void incrementCSeq(Request request) {
+		CSeqHeader cseq = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
+		try {
+			cseq.setSeqNumber(cseq.getSeqNumber() + 1);
+		} catch (InvalidArgumentException ignore) {}
+		request.setHeader(cseq);
+	}
+
+	private void doSendRequest(Request request, Dialog dialog) {
+		try {
+			ClientTransaction newClientTransaction =
+					provider.getNewClientTransaction(request);
+			if (dialog != null) {
+				dialog.sendRequest(newClientTransaction);
+			}
+			else {
+				newClientTransaction.sendRequest();
+			}
+		} catch (TransactionUnavailableException newTransactionCouldNotBeCreated) {
+
+		} catch (SipException requestCouldNotBeSent) {
+
+		}
 	}
 
 }
