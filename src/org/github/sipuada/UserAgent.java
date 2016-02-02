@@ -35,7 +35,8 @@ public class UserAgent implements SipListener {
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
-	public UserAgent(String username, String domain, String password) {
+	public UserAgent(String username, String domain, String password,
+			String localIp, int localPort, String transport) {
 		SipProvider provider;
 		MessageFactory messenger;
 		HeaderFactory headerMaker;
@@ -49,15 +50,16 @@ public class UserAgent implements SipListener {
 			headerMaker = factory.createHeaderFactory();
 			ListeningPoint listeningPoint;
 			boolean listeningPointBound = false;
-			int localPort = 5060;
 			while (!listeningPointBound) {
 				try {
-					listeningPoint = stack.createListeningPoint("192.168.1.10", localPort, "TCP");
+					listeningPoint = stack
+							.createListeningPoint(localIp, localPort, transport);
 					listeningPointBound = true;
 					try {
 						provider = stack.createSipProvider(listeningPoint);
 						uac = new UserAgentClient(provider, messenger, headerMaker,
-								noncesCache, username, domain, password);
+								noncesCache, username, domain, password,
+								localIp, Integer.toString(localPort), transport);
 						uas = new UserAgentServer(provider, messenger, headerMaker);
 					} catch (ObjectInUseException e) {
 						e.printStackTrace();
