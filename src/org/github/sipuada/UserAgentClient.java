@@ -75,6 +75,7 @@ public class UserAgentClient {
 	private final String transport;
 	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
+	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
 	private long localCSeq = 1;
 	private final List<Address> configuredRouteSet = new LinkedList<>();
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
@@ -539,6 +540,10 @@ public class UserAgentClient {
 			}
 			worthAuthenticating = addAuthorizationHeader(request, domainUri,
 					toHeaderValue, username, password, realm, nonce);
+			if (!authNoncesCache.containsKey(toHeaderValue)) {
+				authNoncesCache.put(toHeaderValue, new HashMap<String, String>());
+			}
+			authNoncesCache.get(toHeaderValue).put(realm, nonce);
 		}
 		ListIterator<?> proxyAuthenticateHeaders = response
 				.getHeaders(ProxyAuthenticateHeader.NAME);
@@ -556,6 +561,16 @@ public class UserAgentClient {
 			}
 			worthAuthenticating = addProxyAuthorizationHeader(request, domainUri,
 					toHeaderValue, username, password, realm, nonce);
+			if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
+				proxyAuthNoncesCache.put(toHeaderValue, new HashMap<String, String>());
+				proxyAuthCallIdCache.put(toHeaderValue, new HashMap<String, String>());
+			}
+			proxyAuthNoncesCache.get(toHeaderValue).put(realm, nonce);
+			Dialog dialog = clientTransaction.getDialog();
+			String callId = dialog.getCallId().getCallId();
+			if (dialog != null) {
+				proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
+			}
 		}
 
 		if (worthAuthenticating) {
@@ -957,8 +972,13 @@ public class UserAgentClient {
 					}
 				}
 				for (String realm : probableRealms.keySet()) {
-					addProxyAuthorizationHeader(request, domainUri, toHeaderValue,
-							toHeaderValue, toHeaderValue, realm, probableRealms.get(realm));
+					String thisCallId = dialog.getCallId().getCallId();
+					String savedCallId = proxyAuthCallIdCache.get(toHeaderValue).get(realm);
+					if (thisCallId.equals(savedCallId)) {
+						addProxyAuthorizationHeader(request, domainUri, toHeaderValue,
+								toHeaderValue, toHeaderValue, realm,
+								probableRealms.get(realm));
+					}
 				}
 			}
 		}
@@ -1007,10 +1027,6 @@ public class UserAgentClient {
 			return false;
 		}
 		request.addHeader(authorizationHeader);
-		if (!authNoncesCache.containsKey(toHeaderValue)) {
-			authNoncesCache.put(toHeaderValue, new HashMap<String, String>());
-		}
-		authNoncesCache.get(toHeaderValue).put(realm, nonce);
 		return true;
 	}
 
@@ -1036,10 +1052,6 @@ public class UserAgentClient {
 			return false;
 		}
 		request.addHeader(proxyAuthorizationHeader);
-		if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
-			proxyAuthNoncesCache.put(toHeaderValue, new HashMap<String, String>());
-		}
-		proxyAuthNoncesCache.get(toHeaderValue).put(realm, nonce);
 		return true;
 	}
 
