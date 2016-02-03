@@ -9,6 +9,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -72,7 +73,8 @@ public class UserAgentClient {
 	private final String localIp;
 	private final int localPort;
 	private final String transport;
-	private final Map<String, Map<String, String>> noncesCache;
+	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
+	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
 	private long localCSeq = 1;
 	private final List<Address> configuredRouteSet = new LinkedList<>();
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
@@ -80,12 +82,11 @@ public class UserAgentClient {
 
 	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
-			Map<String, Map<String, String>> cache, String... credentials) {
+			String... credentials) {
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
-		noncesCache = cache;
 		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
 		localDomain = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
 		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
@@ -190,12 +191,23 @@ public class UserAgentClient {
 		}
 	}
 
+	public void sendReinviteRequest(Dialog dialog) {
+		sendRequest(RequestMethod.INVITE, dialog);
+	}
+
+	public void sendByeRequest(Dialog dialog) {
+		sendRequest(RequestMethod.BYE, dialog);
+	}
+
 	private void sendRequest(RequestMethod method, Dialog dialog) {
 		URI addresserUri = dialog.getLocalParty().getURI();
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
 		CallIdHeader callIdHeader = dialog.getCallId();
 		long cseq = dialog.getLocalSeqNumber();
+		if (cseq == 0) {
+			cseq = localCSeq + 1;
+		}
 		if (localCSeq < cseq) {
 			localCSeq = cseq;
 		}
@@ -284,7 +296,7 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
-			doSendRequest(request, clientTransaction, clientTransaction.getDialog());
+			doSendRequest(request, clientTransaction, dialog);
 			//TODO *IF* this request is a INVITE, then please propagate
 			//this clientTransaction back to the application layer
 			//so that it can later cancel this request if desired.
@@ -375,8 +387,7 @@ public class UserAgentClient {
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		if (response != null) {
-			@SuppressWarnings("rawtypes")
-			ListIterator iterator = response.getHeaders(ViaHeader.NAME);
+			ListIterator<?> iterator = response.getHeaders(ViaHeader.NAME);
 			int viaHeaderCount = 0;
 			while (iterator.hasNext()) {
 				iterator.next();
@@ -492,106 +503,72 @@ public class UserAgentClient {
 		Request request = cloneRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
+		SipUri domainUri = new SipUri();
 		try {
-			boolean worthAuthenticating = false;
-			
-			SipUri domainUri = null;
-			if (localDomain.trim().isEmpty()) {
-				domainUri = new SipUri();
-				domainUri.setHost(localDomain);
-			}
-			String username = this.username, password = this.password;
-			if (username.trim().isEmpty()) {
-				username = "anonymous";
-				password = "";
-			}
-			
-			ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
-			String toHeaderValue = toHeader.getAddress().getURI().toString();
+			domainUri.setHost(localDomain);
+		} catch (ParseException parseException) {
+			//Could not properly parse domainUri.
+			//TODO report 401/407 error back to application layer.
+			//TODO also log this error condition back to the application layer.
+			return;
+		}
 
-			@SuppressWarnings("rawtypes")
-			ListIterator wwwAuthenticateHeaders = response
-					.getHeaders(WWWAuthenticateHeader.NAME);
-			while (wwwAuthenticateHeaders.hasNext()) {
-				WWWAuthenticateHeader wwwAuthenticateHeader =
-						(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
-				String realm = wwwAuthenticateHeader.getRealm();
-				String nonce = wwwAuthenticateHeader.getNonce();
-				if (noncesCache.containsKey(toHeaderValue)
-						&& noncesCache.get(toHeaderValue).containsKey(realm)) {
-					String oldNonce = noncesCache.get(toHeaderValue).get(realm);
-					if (oldNonce.equals(nonce)) {
-						continue;
-					}
-				}
-				String responseDigest = AuthorizationDigest.getDigest(username, realm,
-						password, request.getMethod(), domainUri.toString(), nonce);
-				AuthorizationHeader authorizationHeader = headerMaker
-						.createAuthorizationHeader("Digest");
-				authorizationHeader.setAlgorithm("MD5");
-				if (domainUri != null) {
-					authorizationHeader.setURI(domainUri);
-				}
-				authorizationHeader.setUsername(username);
-				authorizationHeader.setRealm(realm);
-				authorizationHeader.setNonce(nonce);
-				authorizationHeader.setResponse(responseDigest);
-				request.addHeader(authorizationHeader);
-				if (!noncesCache.containsKey(toHeaderValue)) {
-					noncesCache.put(toHeaderValue, new HashMap<String, String>());
-				}
-				noncesCache.get(toHeaderValue).put(realm, nonce);
-				worthAuthenticating = true;
-			}
-			@SuppressWarnings("rawtypes")
-			ListIterator proxyAuthenticateHeaders = response
-					.getHeaders(ProxyAuthenticateHeader.NAME);
-			while (proxyAuthenticateHeaders.hasNext()) {
-				ProxyAuthenticateHeader proxyAuthenticateHeader =
-						(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
-				String realm = proxyAuthenticateHeader.getRealm();
-				String nonce = proxyAuthenticateHeader.getNonce();
-				if (noncesCache.containsKey(toHeaderValue)
-						&& noncesCache.get(toHeaderValue).containsKey(realm)) {
-					String oldNonce = noncesCache.get(toHeaderValue).get(realm);
-					if (oldNonce.equals(nonce)) {
-						continue;
-					}
-				}
-				String responseDigest = AuthorizationDigest.getDigest(username, realm,
-						password, request.getMethod(), domainUri.toString(), nonce);
-				ProxyAuthorizationHeader proxyAuthorizationHeader = headerMaker
-						.createProxyAuthorizationHeader("Digest");
-				proxyAuthorizationHeader.setAlgorithm("MD5");
-				if (domainUri != null) {
-					proxyAuthorizationHeader.setURI(domainUri);
-				}
-				proxyAuthorizationHeader.setUsername(username);
-				proxyAuthorizationHeader.setRealm(realm);
-				proxyAuthorizationHeader.setNonce(nonce);
-				proxyAuthorizationHeader.setResponse(responseDigest);
-				request.addHeader(proxyAuthorizationHeader);
-				if (!noncesCache.containsKey(toHeaderValue)) {
-					noncesCache.put(toHeaderValue, new HashMap<String, String>());
-				}
-				noncesCache.get(toHeaderValue).put(realm, nonce);
-				worthAuthenticating = true;
-			}
-			
-			if (worthAuthenticating) {
-				try {
-					doSendRequest(request, null, clientTransaction.getDialog());
-				} catch (SipException requestCouldNotBeSent) {
-					//Request that would authenticate could not be sent.
-					//TODO report 401/407 error back to application layer.
+		String username = this.username, password = this.password;
+		if (username.trim().isEmpty()) {
+			username = "anonymous";
+			password = "";
+		}
+		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
+		String toHeaderValue = toHeader.getAddress().getURI().toString();
+
+		boolean worthAuthenticating = false;
+		ListIterator<?> wwwAuthenticateHeaders = response
+				.getHeaders(WWWAuthenticateHeader.NAME);
+		while (wwwAuthenticateHeaders.hasNext()) {
+			WWWAuthenticateHeader wwwAuthenticateHeader =
+					(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
+			String realm = wwwAuthenticateHeader.getRealm();
+			String nonce = wwwAuthenticateHeader.getNonce();
+			if (authNoncesCache.containsKey(toHeaderValue)
+					&& authNoncesCache.get(toHeaderValue).containsKey(realm)) {
+				String oldNonce = authNoncesCache.get(toHeaderValue).get(realm);
+				if (oldNonce.equals(nonce)) {
+					authNoncesCache.get(toHeaderValue).remove(realm);
+					continue;
 				}
 			}
-			else {
-				//Not worth authenticating because server already denied
-				//this exact request.
+			worthAuthenticating = addAuthorizationHeader(request, domainUri,
+					toHeaderValue, username, password, realm, nonce);
+		}
+		ListIterator<?> proxyAuthenticateHeaders = response
+				.getHeaders(ProxyAuthenticateHeader.NAME);
+		while (proxyAuthenticateHeaders.hasNext()) {
+			ProxyAuthenticateHeader proxyAuthenticateHeader =
+					(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
+			String realm = proxyAuthenticateHeader.getRealm();
+			String nonce = proxyAuthenticateHeader.getNonce();
+			if (proxyAuthNoncesCache.containsKey(toHeaderValue)
+					&& proxyAuthNoncesCache.get(toHeaderValue).containsKey(realm)) {
+				String oldNonce = proxyAuthNoncesCache.get(toHeaderValue).get(realm);
+				if (oldNonce.equals(nonce)) {
+					continue;
+				}
+			}
+			worthAuthenticating = addProxyAuthorizationHeader(request, domainUri,
+					toHeaderValue, username, password, realm, nonce);
+		}
+
+		if (worthAuthenticating) {
+			try {
+				doSendRequest(request, null, clientTransaction.getDialog(), false);
+			} catch (SipException requestCouldNotBeSent) {
+				//Request that would authenticate could not be sent.
 				//TODO report 401/407 error back to application layer.
 			}
-		} catch (ParseException parseException) {
+		}
+		else {
+			//Not worth authenticating because server already denied
+			//this exact request.
 			//TODO report 401/407 error back to application layer.
 		}
 	}
@@ -601,8 +578,7 @@ public class UserAgentClient {
 		Request request = cloneRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
-		@SuppressWarnings("rawtypes")
-		ListIterator acceptEncodingHeaders =
+		ListIterator<?> acceptEncodingHeaders =
 				response.getHeaders(AcceptEncodingHeader.NAME);
 		List<String> acceptedEncodings = new LinkedList<>();
 		while (acceptEncodingHeaders.hasNext()) {
@@ -644,8 +620,7 @@ public class UserAgentClient {
 		}
 		
 		boolean shouldBypassContentTypesCheck = false;
-		@SuppressWarnings("rawtypes")
-		ListIterator acceptHeaders = response.getHeaders(AcceptHeader.NAME);
+		ListIterator<?> acceptHeaders = response.getHeaders(AcceptHeader.NAME);
 		Map<String, String> typeSubtypeToQValue = new HashMap<>();
 		Map<String, Set<String>> typeToSubTypes = new HashMap<>();
 		while (acceptHeaders.hasNext()) {
@@ -674,8 +649,7 @@ public class UserAgentClient {
 		}
 		boolean overlappingContentTypesFound = false;
 		if (!shouldBypassContentTypesCheck) {
-			@SuppressWarnings("rawtypes")
-			ListIterator definedContentTypeHeaders =
+			ListIterator<?> definedContentTypeHeaders =
 					request.getHeaders(ContentTypeHeader.NAME);
 			List<ContentTypeHeader> overlappingContentTypes
 					= new LinkedList<>();
@@ -903,20 +877,20 @@ public class UserAgentClient {
 	private Request cloneRequest(Request original) {
 		Request clone = null;
 		List<ViaHeader> viaHeaders = new LinkedList<>();
-		@SuppressWarnings("rawtypes")
-		ListIterator iterator = original.getHeaders(ViaHeader.NAME);
+		ListIterator<?> iterator = original.getHeaders(ViaHeader.NAME);
 		while (iterator.hasNext()) {
 			viaHeaders.add((ViaHeader) iterator.next());
 		}
 		try {
-			clone = messenger.createRequest(original.getRequestURI(), original.getMethod(),
-					(CallIdHeader) original.getHeader(CallIdHeader.NAME),
-					(CSeqHeader) original.getHeader(CSeqHeader.NAME),
-					(FromHeader) original.getHeader(FromHeader.NAME),
-					(ToHeader) original.getHeader(ToHeader.NAME), viaHeaders,
-					(MaxForwardsHeader) original.getHeader(MaxForwardsHeader.NAME),
-					(ContentTypeHeader) original.getHeader(ContentTypeHeader.NAME),
-					original.getRawContent());
+			URI requestUri = (URI) original.getRequestURI().clone();
+			clone = messenger.createRequest(requestUri, original.getMethod(),
+					(CallIdHeader) original.getHeader(CallIdHeader.NAME).clone(),
+					(CSeqHeader) original.getHeader(CSeqHeader.NAME).clone(),
+					(FromHeader) original.getHeader(FromHeader.NAME).clone(),
+					(ToHeader) original.getHeader(ToHeader.NAME).clone(), viaHeaders,
+					(MaxForwardsHeader) original.getHeader(MaxForwardsHeader.NAME).clone(),
+					(ContentTypeHeader) original.getHeader(ContentTypeHeader.NAME).clone(),
+					original.getRawContent().clone());
 		} catch (ParseException ignore) {}
 		return clone;
 	}
@@ -936,6 +910,59 @@ public class UserAgentClient {
 	private void doSendRequest(Request request,
 			ClientTransaction clientTransaction, Dialog dialog)
 			throws TransactionUnavailableException, SipException {
+		doSendRequest(request, clientTransaction, dialog, true);
+	}
+
+	private void doSendRequest(Request request, ClientTransaction clientTransaction,
+			Dialog dialog, boolean tryAddingAuthorizationHeaders)
+			throws TransactionUnavailableException, SipException {
+		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
+		String toHeaderValue = toHeader.getAddress().getURI().toString();
+
+		SipUri domainUri = new SipUri();
+		try {
+			domainUri.setHost(localDomain);
+		} catch (ParseException parseException) {
+			//Could not properly parse domainUri.
+			//TODO also log this error condition back to the application layer.
+			return;
+		}
+
+		if (tryAddingAuthorizationHeaders) {
+			if (authNoncesCache.containsKey(toHeaderValue)) {
+				Map<String, String> probableRealms = new HashMap<>();
+				for (Entry<String, String> entry :
+					authNoncesCache.get(toHeaderValue).entrySet()) {
+					String realm = entry.getKey();
+					String remoteDomain = toHeaderValue.split("@")[1];
+					if (realm.contains(remoteDomain)) {
+						String nonce = entry.getValue();
+						probableRealms.put(realm, nonce);
+					}
+				}
+				for (String realm : probableRealms.keySet()) {
+					addAuthorizationHeader(request, domainUri, toHeaderValue,
+							toHeaderValue, toHeaderValue, realm, probableRealms.get(realm));
+				}
+			}
+			if (proxyAuthNoncesCache.containsKey(toHeaderValue)) {
+				Map<String, String> probableRealms = new HashMap<>();
+				for (Entry<String, String> entry :
+					proxyAuthNoncesCache.get(toHeaderValue).entrySet()) {
+					String realm = entry.getKey();
+					String remoteDomain = toHeaderValue.split("@")[1];
+					if (realm.contains(remoteDomain)) {
+						String nonce = entry.getValue();
+						probableRealms.put(realm, nonce);
+					}
+				}
+				for (String realm : probableRealms.keySet()) {
+					addProxyAuthorizationHeader(request, domainUri, toHeaderValue,
+							toHeaderValue, toHeaderValue, realm, probableRealms.get(realm));
+				}
+			}
+		}
+
 		ClientTransaction newClientTransaction;
 		if (clientTransaction == null) {
 			newClientTransaction = provider.getNewClientTransaction(request);
@@ -958,6 +985,62 @@ public class UserAgentClient {
 		else {
 			newClientTransaction.sendRequest();
 		}
+	}
+
+	private boolean addAuthorizationHeader(Request request, URI domainUri,
+			String toHeaderValue, String username, String password,
+			String realm, String nonce) {
+		String responseDigest = AuthorizationDigest.getDigest(username, realm,
+				password, request.getMethod(), domainUri.toString(), nonce);
+		AuthorizationHeader authorizationHeader;
+		try {
+			authorizationHeader = headerMaker
+					.createAuthorizationHeader("Digest");
+			authorizationHeader.setAlgorithm("MD5");
+			authorizationHeader.setURI(domainUri);
+			authorizationHeader.setUsername(username);
+			authorizationHeader.setRealm(realm);
+			authorizationHeader.setNonce(nonce);
+			authorizationHeader.setResponse(responseDigest);
+		} catch (ParseException parseException) {
+			//TODO log this error condition back to the application layer.
+			return false;
+		}
+		request.addHeader(authorizationHeader);
+		if (!authNoncesCache.containsKey(toHeaderValue)) {
+			authNoncesCache.put(toHeaderValue, new HashMap<String, String>());
+		}
+		authNoncesCache.get(toHeaderValue).put(realm, nonce);
+		return true;
+	}
+
+	private boolean addProxyAuthorizationHeader(Request request, URI domainUri,
+			String toHeaderValue, String username, String password,
+			String realm, String nonce) {
+		String responseDigest = AuthorizationDigest.getDigest(username, realm,
+				password, request.getMethod(), domainUri.toString(), nonce);
+		ProxyAuthorizationHeader proxyAuthorizationHeader;
+		try {
+			proxyAuthorizationHeader = headerMaker
+					.createProxyAuthorizationHeader("Digest");
+			proxyAuthorizationHeader.setAlgorithm("MD5");
+			if (domainUri != null) {
+				proxyAuthorizationHeader.setURI(domainUri);
+			}
+			proxyAuthorizationHeader.setUsername(username);
+			proxyAuthorizationHeader.setRealm(realm);
+			proxyAuthorizationHeader.setNonce(nonce);
+			proxyAuthorizationHeader.setResponse(responseDigest);
+		} catch (ParseException parseException) {
+			//TODO log this error condition back to the application layer.
+			return false;
+		}
+		request.addHeader(proxyAuthorizationHeader);
+		if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
+			proxyAuthNoncesCache.put(toHeaderValue, new HashMap<String, String>());
+		}
+		proxyAuthNoncesCache.get(toHeaderValue).put(realm, nonce);
+		return true;
 	}
 
 }

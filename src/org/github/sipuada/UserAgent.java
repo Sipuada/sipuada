@@ -1,8 +1,7 @@
 package org.github.sipuada;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
+import java.util.TooManyListenersException;
 
 import android.javax.sip.DialogTerminatedEvent;
 import android.javax.sip.IOExceptionEvent;
@@ -29,10 +28,6 @@ public class UserAgent implements SipListener {
 	private final int MIN_PORT = 5000;
 	private final int MAX_PORT = 6000;
 
-	private final Map<String, Map<String, String>> noncesCache;
-	{
-		noncesCache = new HashMap<>();
-	}
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
@@ -61,10 +56,13 @@ public class UserAgent implements SipListener {
 					try {
 						provider = stack.createSipProvider(listeningPoint);
 						uac = new UserAgentClient(provider, messenger,
-								headerMaker, addressMaker, noncesCache,
+								headerMaker, addressMaker,
 								username, domain, password,
 								localIp, Integer.toString(localPort), transport);
 						uas = new UserAgentServer(provider, messenger, headerMaker);
+						try {
+							provider.addSipListener(this);
+						} catch (TooManyListenersException ignore) {}
 					} catch (ObjectInUseException e) {
 						e.printStackTrace();
 					}
