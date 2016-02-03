@@ -16,8 +16,6 @@ import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
 
 import android.gov.nist.gnjvx.sip.Utils;
-import android.gov.nist.gnjvx.sip.address.AddressImpl;
-import android.gov.nist.gnjvx.sip.address.GenericURI;
 import android.gov.nist.gnjvx.sip.address.SipUri;
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
@@ -28,8 +26,10 @@ import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionDoesNotExistException;
+import android.javax.sip.TransactionState;
 import android.javax.sip.TransactionUnavailableException;
 import android.javax.sip.address.Address;
+import android.javax.sip.address.AddressFactory;
 import android.javax.sip.address.SipURI;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.AcceptEncodingHeader;
@@ -61,9 +61,10 @@ public class UserAgentClient {
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
+	private final AddressFactory addressMaker;
 
 	private final String username;
-	private final String domain;
+	private final String localDomain;
 	private final String password;
 	private final String localIp;
 	private final int localPort;
@@ -74,14 +75,15 @@ public class UserAgentClient {
 	private final List<Address> routeSet = new LinkedList<>();
 
 	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
-			HeaderFactory headerFactory, Map<String, Map<String, String>> cache,
-			String... credentials) {
+			HeaderFactory headerFactory, AddressFactory addressFactory,
+			Map<String, Map<String, String>> cache, String... credentials) {
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
+		addressMaker = addressFactory;
 		noncesCache = cache;
 		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
-		domain = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
+		localDomain = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
 		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
 		localIp = credentials.length > 3 && credentials[3] != null ? credentials[3] : "";
 		localPort = credentials.length > 4 && credentials[4] != null ?
@@ -89,19 +91,30 @@ public class UserAgentClient {
 		transport = credentials.length > 5 && credentials[5] != null ? credentials[5] : "";
 	}
 
-	public void sendRequest(RequestMethod method, String addressee) {
-		sendRequest(method, addressee, null);
-	}
-	
-	public void sendRequest(RequestMethod method, Dialog dialog) {
-		sendRequest(method, dialog.getRemoteParty().getURI().toString(), dialog);
-	}
-	
-	public void sendCancelRequest(ClientTransaction clientTransaction) {
-		
+	public void sendRequest(RequestMethod method, String remoteUser, String remoteDomain) {
+		try {
+			URI requestUri = addressMaker.createSipURI(method == RequestMethod.REGISTER ?
+					null : remoteUser, localDomain);
+			URI addresserUri = addressMaker.createSipURI(username, localDomain);
+			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteDomain);
+			sendRequest(method, requestUri, addresserUri, addresseeUri, null);
+		} catch (ParseException parseException) {
+			//Could not properly parse the addresser or addressee URI.
+			//Must be a valid URI.
+			//TODO report error condition back to the application layer.
+			return;
+		}
 	}
 
-	private void sendRequest(RequestMethod method, String addressee, Dialog dialog) {
+	public void sendRequest(RequestMethod method, Dialog dialog) {
+		URI requestUri = dialog.getRemoteParty().getURI();
+		URI addresserUri = dialog.getLocalParty().getURI();
+		URI addresseeUri = (URI) requestUri.clone();
+		sendRequest(method, requestUri, addresserUri, addresseeUri, dialog);
+	}
+
+	private void sendRequest(RequestMethod method, URI requestUri,
+			URI addresserUri, URI addresseeUri, Dialog dialog) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
 				|| method == RequestMethod.UNKNOWN) {
 			//This method is meant for the INVITE request and
@@ -110,19 +123,7 @@ public class UserAgentClient {
 			//TODO log this wrong usage condition back to the application layer.
 			return;
 		}
-		URI requestUri, addresserUri, addresseeUri;
-		try {
-			String rawRequestUri = method == RequestMethod.REGISTER ?
-					addressee.split("@")[1] : addressee;
-			requestUri = new GenericURI(rawRequestUri);
-			addresserUri = new GenericURI(String.format("sip://%s@%s", username, domain));
-			addresseeUri = new GenericURI(addressee);
-		} catch (ParseException parseException) {
-			//Could not properly parse the recipient. Must be a valid URI.
-			//TODO report error condition back to the application layer.
-			return;
-		}
-		URI remoteTargetUri = requestUri;
+		URI remoteTargetUri = (URI) requestUri.clone();
 		List<Address> modifiedRouteSet = new LinkedList<>();
 		if (!routeSet.isEmpty()) {
 			if (((SipURI)routeSet.get(0).getURI()).hasLrParam()) {
@@ -135,15 +136,13 @@ public class UserAgentClient {
 				for (int i=1; i<routeSet.size(); i++) {
 					modifiedRouteSet.add(routeSet.get(i));
 				}
-				Address remoteTargetAddress = new AddressImpl();
-				remoteTargetAddress.setURI(remoteTargetUri);
+				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
 				modifiedRouteSet.add(remoteTargetAddress);
 			}
 		}
-
 		String callId, fromTag, toTag;
 		long cseq;
-		Address from = new AddressImpl(), to = new AddressImpl();
+		Address from, to;
 
 		if (dialog != null) {
 			callId = dialog.getCallId().getCallId();
@@ -151,17 +150,17 @@ public class UserAgentClient {
 			if (localCSeq < cseq) {
 				localCSeq = cseq;
 			}
-			from.setURI(dialog.getLocalParty().getURI());
+			from = addressMaker.createAddress(dialog.getLocalParty().getURI());
 			fromTag = dialog.getLocalTag();
-			to.setURI(dialog.getRemoteParty().getURI());
+			to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
 			toTag = dialog.getRemoteTag();
 		}
 		else {
 			callId = null;
 			cseq = ++localCSeq;
-			from.setURI(addresserUri);
+			from = addressMaker.createAddress(addresserUri);
 			fromTag = Utils.getInstance().generateTag();
-			to.setURI(addresseeUri);
+			to = addressMaker.createAddress(addresseeUri);
 			toTag = null;
 		}
 
@@ -189,8 +188,9 @@ public class UserAgentClient {
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			doSendRequest(request, clientTransaction, clientTransaction.getDialog());
-			//TODO propagate this clientTransaction back to the application layer,
-			//so that it can later cancel it if desired.
+			//TODO *IF* this request is a INVITE, then please propagate
+			//this clientTransaction back to the application layer
+			//so that it can later cancel this request if desired.
 		} catch (ParseException requestCouldNotBeBuilt) {
 			//Could not properly build this request.
 			//TODO report this error condition back to the application layer.
@@ -199,7 +199,38 @@ public class UserAgentClient {
 			//TODO report this error condition back to the application layer.
 		} catch (InvalidArgumentException ignore) {}
 	}
-	
+
+	public void sendCancelRequest(final ClientTransaction clientTransaction) {
+		if (!clientTransaction.getRequest().getMethod().equals(RequestMethod.INVITE)) {
+			//This method is meant for canceling INVITE requests only.
+			//TODO log this wrong usage condition back to the application layer.
+			return;
+		}
+		try {
+			final Request request = clientTransaction.createCancel();
+			final Timer timer = new Timer();
+			timer.schedule(new TimerTask() {
+				
+				@Override
+				public void run() {
+					switch (clientTransaction.getState().getValue()) {
+					case TransactionState._PROCEEDING:
+						try {
+							doSendRequest(request, null, null);
+						} catch (SipException requestCouldNotBeSent) {
+							//This request could not be sent.
+							//TODO report this error condition back to the application layer.
+						}
+						break;
+					case TransactionState._COMPLETED:
+					case TransactionState._TERMINATED:
+						timer.cancel();
+					}
+				}
+			}, 180, 180);
+		} catch (SipException ignore) {}
+	}
+
 	public void processResponse(ResponseEvent responseEvent) {
 		ClientTransaction clientTransaction = responseEvent.getClientTransaction();
 		if (clientTransaction != null) {
@@ -227,6 +258,9 @@ public class UserAgentClient {
 	private void handleResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		if (tryHandlingResponseGenerically(statusCode, response, clientTransaction)) {
+			if (response == null || clientTransaction == null) {
+				return;
+			}
 			switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
 				case INVITE:
 					handleInviteResponse(statusCode, clientTransaction);
@@ -240,16 +274,18 @@ public class UserAgentClient {
 	
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
-		@SuppressWarnings("rawtypes")
-		ListIterator iterator = response.getHeaders(ViaHeader.NAME);
-		int viaHeaderCount = 0;
-		while (iterator.hasNext()) {
-			iterator.next();
-			viaHeaderCount++;
-		}
-		if (viaHeaderCount >= 1) {
-			//Handle by simply discarding the response, it's corrupted.
-			return false;
+		if (response != null) {
+			@SuppressWarnings("rawtypes")
+			ListIterator iterator = response.getHeaders(ViaHeader.NAME);
+			int viaHeaderCount = 0;
+			while (iterator.hasNext()) {
+				iterator.next();
+				viaHeaderCount++;
+			}
+			if (viaHeaderCount >= 1) {
+				//Handle by simply discarding the response, it's corrupted.
+				return false;
+			}
 		}
 		switch (statusCode) {
 			case Response.PROXY_AUTHENTICATION_REQUIRED:
@@ -257,7 +293,6 @@ public class UserAgentClient {
 				//Handle this by performing authorization procedures.
 				handleAuthorizationRequired(response, clientTransaction);
 				//No method-specific handling is required.
-				//TODO TODO TODO if method is CANCEL, MUST NOT do these things.
 				return false;
 			case Response.REQUEST_ENTITY_TOO_LARGE:
 				//TODO handle this by retrying omitting the body or using one of
@@ -358,9 +393,9 @@ public class UserAgentClient {
 			boolean worthAuthenticating = false;
 			
 			SipUri domainUri = null;
-			if (domain.trim().isEmpty()) {
+			if (localDomain.trim().isEmpty()) {
 				domainUri = new SipUri();
-				domainUri.setHost(domain);
+				domainUri.setHost(localDomain);
 			}
 			String username = this.username, password = this.password;
 			if (username.trim().isEmpty()) {
@@ -675,35 +710,45 @@ public class UserAgentClient {
 			}
 		}
 
-		final Request request = cloneRequest(clientTransaction.getRequest());
-		incrementCSeq(request);
+		if (response != null) {
+			final Request request = cloneRequest(clientTransaction.getRequest());
+			incrementCSeq(request);
 
-		RetryAfterHeader retryAfterHeader =
-				(RetryAfterHeader) response.getHeader(RetryAfterHeader.NAME);
-		if (retryAfterHeader != null) {
-			int retryAfterSeconds = retryAfterHeader.getRetryAfter();
-			int durationSeconds = retryAfterHeader.getDuration();
-			if (durationSeconds == 0 || durationSeconds > 300) {
-				Timer timer = new Timer();
-				timer.schedule(new TimerTask() {
-					
-					@Override
-					public void run() {
-						try {
-							doSendRequest(request, null, clientTransaction.getDialog());
-						} catch (SipException requestCouldNotBeSent) {
-							//Could not reschedule request.
-							//TODO report response error back to application layer.
+			RetryAfterHeader retryAfterHeader =
+					(RetryAfterHeader) response.getHeader(RetryAfterHeader.NAME);
+			if (retryAfterHeader != null) {
+				int retryAfterSeconds = retryAfterHeader.getRetryAfter();
+				int durationSeconds = retryAfterHeader.getDuration();
+				if (durationSeconds == 0 || durationSeconds > 300) {
+					Timer timer = new Timer();
+					timer.schedule(new TimerTask() {
+						
+						@Override
+						public void run() {
+							try {
+								doSendRequest(request, null, clientTransaction.getDialog());
+							} catch (SipException requestCouldNotBeSent) {
+								//Could not reschedule request.
+								//TODO report response error back to application layer.
+							}
 						}
-					}
 
-				}, retryAfterSeconds * 1000);
-				return;
+					}, retryAfterSeconds * 1000);
+					return;
+				}
+			}
+			//Request is not allowed to reschedule or it would be pointless to do so
+			//because availability frame is too short.
+			//TODO report response error back to application layer.
+		}
+		else {
+			if (clientTransaction.getRequest().getMethod().equals(RequestMethod.CANCEL)) {
+				//This means a cancel request succeeded!
+				//TODO report this condition back to the application layer.
+				//TODO also make sure to tell the application layer to get rid of the
+				//Client transaction associated with this request as it just became useless.
 			}
 		}
-		//Request is not allowed to reschedule or it would be pointless to do so
-		//because availability frame is too short.
-		//TODO report response error back to application layer.
 	}
 	
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
@@ -730,6 +775,8 @@ public class UserAgentClient {
 		if (shouldSaveDialog) {
 			//TODO propagate this dialog back to the application layer so that it can
 			//pass it back when desiring to perform subsequent dialog operations.
+			//TODO also make sure to tell the application layer to get rid of the
+			//Client transaction associated with this request as it just became useless.
 		}
 	}
 
