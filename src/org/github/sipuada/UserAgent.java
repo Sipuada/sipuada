@@ -20,6 +20,7 @@ import android.javax.sip.Timeout;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.TransportNotSupportedException;
+import android.javax.sip.address.AddressFactory;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 
@@ -40,6 +41,7 @@ public class UserAgent implements SipListener {
 		SipProvider provider;
 		MessageFactory messenger;
 		HeaderFactory headerMaker;
+		AddressFactory addressMaker;
 		Properties properties = new Properties();
 		properties.setProperty("android.javax.sip.STACK_NAME", "UserAgent");
 		SipStack stack;
@@ -48,6 +50,7 @@ public class UserAgent implements SipListener {
 			stack = factory.createSipStack(properties);
 			messenger = factory.createMessageFactory();
 			headerMaker = factory.createHeaderFactory();
+			addressMaker = factory.createAddressFactory();
 			ListeningPoint listeningPoint;
 			boolean listeningPointBound = false;
 			while (!listeningPointBound) {
@@ -57,8 +60,9 @@ public class UserAgent implements SipListener {
 					listeningPointBound = true;
 					try {
 						provider = stack.createSipProvider(listeningPoint);
-						uac = new UserAgentClient(provider, messenger, headerMaker,
-								noncesCache, username, domain, password,
+						uac = new UserAgentClient(provider, messenger,
+								headerMaker, addressMaker, noncesCache,
+								username, domain, password,
 								localIp, Integer.toString(localPort), transport);
 						uas = new UserAgentServer(provider, messenger, headerMaker);
 					} catch (ObjectInUseException e) {
