@@ -1,17 +1,24 @@
 package org.github.sipuada;
 
+import java.text.ParseException;
+
+import android.javax.sip.Dialog;
+import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
+import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
+import android.javax.sip.message.Response;
 
 public class UserAgentServer {
 
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
+	private ServerTransaction currentServerTransaction = null;
 
 	public UserAgentServer(SipProvider sipProvider, MessageFactory messageFactory, HeaderFactory headerFactory) {
 		provider = sipProvider;
@@ -24,7 +31,7 @@ public class UserAgentServer {
 		if (serverTransaction != null) {
 			Request request = requestEvent.getRequest();
 			String requestMethod = request.getMethod();
-			handlerResquest(requestMethod, serverTransaction, request);
+			handlerResquest(requestMethod, serverTransaction);
 		} else {
 			/*
 			 * If the server transaction equals null the RequestEvent does not
@@ -43,7 +50,7 @@ public class UserAgentServer {
 
 	}
 
-	private void handlerResquest(String requestMethod, ServerTransaction serverTransaction, Request request) {
+	private void handlerResquest(String requestMethod, ServerTransaction serverTransaction) {
 		switch (Constants.getRequestMethod(requestMethod)) {
 		/*
 		 * - The UAS application can accept the invitation by sending a 2xx
@@ -60,6 +67,7 @@ public class UserAgentServer {
 		 * rejection.
 		 */
 		case INVITE:
+			handleInviteRequest(serverTransaction);
 			break;
 		/*
 		 * - A UAS core receiving a BYE request checks if it matches an existing
@@ -69,10 +77,11 @@ public class UserAgentServer {
 		 * 
 		 * - UAS SHOULD terminate the session (and therefore stop sending and
 		 * listening for media) - Whether or not it ends its participation on
-		 * the session, considering multicast sessions, the UAS core MUST
+		 * the session, (considering multicast sessions), the UAS core MUST
 		 * generate a 2xx response to the BYE.
 		 */
 		case BYE:
+			handleByeRequest(serverTransaction);
 			break;
 
 		/*
@@ -80,23 +89,72 @@ public class UserAgentServer {
 		 * according to the procedure above, it SHOULD respond to the CANCEL
 		 * with a 481 (Call Leg/Transaction Does Not Exist).
 		 * 
-		 * - If the UAS has not issued a final response for the original request,
-		 * its behavior depends on the method of the original request. If the
-		 * original request was an INVITE, the UAS SHOULD immediately respond to
-		 * the INVITE with a 487 (Request Terminated).
+		 * - If the UAS has not issued a final response for the original
+		 * request, its behavior depends on the method of the original request.
+		 * If the original request was an INVITE, the UAS SHOULD immediately
+		 * respond to the INVITE with a 487 (Request Terminated).
 		 * 
 		 * - Regardless of the method of the original request, as long as the
 		 * CANCEL matched an existing transaction, the UAS answers the CANCEL
 		 * request itself with a 200 (OK) response(See Section 8.2.6).
 		 */
 		case CANCEL:
+			handleCancelRequest(serverTransaction);
 			break;
 		default:
 			break;
 		}
+	}
+
+	private void handleCancelRequest(ServerTransaction serverTransaction) {
+		try {
+			Response response = messenger.createResponse(Response.OK, serverTransaction.getRequest());
+			serverTransaction.sendResponse(response);
+		} catch (ParseException | SipException | InvalidArgumentException e) {
+			e.printStackTrace();
+		}
+		
+		/*
+		 * TODO Application SHOULD respond with 487 (Request Terminated) or  481 (Call Leg/Transaction Does Not Exist).
+		 */
+	}
+
+	private void handleByeRequest(ServerTransaction serverTransaction) {
+		Dialog dialog = serverTransaction.getDialog();
+		if (dialog == null) {
+			Response response;
+			try {
+				response = messenger.createResponse(Response.REQUEST_TERMINATED, serverTransaction.getRequest());
+				serverTransaction.sendResponse(response);
+			} catch (ParseException | InvalidArgumentException | SipException e) {
+				e.printStackTrace();
+			}
+		} else {
+			// TODO terminate the session.
+			try {
+				Response response = messenger.createResponse(Response.OK, serverTransaction.getRequest());
+				serverTransaction.sendResponse(response);
+			} catch (ParseException | SipException | InvalidArgumentException e) {
+				e.printStackTrace();
+			}
+		}
 
 	}
 
+	private void handleInviteRequest(ServerTransaction serverTransaction) {
+		this.currentServerTransaction = serverTransaction;
+		try {
+			Response response = messenger.createResponse(Response.RINGING, serverTransaction.getRequest());
+			serverTransaction.sendResponse(response);
+		} catch (ParseException | InvalidArgumentException | SipException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public boolean transactionMatchingCondition1(ServerTransaction cancelRequest, ServerTransaction transaction){
+		 return cancelRequest.getBranchId().equals(transaction.getBranchId());
+	}
+	
 	public void sendResponse() {
 
 	}
