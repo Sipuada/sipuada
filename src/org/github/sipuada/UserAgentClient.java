@@ -38,9 +38,11 @@ import android.javax.sip.header.AcceptHeader;
 import android.javax.sip.header.AuthorizationHeader;
 import android.javax.sip.header.CSeqHeader;
 import android.javax.sip.header.CallIdHeader;
+import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.ContentEncodingHeader;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.FromHeader;
+import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.MaxForwardsHeader;
 import android.javax.sip.header.ProxyAuthenticateHeader;
@@ -72,9 +74,9 @@ public class UserAgentClient {
 	private final String transport;
 	private final Map<String, Map<String, String>> noncesCache;
 	private long localCSeq = 1;
+	private final List<Address> configuredRouteSet = new LinkedList<>();
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
 	private Map<URI, Long> registerCSeqs = new HashMap<>();
-	private final List<Address> configuredRouteSet = new LinkedList<>();
 
 	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
@@ -94,16 +96,92 @@ public class UserAgentClient {
 	}
 	
 	public void sendRegisterRequest() {
-		sendRequest(RequestMethod.REGISTER, username, localDomain);
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(null, localDomain);
+		} catch (ParseException parseException) {
+			//Could not properly parse the request URI for this request.
+			//Must be a valid URI.
+			//TODO report error condition back to the application layer.
+			return;
+		}
+		if (!registerCallIds.containsKey(requestUri)) {
+			registerCallIds.put(requestUri, provider.getNewCallId());
+			registerCSeqs.put(requestUri, ++localCSeq);
+		}
+		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
+		long cseq = registerCSeqs.get(requestUri);
+		registerCSeqs.put(requestUri, cseq + 1);
+
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			//Could not properly parse the contact URI for this request.
+			//Must be a valid URI.
+			//TODO report error condition back to the application layer.
+			return;
+		}
+		contactUri.setPort(localPort);
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		try {
+			contactHeader.setExpires(3600);
+		} catch (InvalidArgumentException ignore) {}
+
+		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
+				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
+
+		//TODO *IF* request is a REGISTER, keep in mind that:
+		/*
+		 * UAs MUST NOT send a new registration (that is, containing new Contact
+		 * header field values, as opposed to a retransmission) until they have
+		 * received a final response from the registrar for the previous one or
+		 * the previous REGISTER request has timed out.
+		 *
+		 * FIXME for now we only allow REGISTER requests passing a single hardcoded
+		 * Contact header so this doesn't apply to us yet.
+		 */
+
+		sendRequest(RequestMethod.REGISTER, username, localDomain,
+				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
-	public void sendRequest(RequestMethod method, String remoteUser, String remoteDomain) {
+	public void sendInviteRequest(String remoteUser, String remoteDomain) {
+		URI requestUri;
 		try {
-			URI requestUri = addressMaker.createSipURI(method == RequestMethod.REGISTER ?
-					null : remoteUser, localDomain);
+			requestUri = addressMaker.createSipURI(remoteUser, remoteDomain);
+		} catch (ParseException parseException) {
+			//Could not properly parse the request URI for this request.
+			//Must be a valid URI.
+			//TODO report error condition back to the application layer.
+			return;
+		}
+		CallIdHeader callIdHeader = provider.getNewCallId();
+		long cseq = ++localCSeq;
+
+		//TODO *IF* request is a INVITE, make sure to add the following headers:
+		/*
+		 * (according to section 13.2.1)
+		 *
+		 * Allow
+		 * Supported
+		 * (later support also: Accept, Expires, adding body and body-related headers)
+		 * (later support also: the offer/answer model
+		 */
+
+		sendRequest(RequestMethod.INVITE, remoteUser, remoteDomain,
+				requestUri, callIdHeader, cseq);
+	}
+
+	private void sendRequest(RequestMethod method, String remoteUser, String remoteDomain,
+			URI requestUri, CallIdHeader callIdHeader, long cseq,
+			Header... additionalHeaders) {
+		try {
 			URI addresserUri = addressMaker.createSipURI(username, localDomain);
 			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteDomain);
-			sendRequest(method, requestUri, addresserUri, addresseeUri, null);
+			sendRequest(method, requestUri, addresserUri, addresseeUri, null,
+					callIdHeader, cseq, additionalHeaders);
 		} catch (ParseException parseException) {
 			//Could not properly parse the addresser or addressee URI.
 			//Must be a valid URI.
@@ -112,15 +190,22 @@ public class UserAgentClient {
 		}
 	}
 
-	public void sendRequest(RequestMethod method, Dialog dialog) {
+	private void sendRequest(RequestMethod method, Dialog dialog) {
 		URI addresserUri = dialog.getLocalParty().getURI();
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
-		sendRequest(method, requestUri, addresserUri, addresseeUri, dialog);
+		CallIdHeader callIdHeader = dialog.getCallId();
+		long cseq = dialog.getLocalSeqNumber();
+		if (localCSeq < cseq) {
+			localCSeq = cseq;
+		}
+		sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
+				callIdHeader, cseq);
 	}
 
-	private void sendRequest(RequestMethod method, URI requestUri,
-			URI addresserUri, URI addresseeUri, Dialog dialog) {
+	private void sendRequest(RequestMethod method, URI requestUri, URI addresserUri,
+			URI addresseeUri, Dialog dialog, CallIdHeader callIdHeader, long cseq,
+			Header... additionalHeaders) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
 				|| method == RequestMethod.UNKNOWN) {
 			//This method is meant for the INVITE request and
@@ -130,17 +215,10 @@ public class UserAgentClient {
 			return;
 		}
 
-		CallIdHeader callIdHeader;
-		long cseq;
 		Address from, to;
 		String fromTag, toTag;
 		List<Address> canonRouteSet = new LinkedList<>();
 		if (dialog != null) {
-			callIdHeader = dialog.getCallId();
-			cseq = dialog.getLocalSeqNumber() + 1;
-			if (localCSeq < cseq) {
-				localCSeq = cseq;
-			}
 			from = addressMaker.createAddress(dialog.getLocalParty().getURI());
 			fromTag = dialog.getLocalTag();
 			to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
@@ -153,19 +231,6 @@ public class UserAgentClient {
 			}
 		}
 		else {
-			if (method == RequestMethod.REGISTER) {
-				if (!registerCallIds.containsKey(requestUri)) {
-					registerCallIds.put(requestUri, provider.getNewCallId());
-					registerCSeqs.put(requestUri, ++localCSeq);
-				}
-				callIdHeader = registerCallIds.get(requestUri);
-				cseq = registerCSeqs.get(requestUri);
-				registerCSeqs.put(requestUri, cseq + 1);
-			}
-			else {
-				callIdHeader = provider.getNewCallId();
-				cseq = ++localCSeq;
-			}
 			from = addressMaker.createAddress(addresserUri);
 			fromTag = Utils.getInstance().generateTag();
 			to = addressMaker.createAddress(addresseeUri);
@@ -211,24 +276,10 @@ public class UserAgentClient {
 			else {
 				request.removeHeader(RouteHeader.NAME);
 			}
-			
-			//TODO *IF* request is a INVITE, make sure to add the following headers:
-			/*
-			 * (according to section 13.2.1)
-			 * 
-			 * Allow
-			 * Supported
-			 * (later support also: Accept, Expires, adding body and body-related headers)
-			 * (later support also: the offer/answer model
-			 */
-			
-			//TODO *IF* request is a REGISTER, keep in mind that:
-			/*
-			 * UAs MUST NOT send a new registration (that is, containing new Contact
-			 * header field values, as opposed to a retransmission) until they have
-			 * received a final response from the registrar for the previous one or
-			 * the previous REGISTER request has timed out.
-			 */
+
+			for (int i=0; i<additionalHeaders.length; i++) {
+				request.addHeader(additionalHeaders[i]);
+			}
 			
 			ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
@@ -252,29 +303,32 @@ public class UserAgentClient {
 			//TODO log this wrong usage condition back to the application layer.
 			return;
 		}
+		final Request cancelRequest;
 		try {
-			final Request cancelRequest = clientTransaction.createCancel();
-			final Timer timer = new Timer();
-			timer.schedule(new TimerTask() {
+			cancelRequest = clientTransaction.createCancel();
+		} catch (SipException ignore) {
+			return;
+		}
+		final Timer timer = new Timer();
+		timer.schedule(new TimerTask() {
 
-				@Override
-				public void run() {
-					switch (clientTransaction.getState().getValue()) {
-					case TransactionState._PROCEEDING:
-						try {
-							doSendRequest(cancelRequest, null, null);
-						} catch (SipException requestCouldNotBeSent) {
-							//This request could not be sent.
-							//TODO report this error condition back to the application layer.
-						}
-						break;
-					case TransactionState._COMPLETED:
-					case TransactionState._TERMINATED:
-						timer.cancel();
+			@Override
+			public void run() {
+				switch (clientTransaction.getState().getValue()) {
+				case TransactionState._PROCEEDING:
+					try {
+						doSendRequest(cancelRequest, null, null);
+					} catch (SipException requestCouldNotBeSent) {
+						//This request could not be sent.
+						//TODO report this error condition back to the application layer.
 					}
+					break;
+				case TransactionState._COMPLETED:
+				case TransactionState._TERMINATED:
+					timer.cancel();
 				}
-			}, 180, 180);
-		} catch (SipException ignore) {}
+			}
+		}, 180, 180);
 	}
 
 	public void processResponse(ResponseEvent responseEvent) {
@@ -795,12 +849,20 @@ public class UserAgentClient {
 	}
 	
 	private void handleThisRequestTerminated(ClientTransaction clientTransaction) {
-		//This means a CANCEL or BYE request succeeded in canceling/terminating the original transaction!
-		//TODO report this condition back to the application layer.
-		//TODO also make sure to tell the application layer to get rid of the
-		//Client transaction associated with this request as it just became useless.
+		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
+			case CANCEL:
+			case BYE:
+				//This means a CANCEL or BYE request succeeded in canceling/terminating
+				//the original transaction!
+				//TODO report this condition back to the application layer.
+				//TODO also make sure to tell the application layer to get rid of the
+				//Client transaction associated with this request as it just became useless.
+				break;
+			default:
+				//This should never happen.
+		}
 	}
-	
+
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
 		boolean shouldSaveDialog = false;
 		Dialog dialog = clientTransaction.getDialog();
