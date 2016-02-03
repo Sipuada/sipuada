@@ -4,6 +4,7 @@ import java.text.ParseException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
@@ -70,9 +71,10 @@ public class UserAgentClient {
 	private final int localPort;
 	private final String transport;
 	private final Map<String, Map<String, String>> noncesCache;
-
 	private long localCSeq = 1;
-	private final List<Address> routeSet = new LinkedList<>();
+	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
+	private Map<URI, Long> registerCSeqs = new HashMap<>();
+	private final List<Address> configuredRouteSet = new LinkedList<>();
 
 	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
@@ -89,6 +91,10 @@ public class UserAgentClient {
 		localPort = credentials.length > 4 && credentials[4] != null ?
 				Integer.parseInt(credentials[4]) : 5060;
 		transport = credentials.length > 5 && credentials[5] != null ? credentials[5] : "";
+	}
+	
+	public void sendRegisterRequest() {
+		sendRequest(RequestMethod.REGISTER, username, localDomain);
 	}
 
 	public void sendRequest(RequestMethod method, String remoteUser, String remoteDomain) {
@@ -107,9 +113,9 @@ public class UserAgentClient {
 	}
 
 	public void sendRequest(RequestMethod method, Dialog dialog) {
-		URI requestUri = dialog.getRemoteParty().getURI();
 		URI addresserUri = dialog.getLocalParty().getURI();
-		URI addresseeUri = (URI) requestUri.clone();
+		URI addresseeUri = dialog.getRemoteParty().getURI();
+		URI requestUri = (URI) addresseeUri.clone();
 		sendRequest(method, requestUri, addresserUri, addresseeUri, dialog);
 	}
 
@@ -123,29 +129,14 @@ public class UserAgentClient {
 			//TODO log this wrong usage condition back to the application layer.
 			return;
 		}
-		URI remoteTargetUri = (URI) requestUri.clone();
-		List<Address> modifiedRouteSet = new LinkedList<>();
-		if (!routeSet.isEmpty()) {
-			if (((SipURI)routeSet.get(0).getURI()).hasLrParam()) {
-				for (Address address : routeSet) {
-					modifiedRouteSet.add(address);
-				}
-			}
-			else {
-				requestUri = routeSet.get(0).getURI();
-				for (int i=1; i<routeSet.size(); i++) {
-					modifiedRouteSet.add(routeSet.get(i));
-				}
-				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
-				modifiedRouteSet.add(remoteTargetAddress);
-			}
-		}
-		String callId, fromTag, toTag;
+
+		CallIdHeader callIdHeader;
 		long cseq;
 		Address from, to;
-
+		String fromTag, toTag;
+		List<Address> canonRouteSet = new LinkedList<>();
 		if (dialog != null) {
-			callId = dialog.getCallId().getCallId();
+			callIdHeader = dialog.getCallId();
 			cseq = dialog.getLocalSeqNumber() + 1;
 			if (localCSeq < cseq) {
 				localCSeq = cseq;
@@ -154,14 +145,51 @@ public class UserAgentClient {
 			fromTag = dialog.getLocalTag();
 			to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
 			toTag = dialog.getRemoteTag();
+
+			Iterator<?> routeHeaders = dialog.getRouteSet();
+			while (routeHeaders.hasNext()) {
+				RouteHeader routeHeader = (RouteHeader) routeHeaders.next();
+				canonRouteSet.add(routeHeader.getAddress());
+			}
 		}
 		else {
-			callId = null;
-			cseq = ++localCSeq;
+			if (method == RequestMethod.REGISTER) {
+				if (!registerCallIds.containsKey(requestUri)) {
+					registerCallIds.put(requestUri, provider.getNewCallId());
+					registerCSeqs.put(requestUri, ++localCSeq);
+				}
+				callIdHeader = registerCallIds.get(requestUri);
+				cseq = registerCSeqs.get(requestUri);
+				registerCSeqs.put(requestUri, cseq + 1);
+			}
+			else {
+				callIdHeader = provider.getNewCallId();
+				cseq = ++localCSeq;
+			}
 			from = addressMaker.createAddress(addresserUri);
 			fromTag = Utils.getInstance().generateTag();
 			to = addressMaker.createAddress(addresseeUri);
 			toTag = null;
+			
+			canonRouteSet.addAll(configuredRouteSet);
+		}
+
+		List<Address> normalizedRouteSet = new LinkedList<>();
+		URI remoteTargetUri = (URI) requestUri.clone();
+		if (!canonRouteSet.isEmpty()) {
+			if (((SipURI)canonRouteSet.get(0).getURI()).hasLrParam()) {
+				for (Address address : canonRouteSet) {
+					normalizedRouteSet.add(address);
+				}
+			}
+			else {
+				requestUri = canonRouteSet.get(0).getURI();
+				for (int i=1; i<canonRouteSet.size(); i++) {
+					normalizedRouteSet.add(canonRouteSet.get(i));
+				}
+				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
+				normalizedRouteSet.add(remoteTargetAddress);
+			}
 		}
 
 		try {
@@ -169,21 +197,39 @@ public class UserAgentClient {
 					.createViaHeader(localIp, localPort, transport, null);
 			viaHeader.setRPort();
 			Request request = messenger.createRequest(requestUri, method.toString(),
-					callId == null ? provider.getNewCallId() :
-						headerMaker.createCallIdHeader(callId),
-					headerMaker.createCSeqHeader(cseq, method.toString()),
+					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
 					headerMaker.createFromHeader(from, fromTag),
 					headerMaker.createToHeader(to, toTag),
 					Collections.singletonList(viaHeader),
 					headerMaker.createMaxForwardsHeader(70));
-			if (!modifiedRouteSet.isEmpty()) {
-				routeSet.clear();
-				routeSet.addAll(modifiedRouteSet);
-				for (Address routeAddress : modifiedRouteSet) {
+			if (!normalizedRouteSet.isEmpty()) {
+				for (Address routeAddress : normalizedRouteSet) {
 					RouteHeader routeHeader = headerMaker.createRouteHeader(routeAddress);
 					request.addHeader(routeHeader);
 				}
 			}
+			else {
+				request.removeHeader(RouteHeader.NAME);
+			}
+			
+			//TODO *IF* request is a INVITE, make sure to add the following headers:
+			/*
+			 * (according to section 13.2.1)
+			 * 
+			 * Allow
+			 * Supported
+			 * (later support also: Accept, Expires, adding body and body-related headers)
+			 * (later support also: the offer/answer model
+			 */
+			
+			//TODO *IF* request is a REGISTER, keep in mind that:
+			/*
+			 * UAs MUST NOT send a new registration (that is, containing new Contact
+			 * header field values, as opposed to a retransmission) until they have
+			 * received a final response from the registrar for the previous one or
+			 * the previous REGISTER request has timed out.
+			 */
+			
 			ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
@@ -207,16 +253,16 @@ public class UserAgentClient {
 			return;
 		}
 		try {
-			final Request request = clientTransaction.createCancel();
+			final Request cancelRequest = clientTransaction.createCancel();
 			final Timer timer = new Timer();
 			timer.schedule(new TimerTask() {
-				
+
 				@Override
 				public void run() {
 					switch (clientTransaction.getState().getValue()) {
 					case TransactionState._PROCEEDING:
 						try {
-							doSendRequest(request, null, null);
+							doSendRequest(cancelRequest, null, null);
 						} catch (SipException requestCouldNotBeSent) {
 							//This request could not be sent.
 							//TODO report this error condition back to the application layer.
@@ -361,6 +407,9 @@ public class UserAgentClient {
 				//TODO figure out how to handle this by prompting for user intervention
 				//for deciding which of the choices provided is to be used in the retry.
 				//return false;
+			case Response.REQUEST_TERMINATED:
+				handleThisRequestTerminated(clientTransaction);
+				return false;
 		}
 		switch (Constants.getResponseClass(statusCode)) {
 			case PROVISIONAL:
@@ -701,6 +750,10 @@ public class UserAgentClient {
 
 	private void handleByReschedulingIfApplicable(Response response,
 			final ClientTransaction clientTransaction, boolean abortIfInDialog) {
+		if (response == null) {
+			handleThisRequestTerminated(clientTransaction);
+			return;
+		}
 		if (abortIfInDialog) {
 			Dialog dialog = clientTransaction.getDialog();
 			if (dialog != null) {
@@ -710,45 +763,42 @@ public class UserAgentClient {
 			}
 		}
 
-		if (response != null) {
-			final Request request = cloneRequest(clientTransaction.getRequest());
-			incrementCSeq(request);
+		final Request request = cloneRequest(clientTransaction.getRequest());
+		incrementCSeq(request);
 
-			RetryAfterHeader retryAfterHeader =
-					(RetryAfterHeader) response.getHeader(RetryAfterHeader.NAME);
-			if (retryAfterHeader != null) {
-				int retryAfterSeconds = retryAfterHeader.getRetryAfter();
-				int durationSeconds = retryAfterHeader.getDuration();
-				if (durationSeconds == 0 || durationSeconds > 300) {
-					Timer timer = new Timer();
-					timer.schedule(new TimerTask() {
-						
-						@Override
-						public void run() {
-							try {
-								doSendRequest(request, null, clientTransaction.getDialog());
-							} catch (SipException requestCouldNotBeSent) {
-								//Could not reschedule request.
-								//TODO report response error back to application layer.
-							}
+		RetryAfterHeader retryAfterHeader =
+				(RetryAfterHeader) response.getHeader(RetryAfterHeader.NAME);
+		if (retryAfterHeader != null) {
+			int retryAfterSeconds = retryAfterHeader.getRetryAfter();
+			int durationSeconds = retryAfterHeader.getDuration();
+			if (durationSeconds == 0 || durationSeconds > 300) {
+				Timer timer = new Timer();
+				timer.schedule(new TimerTask() {
+
+					@Override
+					public void run() {
+						try {
+							doSendRequest(request, null, clientTransaction.getDialog());
+						} catch (SipException requestCouldNotBeSent) {
+							//Could not reschedule request.
+							//TODO report response error back to application layer.
 						}
+					}
 
-					}, retryAfterSeconds * 1000);
-					return;
-				}
-			}
-			//Request is not allowed to reschedule or it would be pointless to do so
-			//because availability frame is too short.
-			//TODO report response error back to application layer.
-		}
-		else {
-			if (clientTransaction.getRequest().getMethod().equals(RequestMethod.CANCEL)) {
-				//This means a cancel request succeeded!
-				//TODO report this condition back to the application layer.
-				//TODO also make sure to tell the application layer to get rid of the
-				//Client transaction associated with this request as it just became useless.
+				}, retryAfterSeconds * 1000);
+				return;
 			}
 		}
+		//Request is not allowed to reschedule or it would be pointless to do so
+		//because availability frame is too short.
+		//TODO report response error back to application layer.
+	}
+	
+	private void handleThisRequestTerminated(ClientTransaction clientTransaction) {
+		//This means a CANCEL or BYE request succeeded in canceling/terminating the original transaction!
+		//TODO report this condition back to the application layer.
+		//TODO also make sure to tell the application layer to get rid of the
+		//Client transaction associated with this request as it just became useless.
 	}
 	
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
@@ -760,6 +810,10 @@ public class UserAgentClient {
 					CSeqHeader cseqHeader = (CSeqHeader) clientTransaction
 							.getRequest().getHeader(CSeqHeader.NAME);
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
+					//TODO *IF* the INVITE request contained a offer, this ACK
+					//MUST carry an answer to that offer, given that the offer is acceptable!
+					//*HOWEVER* if the offer is not acceptable, after sending the ACK,
+					//a BYE request MUST be sent immediately.
 					dialog.sendAck(ackRequest);
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
@@ -775,6 +829,10 @@ public class UserAgentClient {
 		if (shouldSaveDialog) {
 			//TODO propagate this dialog back to the application layer so that it can
 			//pass it back when desiring to perform subsequent dialog operations.
+			//TODO remember that this dialog may be early. It may be useful for us
+			//to keep track of the allowed methods while early by reading the Allow header
+			//in the provisional response, or allowed methods afterwards by reading the
+			//aforementioned header in the final 2xx response.
 			//TODO also make sure to tell the application layer to get rid of the
 			//Client transaction associated with this request as it just became useless.
 		}
@@ -804,7 +862,11 @@ public class UserAgentClient {
 	private void incrementCSeq(Request request) {
 		CSeqHeader cseq = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
 		try {
-			cseq.setSeqNumber(cseq.getSeqNumber() + 1);
+			long newCSeq = cseq.getSeqNumber() + 1;
+			cseq.setSeqNumber(newCSeq);
+			if (localCSeq < newCSeq) {
+				localCSeq = newCSeq;
+			}
 		} catch (InvalidArgumentException ignore) {}
 		request.setHeader(cseq);
 	}
@@ -812,8 +874,19 @@ public class UserAgentClient {
 	private void doSendRequest(Request request,
 			ClientTransaction clientTransaction, Dialog dialog)
 			throws TransactionUnavailableException, SipException {
-		ClientTransaction newClientTransaction = clientTransaction != null ?
-				provider.getNewClientTransaction(request) : clientTransaction;
+		ClientTransaction newClientTransaction;
+		if (clientTransaction == null) {
+			newClientTransaction = provider.getNewClientTransaction(request);
+			ViaHeader viaHeader = (ViaHeader) request.getHeader(ViaHeader.NAME);
+			try {
+				viaHeader.setBranch(newClientTransaction.getBranchId());
+				viaHeader.setRPort();
+			} catch (ParseException ignore) {
+			} catch (InvalidArgumentException ignore) {}
+		}
+		else {
+			newClientTransaction = clientTransaction;
+		}
 		if (dialog != null) {
 			try {
 				dialog.sendRequest(newClientTransaction);
