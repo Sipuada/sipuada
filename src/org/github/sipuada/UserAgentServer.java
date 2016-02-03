@@ -18,7 +18,7 @@ public class UserAgentServer {
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
-	private ServerTransaction currentServerTransaction = null;
+	private IIncomingRequestsListener requestsListener;
 
 	public UserAgentServer(SipProvider sipProvider, MessageFactory messageFactory, HeaderFactory headerFactory) {
 		provider = sipProvider;
@@ -114,9 +114,17 @@ public class UserAgentServer {
 			e.printStackTrace();
 		}
 		
-		/*
-		 * TODO Application SHOULD respond with 487 (Request Terminated) or  481 (Call Leg/Transaction Does Not Exist).
-		 */
+		ServerTransaction canceledTransaction = requestsListener.onCancelRequest(serverTransaction);
+		if(canceledTransaction!= null){
+			try {
+				Response response = messenger.createResponse(Response.REQUEST_TERMINATED, canceledTransaction.getRequest());
+				canceledTransaction.sendResponse(response);
+			} catch (SipException | InvalidArgumentException | ParseException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
 	}
 
 	private void handleByeRequest(ServerTransaction serverTransaction) {
@@ -130,7 +138,6 @@ public class UserAgentServer {
 				e.printStackTrace();
 			}
 		} else {
-			// TODO terminate the session.
 			try {
 				Response response = messenger.createResponse(Response.OK, serverTransaction.getRequest());
 				serverTransaction.sendResponse(response);
@@ -142,7 +149,24 @@ public class UserAgentServer {
 	}
 
 	private void handleInviteRequest(ServerTransaction serverTransaction) {
-		this.currentServerTransaction = serverTransaction;
+		if (requestsListener != null) {
+			if (requestsListener.onInviteRequest(serverTransaction)) {
+				sendRingingResponse(serverTransaction);
+			} else {
+				try {
+					Response response = messenger.createResponse(Response.BUSY_HERE, serverTransaction.getRequest());
+					serverTransaction.sendResponse(response);
+				} catch (ParseException | InvalidArgumentException | SipException e) {
+					e.printStackTrace();
+				}
+			}
+		} else {
+			sendRingingResponse(serverTransaction);
+		}
+
+	}
+
+	private void sendRingingResponse(ServerTransaction serverTransaction) {
 		try {
 			Response response = messenger.createResponse(Response.RINGING, serverTransaction.getRequest());
 			serverTransaction.sendResponse(response);
@@ -151,10 +175,15 @@ public class UserAgentServer {
 		}
 	}
 
-	public boolean transactionMatchingCondition1(ServerTransaction cancelRequest, ServerTransaction transaction){
-		 return cancelRequest.getBranchId().equals(transaction.getBranchId());
+
+	public IIncomingRequestsListener getRequestsListener() {
+		return requestsListener;
 	}
-	
+
+	public void setRequestsListener(IIncomingRequestsListener listener) {
+		this.requestsListener = listener;
+	}
+
 	public void sendResponse() {
 
 	}
