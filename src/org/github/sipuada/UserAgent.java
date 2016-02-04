@@ -16,9 +16,11 @@ import android.javax.sip.SipFactory;
 import android.javax.sip.SipListener;
 import android.javax.sip.SipProvider;
 import android.javax.sip.SipStack;
+import android.javax.sip.Timeout;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.TransportNotSupportedException;
+import android.javax.sip.address.AddressFactory;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 
@@ -31,13 +33,25 @@ public class UserAgent implements SipListener {
 	{
 		noncesCache = new HashMap<>();
 	}
+	
 	private UserAgentClient uac;
+	
+	public UserAgentClient getUac() {
+		return uac;
+	}
+
+	public UserAgentServer getUas() {
+		return uas;
+	}
+
 	private UserAgentServer uas;
 
-	public UserAgent(String username, String domain, String password) {
+	public UserAgent(String username, String domain, String password,
+			String localIp, int localPort, String transport) {
 		SipProvider provider;
 		MessageFactory messenger;
 		HeaderFactory headerMaker;
+		AddressFactory addressMaker;
 		Properties properties = new Properties();
 		properties.setProperty("android.javax.sip.STACK_NAME", "UserAgent");
 		SipStack stack;
@@ -46,17 +60,20 @@ public class UserAgent implements SipListener {
 			stack = factory.createSipStack(properties);
 			messenger = factory.createMessageFactory();
 			headerMaker = factory.createHeaderFactory();
+			addressMaker = factory.createAddressFactory();
 			ListeningPoint listeningPoint;
 			boolean listeningPointBound = false;
-			int localPort = 5060;
 			while (!listeningPointBound) {
 				try {
-					listeningPoint = stack.createListeningPoint("192.168.1.10", localPort, "TCP");
+					listeningPoint = stack
+							.createListeningPoint(localIp, localPort, transport);
 					listeningPointBound = true;
 					try {
 						provider = stack.createSipProvider(listeningPoint);
-						uac = new UserAgentClient(provider, messenger, headerMaker,
-								noncesCache, username, domain, password);
+						uac = new UserAgentClient(provider, messenger,
+								headerMaker, addressMaker, noncesCache,
+								username, domain, password,
+								localIp, Integer.toString(localPort), transport);
 						uas = new UserAgentServer(provider, messenger, headerMaker);
 					} catch (ObjectInUseException e) {
 						e.printStackTrace();
@@ -80,8 +97,13 @@ public class UserAgent implements SipListener {
 	}
 
 	@Override
-	public void processTimeout(TimeoutEvent timeoutEvent) {
-		uac.processTimeout(timeoutEvent);
+	public void processTimeout(TimeoutEvent timeoutOrRetransmissionEvent) {
+		if (timeoutOrRetransmissionEvent.getTimeout() == Timeout.TRANSACTION) {
+			uac.processTimeout(timeoutOrRetransmissionEvent);
+		}
+		else if (timeoutOrRetransmissionEvent.getTimeout() == Timeout.RETRANSMIT) {
+			uas.processRetransmission(timeoutOrRetransmissionEvent);
+		}
 	}
 
 	@Override

@@ -8,6 +8,7 @@ import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
+import android.javax.sip.TimeoutEvent;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
@@ -32,22 +33,7 @@ public class UserAgentServer {
 			Request request = requestEvent.getRequest();
 			String requestMethod = request.getMethod();
 			handlerResquest(requestMethod, serverTransaction);
-		} else {
-			/*
-			 * If the server transaction equals null the RequestEvent does not
-			 * belong to an existing dialog and the application must determine
-			 * how to handle the RequestEvent. If the application decides to
-			 * forward the Request statelessly no transactional support is
-			 * required and it can simply pass the Request of the RequestEvent
-			 * as an argument to the {@link SipProvider#sendRequest(Request)}
-			 * method. However if the application determines to respond to a
-			 * Request statefully it must request a new server transaction from
-			 * the {@link SipProvider#getNewServerTransaction(Request)}method
-			 * and use this server transaction to send the Response based on the
-			 * content of the Request.
-			 */
-		}
-
+		} 
 	}
 
 	private void handlerResquest(String requestMethod, ServerTransaction serverTransaction) {
@@ -184,8 +170,21 @@ public class UserAgentServer {
 		this.requestsListener = listener;
 	}
 
-	public void sendResponse() {
+	
+	public void processRetransmission(TimeoutEvent retransmissionEvent) {
+		if (retransmissionEvent.isServerTransaction()) {
+			ServerTransaction serverTransaction = retransmissionEvent.getServerTransaction();
+			//TODO Dialog layer says we should retransmit a response. how?
+		}
+	}
 
+	public void sendResponse(int method, ServerTransaction serverTransaction) {
+		try {
+			Response response = messenger.createResponse(method, serverTransaction.getRequest());
+			serverTransaction.sendResponse(response);
+		} catch (SipException | InvalidArgumentException | ParseException e) {
+			e.printStackTrace();
+		}
 	}
 
 }
