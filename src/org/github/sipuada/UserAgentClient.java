@@ -378,6 +378,8 @@ public class UserAgentClient {
 				case INVITE:
 					handleInviteResponse(statusCode, clientTransaction);
 					break;
+				case BYE:
+					handleByeResponse(statusCode, clientTransaction);
 				case UNKNOWN:
 				default:
 					break;
@@ -473,6 +475,9 @@ public class UserAgentClient {
 				//TODO figure out how to handle this by prompting for user intervention
 				//for deciding which of the choices provided is to be used in the retry.
 				//return false;
+			case Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST:
+				handleByTerminatingIfWithinDialog(clientTransaction);
+				return false;
 			case Response.REQUEST_TERMINATED:
 				handleThisRequestTerminated(clientTransaction);
 				return false;
@@ -485,12 +490,19 @@ public class UserAgentClient {
 				return true;
 			case REDIRECT:
 				//TODO perform redirect request(s) transparently.
-				//When implementing this, remember to implement the AMBIGUOUS case above.
+				//TODO remember to, if no redirect is sent, remove any early dialogs
+				//associated with this request and tell the application layer about it.
+				//FIXME for now we are always doing the task above for obvious reasons.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
+				//TODO also remember to implement the AMBIGUOUS case above as it's similar.
 				return false;
 			case CLIENT_ERROR:
 			case SERVER_ERROR:
 			case GLOBAL_ERROR:
+				//TODO remove any early dialogs associated with this request
+				//and tell the application layer about it.
 				//TODO report this response error back to the application layer.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
 				return false;
 			case UNKNOWN:
 				//Handle this by simply discarding this unknown response.
@@ -509,6 +521,7 @@ public class UserAgentClient {
 			domainUri.setHost(localDomain);
 		} catch (ParseException parseException) {
 			//Could not properly parse domainUri.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 401/407 error back to application layer.
 			//TODO also log this error condition back to the application layer.
 			return;
@@ -580,12 +593,14 @@ public class UserAgentClient {
 				doSendRequest(request, null, clientTransaction.getDialog(), false);
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would authenticate could not be sent.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
 				//TODO report 401/407 error back to application layer.
 			}
 		}
 		else {
 			//Not worth authenticating because server already denied
 			//this exact request.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 401/407 error back to application layer.
 		}
 	}
@@ -719,12 +734,14 @@ public class UserAgentClient {
 				doSendRequest(request, null, clientTransaction.getDialog());
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would amend this situation could not be sent.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
 				//TODO report 415 error back to application layer.
 			}
 		}
 		else {
 			//Cannot satisfy the media type requirements since this UAC doesn't
 			//support any that are accepted by the UAS that sent this response.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 415 error back to application layer.
 		}
 	}
@@ -789,6 +806,7 @@ public class UserAgentClient {
 			doSendRequest(request, null, clientTransaction.getDialog());
 		} catch (SipException requestCouldNotBeSent) {
 			//Request that would amend this situation could not be sent.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 420 error back to application layer.
 		}
 	}
@@ -804,6 +822,7 @@ public class UserAgentClient {
 			if (dialog != null) {
 				dialog.delete();
 				if (isError) {
+					handleThisByRemovingEarlyDialogs(clientTransaction);
 					//TODO report response error back to application layer.
 				}
 				return;
@@ -828,6 +847,7 @@ public class UserAgentClient {
 							doSendRequest(request, null, clientTransaction.getDialog());
 						} catch (SipException requestCouldNotBeSent) {
 							//Could not reschedule request.
+							handleThisByRemovingEarlyDialogs(clientTransaction);
 							//TODO report response error back to application layer.
 						}
 					}
@@ -838,22 +858,25 @@ public class UserAgentClient {
 		}
 		//Request is not allowed to reschedule or it would be pointless to do so
 		//because availability frame is too short.
+		handleThisByRemovingEarlyDialogs(clientTransaction);
 		//TODO report response error back to application layer.
 	}
+
+	private void handleByTerminatingIfWithinDialog(ClientTransaction clientTransaction) {
+		Dialog dialog = clientTransaction.getDialog();
+		if (dialog != null) {
+			//TODO handle this by sending a BYE request within this dialog immediately.
+		}
+		else {
+			//TODO report 481 error back to the application layer.
+		}
+	}
 	
-	private boolean handleThisRequestTerminated(ClientTransaction clientTransaction) {
-		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
-			case INVITE:
-			case BYE:
-				//This means a CANCEL or BYE request succeeded in canceling/terminating
-				//the original transaction!
-				//TODO report this condition back to the application layer.
-				//TODO also make sure to tell the application layer to get rid of the
-				//Client transaction associated with this request as it just became useless.
-				return true;
-			default:
-				//This should never happen.
-				return false;
+	private void handleThisByRemovingEarlyDialogs(ClientTransaction clientTransaction) {
+		Dialog dialog = clientTransaction.getDialog();
+		if (dialog != null) {
+			//TODO tell the application layer to get rid of the early dialog associated
+			//with this request as it just became invalid.
 		}
 	}
 
@@ -868,7 +891,7 @@ public class UserAgentClient {
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
 					//TODO *IF* the INVITE request contained a offer, this ACK
 					//MUST carry an answer to that offer, given that the offer is acceptable!
-					//*HOWEVER* if the offer is not acceptable, after sending the ACK,
+					//TODO *HOWEVER* if the offer is not acceptable, after sending the ACK,
 					//a BYE request MUST be sent immediately.
 					dialog.sendAck(ackRequest);
 				} catch (InvalidArgumentException ignore) {
@@ -891,6 +914,35 @@ public class UserAgentClient {
 			//aforementioned header in the final 2xx response.
 			//TODO also make sure to tell the application layer to get rid of the
 			//Client transaction associated with this request as it just became useless.
+		}
+	}
+
+	private void handleByeResponse(int statusCode, ClientTransaction clientTransaction) {
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			handleThisRequestTerminated(clientTransaction);
+			//TODO make sure to tell the application layer to get rid of the
+			//Dialog associated with this request as it just became invalid.
+		}
+	}
+
+	private boolean handleThisRequestTerminated(ClientTransaction clientTransaction) {
+		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
+			case INVITE:
+				//This means a CANCEL succeeded in canceling the original INVITE request.
+				//TODO make sure to tell the application layer to get rid of the
+				//Client transaction associated with this request as it just became useless.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
+				//TODO report this condition back to the application layer.
+				return true;
+			case BYE:
+				//This means a BYE succeeded in terminating a INVITE request within a Dialog.
+				//TODO make sure to tell the application layer to get rid of the
+				//Dialog associated with this request as it just became invalid.
+				//TODO report this condition back to the application layer.
+				return true;
+			default:
+				//This should never happen.
+				return false;
 		}
 	}
 
