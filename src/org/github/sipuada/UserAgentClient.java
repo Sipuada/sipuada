@@ -42,10 +42,8 @@ import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.ContentEncodingHeader;
 import android.javax.sip.header.ContentTypeHeader;
-import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
-import android.javax.sip.header.MaxForwardsHeader;
 import android.javax.sip.header.ProxyAuthenticateHeader;
 import android.javax.sip.header.ProxyAuthorizationHeader;
 import android.javax.sip.header.ProxyRequireHeader;
@@ -548,7 +546,7 @@ public class UserAgentClient {
 	
 	private void handleAuthorizationRequired(Response response,
 			ClientTransaction clientTransaction) {
-		Request request = cloneRequest(clientTransaction.getRequest());
+		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
 		SipUri domainUri = new SipUri();
@@ -642,7 +640,7 @@ public class UserAgentClient {
 	
 	private void handleUnsupportedMediaTypes(Response response,
 			ClientTransaction clientTransaction) {
-		Request request = cloneRequest(clientTransaction.getRequest());
+		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
 		ListIterator<?> acceptEncodingHeaders =
@@ -783,7 +781,7 @@ public class UserAgentClient {
 	
 	private void handleUnsupportedExtension(Response response,
 			ClientTransaction clientTransaction) {
-		Request request = cloneRequest(clientTransaction.getRequest());
+		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 		
 		UnsupportedHeader unsupportedHeader =
@@ -864,7 +862,7 @@ public class UserAgentClient {
 			}
 		}
 
-		final Request request = cloneRequest(clientTransaction.getRequest());
+		final Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
 		RetryAfterHeader retryAfterHeader =
@@ -984,25 +982,20 @@ public class UserAgentClient {
 		}
 	}
 
-	private Request cloneRequest(Request original) {
-		Request clone = null;
-		List<ViaHeader> viaHeaders = new LinkedList<>();
+	private Request createFromRequest(Request original) {
+		Request derived = (Request) original.clone();
 		ListIterator<?> iterator = original.getHeaders(ViaHeader.NAME);
+		String newBranchId = Utils.getInstance().generateBranchId();
 		while (iterator.hasNext()) {
-			viaHeaders.add((ViaHeader) iterator.next());
+			ViaHeader viaHeader = (ViaHeader) iterator.next();
+			if (viaHeader.getBranch() != null) {
+				try {
+					viaHeader.setBranch(newBranchId);
+				} catch (ParseException ignore) {}
+			}
+			derived.addHeader(viaHeader);
 		}
-		try {
-			URI requestUri = (URI) original.getRequestURI().clone();
-			clone = messenger.createRequest(requestUri, original.getMethod(),
-					(CallIdHeader) original.getHeader(CallIdHeader.NAME).clone(),
-					(CSeqHeader) original.getHeader(CSeqHeader.NAME).clone(),
-					(FromHeader) original.getHeader(FromHeader.NAME).clone(),
-					(ToHeader) original.getHeader(ToHeader.NAME).clone(), viaHeaders,
-					(MaxForwardsHeader) original.getHeader(MaxForwardsHeader.NAME).clone(),
-					(ContentTypeHeader) original.getHeader(ContentTypeHeader.NAME).clone(),
-					original.getRawContent().clone());
-		} catch (ParseException ignore) {}
-		return clone;
+		return derived;
 	}
 
 	private void incrementCSeq(Request request) {
