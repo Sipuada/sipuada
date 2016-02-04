@@ -321,9 +321,6 @@ public class UserAgentClient {
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			doSendRequest(request, clientTransaction, dialog);
-			//TODO *IF* this request is a INVITE, then please propagate
-			//this clientTransaction back to the application layer
-			//so that it can later cancel this request if desired.
 			//TODO *IF* this request is a BYE, please let the application layer
 			//know it should consider the session associated with this request
 			//terminated.
@@ -377,7 +374,7 @@ public class UserAgentClient {
 		}, 180, 180);
 	}
 
-	public void processResponse(ResponseEvent responseEvent) {
+	protected void processResponse(ResponseEvent responseEvent) {
 		ClientTransaction clientTransaction = responseEvent.getClientTransaction();
 		if (clientTransaction != null) {
 			Response response = responseEvent.getResponse();
@@ -390,14 +387,14 @@ public class UserAgentClient {
 		}
 	}
 
-	public void processTimeout(TimeoutEvent timeoutEvent) {
+	protected void processTimeout(TimeoutEvent timeoutEvent) {
 		if (!timeoutEvent.isServerTransaction()) {
 			ClientTransaction clientTransaction = timeoutEvent.getClientTransaction();
 			handleResponse(Response.REQUEST_TIMEOUT, null, clientTransaction);
 		}
 	}
 
-	public void processFatalTransportError(IOExceptionEvent exceptionEvent) {
+	protected void processFatalTransportError(IOExceptionEvent exceptionEvent) {
 		handleResponse(Response.SERVICE_UNAVAILABLE, null, null);
 	}
 	
@@ -906,7 +903,6 @@ public class UserAgentClient {
 	}
 	
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
-		boolean shouldSaveDialog = false;
 		Dialog dialog = clientTransaction.getDialog();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			if (dialog != null) {
@@ -921,24 +917,21 @@ public class UserAgentClient {
 					dialog.sendAck(ackRequest);
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
-				shouldSaveDialog = true;
+				//TODO propagate this dialog back to the application layer so that it can
+				//pass it back when desiring to perform subsequent dialog operations.
+				//TODO also make sure to tell the application layer to get rid of the
+				//Client transaction associated with this request as it just became useless,
+				//since now CANCEL's are forbidden as they would effectively be no-ops.
+				//Now to terminate a call the application layer shall send a BYE request.
 			}
 		}
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
 			if (statusCode == Response.RINGING) {
 				//TODO report response status code back to the application layer.
 			}
-			shouldSaveDialog = true;
-		}
-		if (shouldSaveDialog) {
-			//TODO propagate this dialog back to the application layer so that it can
-			//pass it back when desiring to perform subsequent dialog operations.
-			//TODO remember that this dialog may be early. It may be useful for us
-			//to keep track of the allowed methods while early by reading the Allow header
-			//in the provisional response, or allowed methods afterwards by reading the
-			//aforementioned header in the final 2xx response.
-			//TODO also make sure to tell the application layer to get rid of the
-			//Client transaction associated with this request as it just became useless.
+			//TODO please propagate this clientTransaction back to the application layer
+			//so that it can later cancel this request if desired, before this request
+			//produces a final response.
 		}
 	}
 
