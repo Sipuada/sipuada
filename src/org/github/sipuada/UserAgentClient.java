@@ -431,7 +431,7 @@ public class UserAgentClient {
 				iterator.next();
 				viaHeaderCount++;
 			}
-			if (viaHeaderCount >= 1) {
+			if (viaHeaderCount > 1) {
 				//Handle by simply discarding the response, it's corrupted.
 				return false;
 			}
