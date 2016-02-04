@@ -3,6 +3,7 @@ package org.github.sipuada;
 import java.util.HashMap;
 import java.util.Map;
 
+import android.javax.sip.Dialog;
 import android.javax.sip.ServerTransaction;
 import android.javax.sip.message.Response;
 
@@ -36,28 +37,30 @@ public class Sipuada implements IIncomingRequestsListener{
 	}
 
 	public void register(){
-		userAgent.getUac().sendRegisterRequest();
+		userAgent.getUserAgentClient().sendRegisterRequest();
 	}
 	
 	public void call(String sipAddress){
 		String remoteUser = sipAddress.split("@")[0];
 		String remoteDomain = sipAddress.split("@")[1];
-		userAgent.getUac().sendInviteRequest(remoteUser, remoteDomain);
+		userAgent.getUserAgentClient().sendInviteRequest(remoteUser, remoteDomain);
 	}
 	
 	public void acceptCall(String callId){
 		ServerTransaction serverTransaction = serverTransactions.get(callId);
-		userAgent.getUas().sendResponse(Response.OK, serverTransaction);
+		userAgent.getUserAgentServer().sendResponse(Response.OK, serverTransaction);
 	}
 	
 	public void rejectCall(String callId){
 		ServerTransaction serverTransaction = serverTransactions.get(callId);
-		userAgent.getUas().sendResponse(Response.BUSY_HERE, serverTransaction);
+		userAgent.getUserAgentServer().sendResponse(Response.BUSY_HERE, serverTransaction);
 	}
 	
 	public void endCall(String callId){
 		ServerTransaction serverTransaction = serverTransactions.get(callId);
-		//TODO userAgent.getUac().sendBye();
+		//TODO get dialog
+		Dialog dialog = null;
+		userAgent.getUserAgentClient().sendByeRequest(dialog);
 	}
 	
 	@Override

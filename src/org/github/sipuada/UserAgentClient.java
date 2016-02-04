@@ -9,6 +9,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -72,7 +73,9 @@ public class UserAgentClient {
 	private final String localIp;
 	private final int localPort;
 	private final String transport;
-	private final Map<String, Map<String, String>> noncesCache;
+	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
+	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
+	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
 	private long localCSeq = 1;
 	private final List<Address> configuredRouteSet = new LinkedList<>();
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
@@ -80,12 +83,11 @@ public class UserAgentClient {
 
 	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
-			Map<String, Map<String, String>> cache, String... credentials) {
+			String... credentials) {
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
-		noncesCache = cache;
 		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
 		localDomain = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
 		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
@@ -147,6 +149,14 @@ public class UserAgentClient {
 				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
+	//TODO later implement the OPTIONS method.
+	//	public void sendOptionsRequest(String remoteUser, String remoteDomain) {
+	//		sendRequest(RequestMethod.OPTIONS, remoteUser, remoteDomain,
+	//				...);
+	//	}
+	//TODO when we do it, make sure that no dialog and session state is
+	//messed up with by the flow of incoming responses to this OPTIONS request.
+
 	public void sendInviteRequest(String remoteUser, String remoteDomain) {
 		URI requestUri;
 		try {
@@ -190,12 +200,40 @@ public class UserAgentClient {
 		}
 	}
 
+	public void sendReinviteRequest(Dialog dialog) {
+		//TODO everything related to sending RE-INVITE requests, such as
+		//making sure they are sent only when they should (it MUST NOT be sent
+		//while another INVITE transaction is in progress in either direction within the
+		//context of this dialog).
+		//TODO also it's important to make sure that failures to this RE-INVITE
+		//don't cause the current dialog and session to cease to exist, unless the received
+		//response is either a 481 (Call Does Not Exist) or a 408 (Request Timeout), in
+		//which case the dialog and session shall be terminated.
+		//This will probably need a review of almost all of this source code.
+		//TODO finally, also make sure this RE-INVITE is handled properly in the case
+		//a 491 response is received (given that the transaction layer doesn't already
+		//do this transparently for us, that is).
+		sendRequest(RequestMethod.INVITE, dialog);
+	}
+
+	public void sendByeRequest(Dialog dialog) {
+		//TODO make sure this is only sent by the callee if the dialog is NOT early and
+		//it has already received an ACK for it's 2xx response or until the server
+		//transaction timed out. The callee MUST NOT send it if the conditions
+		//above are not met.
+		//(The caller is allowed to send for either confirmed or early dialogs).
+		sendRequest(RequestMethod.BYE, dialog);
+	}
+
 	private void sendRequest(RequestMethod method, Dialog dialog) {
 		URI addresserUri = dialog.getLocalParty().getURI();
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
 		CallIdHeader callIdHeader = dialog.getCallId();
 		long cseq = dialog.getLocalSeqNumber();
+		if (cseq == 0) {
+			cseq = localCSeq + 1;
+		}
 		if (localCSeq < cseq) {
 			localCSeq = cseq;
 		}
@@ -284,10 +322,13 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
-			doSendRequest(request, clientTransaction, clientTransaction.getDialog());
+			doSendRequest(request, clientTransaction, dialog);
 			//TODO *IF* this request is a INVITE, then please propagate
 			//this clientTransaction back to the application layer
 			//so that it can later cancel this request if desired.
+			//TODO *IF* this request is a BYE, please let the application layer
+			//know it should consider the session associated with this request
+			//terminated.
 		} catch (ParseException requestCouldNotBeBuilt) {
 			//Could not properly build this request.
 			//TODO report this error condition back to the application layer.
@@ -314,6 +355,9 @@ public class UserAgentClient {
 
 			@Override
 			public void run() {
+				if (clientTransaction.getState() == null) {
+					return;
+				}
 				switch (clientTransaction.getState().getValue()) {
 				case TransactionState._PROCEEDING:
 					try {
@@ -326,6 +370,10 @@ public class UserAgentClient {
 				case TransactionState._COMPLETED:
 				case TransactionState._TERMINATED:
 					timer.cancel();
+					//The request was accepted before we could cancel it.
+					//TODO decide whether we will send a BYE request here to
+					//terminate the established session, or just inform the application
+					//layer that it was too late to cancel.
 				}
 			}
 		}, 180, 180);
@@ -365,6 +413,8 @@ public class UserAgentClient {
 				case INVITE:
 					handleInviteResponse(statusCode, clientTransaction);
 					break;
+				case BYE:
+					handleByeResponse(statusCode, clientTransaction);
 				case UNKNOWN:
 				default:
 					break;
@@ -375,8 +425,7 @@ public class UserAgentClient {
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		if (response != null) {
-			@SuppressWarnings("rawtypes")
-			ListIterator iterator = response.getHeaders(ViaHeader.NAME);
+			ListIterator<?> iterator = response.getHeaders(ViaHeader.NAME);
 			int viaHeaderCount = 0;
 			while (iterator.hasNext()) {
 				iterator.next();
@@ -461,6 +510,9 @@ public class UserAgentClient {
 				//TODO figure out how to handle this by prompting for user intervention
 				//for deciding which of the choices provided is to be used in the retry.
 				//return false;
+			case Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST:
+				handleByTerminatingIfWithinDialog(clientTransaction);
+				return false;
 			case Response.REQUEST_TERMINATED:
 				handleThisRequestTerminated(clientTransaction);
 				return false;
@@ -473,12 +525,19 @@ public class UserAgentClient {
 				return true;
 			case REDIRECT:
 				//TODO perform redirect request(s) transparently.
-				//When implementing this, remember to implement the AMBIGUOUS case above.
+				//TODO remember to, if no redirect is sent, remove any early dialogs
+				//associated with this request and tell the application layer about it.
+				//FIXME for now we are always doing the task above for obvious reasons.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
+				//TODO also remember to implement the AMBIGUOUS case above as it's similar.
 				return false;
 			case CLIENT_ERROR:
 			case SERVER_ERROR:
 			case GLOBAL_ERROR:
+				//TODO remove any early dialogs associated with this request
+				//and tell the application layer about it.
 				//TODO report this response error back to the application layer.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
 				return false;
 			case UNKNOWN:
 				//Handle this by simply discarding this unknown response.
@@ -492,106 +551,91 @@ public class UserAgentClient {
 		Request request = cloneRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
+		SipUri domainUri = new SipUri();
 		try {
-			boolean worthAuthenticating = false;
-			
-			SipUri domainUri = null;
-			if (localDomain.trim().isEmpty()) {
-				domainUri = new SipUri();
-				domainUri.setHost(localDomain);
-			}
-			String username = this.username, password = this.password;
-			if (username.trim().isEmpty()) {
-				username = "anonymous";
-				password = "";
-			}
-			
-			ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
-			String toHeaderValue = toHeader.getAddress().getURI().toString();
+			domainUri.setHost(localDomain);
+		} catch (ParseException parseException) {
+			//Could not properly parse domainUri.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
+			//TODO report 401/407 error back to application layer.
+			//TODO also log this error condition back to the application layer.
+			return;
+		}
 
-			@SuppressWarnings("rawtypes")
-			ListIterator wwwAuthenticateHeaders = response
-					.getHeaders(WWWAuthenticateHeader.NAME);
-			while (wwwAuthenticateHeaders.hasNext()) {
-				WWWAuthenticateHeader wwwAuthenticateHeader =
-						(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
-				String realm = wwwAuthenticateHeader.getRealm();
-				String nonce = wwwAuthenticateHeader.getNonce();
-				if (noncesCache.containsKey(toHeaderValue)
-						&& noncesCache.get(toHeaderValue).containsKey(realm)) {
-					String oldNonce = noncesCache.get(toHeaderValue).get(realm);
-					if (oldNonce.equals(nonce)) {
-						continue;
-					}
-				}
-				String responseDigest = AuthorizationDigest.getDigest(username, realm,
-						password, request.getMethod(), domainUri.toString(), nonce);
-				AuthorizationHeader authorizationHeader = headerMaker
-						.createAuthorizationHeader("Digest");
-				authorizationHeader.setAlgorithm("MD5");
-				if (domainUri != null) {
-					authorizationHeader.setURI(domainUri);
-				}
-				authorizationHeader.setUsername(username);
-				authorizationHeader.setRealm(realm);
-				authorizationHeader.setNonce(nonce);
-				authorizationHeader.setResponse(responseDigest);
-				request.addHeader(authorizationHeader);
-				if (!noncesCache.containsKey(toHeaderValue)) {
-					noncesCache.put(toHeaderValue, new HashMap<String, String>());
-				}
-				noncesCache.get(toHeaderValue).put(realm, nonce);
-				worthAuthenticating = true;
-			}
-			@SuppressWarnings("rawtypes")
-			ListIterator proxyAuthenticateHeaders = response
-					.getHeaders(ProxyAuthenticateHeader.NAME);
-			while (proxyAuthenticateHeaders.hasNext()) {
-				ProxyAuthenticateHeader proxyAuthenticateHeader =
-						(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
-				String realm = proxyAuthenticateHeader.getRealm();
-				String nonce = proxyAuthenticateHeader.getNonce();
-				if (noncesCache.containsKey(toHeaderValue)
-						&& noncesCache.get(toHeaderValue).containsKey(realm)) {
-					String oldNonce = noncesCache.get(toHeaderValue).get(realm);
-					if (oldNonce.equals(nonce)) {
-						continue;
-					}
-				}
-				String responseDigest = AuthorizationDigest.getDigest(username, realm,
-						password, request.getMethod(), domainUri.toString(), nonce);
-				ProxyAuthorizationHeader proxyAuthorizationHeader = headerMaker
-						.createProxyAuthorizationHeader("Digest");
-				proxyAuthorizationHeader.setAlgorithm("MD5");
-				if (domainUri != null) {
-					proxyAuthorizationHeader.setURI(domainUri);
-				}
-				proxyAuthorizationHeader.setUsername(username);
-				proxyAuthorizationHeader.setRealm(realm);
-				proxyAuthorizationHeader.setNonce(nonce);
-				proxyAuthorizationHeader.setResponse(responseDigest);
-				request.addHeader(proxyAuthorizationHeader);
-				if (!noncesCache.containsKey(toHeaderValue)) {
-					noncesCache.put(toHeaderValue, new HashMap<String, String>());
-				}
-				noncesCache.get(toHeaderValue).put(realm, nonce);
-				worthAuthenticating = true;
-			}
-			
-			if (worthAuthenticating) {
-				try {
-					doSendRequest(request, null, clientTransaction.getDialog());
-				} catch (SipException requestCouldNotBeSent) {
-					//Request that would authenticate could not be sent.
-					//TODO report 401/407 error back to application layer.
+		String username = this.username, password = this.password;
+		if (username.trim().isEmpty()) {
+			username = "anonymous";
+			password = "";
+		}
+		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
+		String toHeaderValue = toHeader.getAddress().getURI().toString();
+
+		boolean worthAuthenticating = false;
+		ListIterator<?> wwwAuthenticateHeaders = response
+				.getHeaders(WWWAuthenticateHeader.NAME);
+		while (wwwAuthenticateHeaders.hasNext()) {
+			WWWAuthenticateHeader wwwAuthenticateHeader =
+					(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
+			String realm = wwwAuthenticateHeader.getRealm();
+			String nonce = wwwAuthenticateHeader.getNonce();
+			if (authNoncesCache.containsKey(toHeaderValue)
+					&& authNoncesCache.get(toHeaderValue).containsKey(realm)) {
+				String oldNonce = authNoncesCache.get(toHeaderValue).get(realm);
+				if (oldNonce.equals(nonce)) {
+					authNoncesCache.get(toHeaderValue).remove(realm);
+					continue;
 				}
 			}
-			else {
-				//Not worth authenticating because server already denied
-				//this exact request.
+			worthAuthenticating = addAuthorizationHeader(request, domainUri,
+					toHeaderValue, username, password, realm, nonce);
+			if (!authNoncesCache.containsKey(toHeaderValue)) {
+				authNoncesCache.put(toHeaderValue, new HashMap<String, String>());
+			}
+			authNoncesCache.get(toHeaderValue).put(realm, nonce);
+		}
+		ListIterator<?> proxyAuthenticateHeaders = response
+				.getHeaders(ProxyAuthenticateHeader.NAME);
+		while (proxyAuthenticateHeaders.hasNext()) {
+			ProxyAuthenticateHeader proxyAuthenticateHeader =
+					(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
+			String realm = proxyAuthenticateHeader.getRealm();
+			String nonce = proxyAuthenticateHeader.getNonce();
+			if (proxyAuthNoncesCache.containsKey(toHeaderValue)
+					&& proxyAuthNoncesCache.get(toHeaderValue).containsKey(realm)) {
+				String oldNonce = proxyAuthNoncesCache.get(toHeaderValue).get(realm);
+				if (oldNonce.equals(nonce)) {
+					proxyAuthNoncesCache.get(toHeaderValue).remove(realm);
+					proxyAuthCallIdCache.get(toHeaderValue).remove(realm);
+					continue;
+				}
+			}
+			worthAuthenticating = addProxyAuthorizationHeader(request, domainUri,
+					toHeaderValue, username, password, realm, nonce);
+			if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
+				proxyAuthNoncesCache.put(toHeaderValue, new HashMap<String, String>());
+				proxyAuthCallIdCache.put(toHeaderValue, new HashMap<String, String>());
+			}
+			proxyAuthNoncesCache.get(toHeaderValue).put(realm, nonce);
+			Dialog dialog = clientTransaction.getDialog();
+			String callId = dialog.getCallId().getCallId();
+			if (dialog != null) {
+				proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
+			}
+		}
+
+		if (worthAuthenticating) {
+			try {
+				doSendRequest(request, null, clientTransaction.getDialog(), false);
+			} catch (SipException requestCouldNotBeSent) {
+				//Request that would authenticate could not be sent.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
 				//TODO report 401/407 error back to application layer.
 			}
-		} catch (ParseException parseException) {
+		}
+		else {
+			//Not worth authenticating because server already denied
+			//this exact request.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 401/407 error back to application layer.
 		}
 	}
@@ -601,8 +645,7 @@ public class UserAgentClient {
 		Request request = cloneRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
-		@SuppressWarnings("rawtypes")
-		ListIterator acceptEncodingHeaders =
+		ListIterator<?> acceptEncodingHeaders =
 				response.getHeaders(AcceptEncodingHeader.NAME);
 		List<String> acceptedEncodings = new LinkedList<>();
 		while (acceptEncodingHeaders.hasNext()) {
@@ -644,8 +687,7 @@ public class UserAgentClient {
 		}
 		
 		boolean shouldBypassContentTypesCheck = false;
-		@SuppressWarnings("rawtypes")
-		ListIterator acceptHeaders = response.getHeaders(AcceptHeader.NAME);
+		ListIterator<?> acceptHeaders = response.getHeaders(AcceptHeader.NAME);
 		Map<String, String> typeSubtypeToQValue = new HashMap<>();
 		Map<String, Set<String>> typeToSubTypes = new HashMap<>();
 		while (acceptHeaders.hasNext()) {
@@ -674,8 +716,7 @@ public class UserAgentClient {
 		}
 		boolean overlappingContentTypesFound = false;
 		if (!shouldBypassContentTypesCheck) {
-			@SuppressWarnings("rawtypes")
-			ListIterator definedContentTypeHeaders =
+			ListIterator<?> definedContentTypeHeaders =
 					request.getHeaders(ContentTypeHeader.NAME);
 			List<ContentTypeHeader> overlappingContentTypes
 					= new LinkedList<>();
@@ -728,12 +769,14 @@ public class UserAgentClient {
 				doSendRequest(request, null, clientTransaction.getDialog());
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would amend this situation could not be sent.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
 				//TODO report 415 error back to application layer.
 			}
 		}
 		else {
 			//Cannot satisfy the media type requirements since this UAC doesn't
 			//support any that are accepted by the UAS that sent this response.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 415 error back to application layer.
 		}
 	}
@@ -798,21 +841,25 @@ public class UserAgentClient {
 			doSendRequest(request, null, clientTransaction.getDialog());
 		} catch (SipException requestCouldNotBeSent) {
 			//Request that would amend this situation could not be sent.
+			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 420 error back to application layer.
 		}
 	}
 
 	private void handleByReschedulingIfApplicable(Response response,
-			final ClientTransaction clientTransaction, boolean abortIfInDialog) {
-		if (response == null) {
-			handleThisRequestTerminated(clientTransaction);
-			return;
-		}
-		if (abortIfInDialog) {
+			final ClientTransaction clientTransaction, boolean isTimeout) {
+		if (isTimeout) {
+			boolean isError = true;
+			if (response == null) {
+				isError = !handleThisRequestTerminated(clientTransaction);
+			}
 			Dialog dialog = clientTransaction.getDialog();
 			if (dialog != null) {
 				dialog.delete();
-				//TODO report response error back to application layer.
+				if (isError) {
+					handleThisByRemovingEarlyDialogs(clientTransaction);
+					//TODO report response error back to application layer.
+				}
 				return;
 			}
 		}
@@ -835,6 +882,7 @@ public class UserAgentClient {
 							doSendRequest(request, null, clientTransaction.getDialog());
 						} catch (SipException requestCouldNotBeSent) {
 							//Could not reschedule request.
+							handleThisByRemovingEarlyDialogs(clientTransaction);
 							//TODO report response error back to application layer.
 						}
 					}
@@ -845,24 +893,20 @@ public class UserAgentClient {
 		}
 		//Request is not allowed to reschedule or it would be pointless to do so
 		//because availability frame is too short.
+		handleThisByRemovingEarlyDialogs(clientTransaction);
 		//TODO report response error back to application layer.
 	}
-	
-	private void handleThisRequestTerminated(ClientTransaction clientTransaction) {
-		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
-			case CANCEL:
-			case BYE:
-				//This means a CANCEL or BYE request succeeded in canceling/terminating
-				//the original transaction!
-				//TODO report this condition back to the application layer.
-				//TODO also make sure to tell the application layer to get rid of the
-				//Client transaction associated with this request as it just became useless.
-				break;
-			default:
-				//This should never happen.
+
+	private void handleByTerminatingIfWithinDialog(ClientTransaction clientTransaction) {
+		Dialog dialog = clientTransaction.getDialog();
+		if (dialog != null) {
+			//TODO handle this by sending a BYE request within this dialog immediately.
+		}
+		else {
+			//TODO report 481 error back to the application layer.
 		}
 	}
-
+	
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
 		boolean shouldSaveDialog = false;
 		Dialog dialog = clientTransaction.getDialog();
@@ -874,7 +918,7 @@ public class UserAgentClient {
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
 					//TODO *IF* the INVITE request contained a offer, this ACK
 					//MUST carry an answer to that offer, given that the offer is acceptable!
-					//*HOWEVER* if the offer is not acceptable, after sending the ACK,
+					//TODO *HOWEVER* if the offer is not acceptable, after sending the ACK,
 					//a BYE request MUST be sent immediately.
 					dialog.sendAck(ackRequest);
 				} catch (InvalidArgumentException ignore) {
@@ -900,23 +944,63 @@ public class UserAgentClient {
 		}
 	}
 
+	private void handleByeResponse(int statusCode, ClientTransaction clientTransaction) {
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			handleThisRequestTerminated(clientTransaction);
+			//TODO make sure to tell the application layer to get rid of the
+			//Dialog associated with this request as it just became invalid.
+		}
+	}
+
+	private boolean handleThisRequestTerminated(ClientTransaction clientTransaction) {
+		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
+			case INVITE:
+				//This means a CANCEL succeeded in canceling the original INVITE request.
+				//TODO make sure to tell the application layer to get rid of the
+				//Client transaction associated with this request as it just became useless.
+				handleThisByRemovingEarlyDialogs(clientTransaction);
+				//TODO report this condition back to the application layer.
+				return true;
+			case BYE:
+				//This means a BYE succeeded in terminating a INVITE request within a Dialog.
+				//TODO make sure to tell the application layer to get rid of the
+				//Dialog associated with this request as it just became invalid.
+				//TODO report this condition back to the application layer.
+				return true;
+			default:
+				//This should never happen.
+				return false;
+		}
+	}
+
+	private void handleThisByRemovingEarlyDialogs(ClientTransaction clientTransaction) {
+		Dialog dialog = clientTransaction.getDialog();
+		if (dialog != null) {
+			//TODO tell the application layer to get rid of the early dialog associated
+			//with this request as it just became invalid.
+			//TODO According to "15 Terminating a Session", all sessions and dialogs
+			//that were created through responses to this request shall be terminated too,
+			//if this was a INVITE request.
+		}
+	}
+
 	private Request cloneRequest(Request original) {
 		Request clone = null;
 		List<ViaHeader> viaHeaders = new LinkedList<>();
-		@SuppressWarnings("rawtypes")
-		ListIterator iterator = original.getHeaders(ViaHeader.NAME);
+		ListIterator<?> iterator = original.getHeaders(ViaHeader.NAME);
 		while (iterator.hasNext()) {
 			viaHeaders.add((ViaHeader) iterator.next());
 		}
 		try {
-			clone = messenger.createRequest(original.getRequestURI(), original.getMethod(),
-					(CallIdHeader) original.getHeader(CallIdHeader.NAME),
-					(CSeqHeader) original.getHeader(CSeqHeader.NAME),
-					(FromHeader) original.getHeader(FromHeader.NAME),
-					(ToHeader) original.getHeader(ToHeader.NAME), viaHeaders,
-					(MaxForwardsHeader) original.getHeader(MaxForwardsHeader.NAME),
-					(ContentTypeHeader) original.getHeader(ContentTypeHeader.NAME),
-					original.getRawContent());
+			URI requestUri = (URI) original.getRequestURI().clone();
+			clone = messenger.createRequest(requestUri, original.getMethod(),
+					(CallIdHeader) original.getHeader(CallIdHeader.NAME).clone(),
+					(CSeqHeader) original.getHeader(CSeqHeader.NAME).clone(),
+					(FromHeader) original.getHeader(FromHeader.NAME).clone(),
+					(ToHeader) original.getHeader(ToHeader.NAME).clone(), viaHeaders,
+					(MaxForwardsHeader) original.getHeader(MaxForwardsHeader.NAME).clone(),
+					(ContentTypeHeader) original.getHeader(ContentTypeHeader.NAME).clone(),
+					original.getRawContent().clone());
 		} catch (ParseException ignore) {}
 		return clone;
 	}
@@ -936,7 +1020,65 @@ public class UserAgentClient {
 	private void doSendRequest(Request request,
 			ClientTransaction clientTransaction, Dialog dialog)
 			throws TransactionUnavailableException, SipException {
-		ClientTransaction newClientTransaction;
+		doSendRequest(request, clientTransaction, dialog, true);
+	}
+
+	private void doSendRequest(Request request, ClientTransaction clientTransaction,
+			Dialog dialog, boolean tryAddingAuthorizationHeaders)
+			throws TransactionUnavailableException, SipException {
+		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
+		String toHeaderValue = toHeader.getAddress().getURI().toString();
+
+		SipUri domainUri = new SipUri();
+		try {
+			domainUri.setHost(localDomain);
+		} catch (ParseException parseException) {
+			//Could not properly parse domainUri.
+			//TODO also log this error condition back to the application layer.
+			return;
+		}
+
+		if (tryAddingAuthorizationHeaders) {
+			if (authNoncesCache.containsKey(toHeaderValue)) {
+				Map<String, String> probableRealms = new HashMap<>();
+				for (Entry<String, String> entry :
+					authNoncesCache.get(toHeaderValue).entrySet()) {
+					String realm = entry.getKey();
+					String remoteDomain = toHeaderValue.split("@")[1];
+					if (realm.contains(remoteDomain)) {
+						String nonce = entry.getValue();
+						probableRealms.put(realm, nonce);
+					}
+				}
+				for (String realm : probableRealms.keySet()) {
+					addAuthorizationHeader(request, domainUri, toHeaderValue,
+							toHeaderValue, toHeaderValue, realm, probableRealms.get(realm));
+				}
+			}
+			if (proxyAuthNoncesCache.containsKey(toHeaderValue)) {
+				Map<String, String> probableRealms = new HashMap<>();
+				for (Entry<String, String> entry :
+					proxyAuthNoncesCache.get(toHeaderValue).entrySet()) {
+					String realm = entry.getKey();
+					String remoteDomain = toHeaderValue.split("@")[1];
+					if (realm.contains(remoteDomain)) {
+						String nonce = entry.getValue();
+						probableRealms.put(realm, nonce);
+					}
+				}
+				for (String realm : probableRealms.keySet()) {
+					String thisCallId = dialog.getCallId().getCallId();
+					String savedCallId = proxyAuthCallIdCache.get(toHeaderValue).get(realm);
+					if (thisCallId.equals(savedCallId)) {
+						addProxyAuthorizationHeader(request, domainUri, toHeaderValue,
+								toHeaderValue, toHeaderValue, realm,
+								probableRealms.get(realm));
+					}
+				}
+			}
+		}
+
+		ClientTransaction newClientTransaction = clientTransaction;
 		if (clientTransaction == null) {
 			newClientTransaction = provider.getNewClientTransaction(request);
 			ViaHeader viaHeader = (ViaHeader) request.getHeader(ViaHeader.NAME);
@@ -946,18 +1088,67 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {
 			} catch (InvalidArgumentException ignore) {}
 		}
-		else {
-			newClientTransaction = clientTransaction;
-		}
 		if (dialog != null) {
 			try {
 				dialog.sendRequest(newClientTransaction);
 			}
-			catch (TransactionDoesNotExistException ignore) {}
+			catch (TransactionDoesNotExistException invalidTransaction) {
+				//A invalid (probably null) client transaction
+				//can't be used to send this request.
+				//TODO log this error condition back to the application layer.
+			}
 		}
 		else {
 			newClientTransaction.sendRequest();
 		}
+	}
+
+	private boolean addAuthorizationHeader(Request request, URI domainUri,
+			String toHeaderValue, String username, String password,
+			String realm, String nonce) {
+		String responseDigest = AuthorizationDigest.getDigest(username, realm,
+				password, request.getMethod(), domainUri.toString(), nonce);
+		AuthorizationHeader authorizationHeader;
+		try {
+			authorizationHeader = headerMaker
+					.createAuthorizationHeader("Digest");
+			authorizationHeader.setAlgorithm("MD5");
+			authorizationHeader.setURI(domainUri);
+			authorizationHeader.setUsername(username);
+			authorizationHeader.setRealm(realm);
+			authorizationHeader.setNonce(nonce);
+			authorizationHeader.setResponse(responseDigest);
+		} catch (ParseException parseException) {
+			//TODO log this error condition back to the application layer.
+			return false;
+		}
+		request.addHeader(authorizationHeader);
+		return true;
+	}
+
+	private boolean addProxyAuthorizationHeader(Request request, URI domainUri,
+			String toHeaderValue, String username, String password,
+			String realm, String nonce) {
+		String responseDigest = AuthorizationDigest.getDigest(username, realm,
+				password, request.getMethod(), domainUri.toString(), nonce);
+		ProxyAuthorizationHeader proxyAuthorizationHeader;
+		try {
+			proxyAuthorizationHeader = headerMaker
+					.createProxyAuthorizationHeader("Digest");
+			proxyAuthorizationHeader.setAlgorithm("MD5");
+			if (domainUri != null) {
+				proxyAuthorizationHeader.setURI(domainUri);
+			}
+			proxyAuthorizationHeader.setUsername(username);
+			proxyAuthorizationHeader.setRealm(realm);
+			proxyAuthorizationHeader.setNonce(nonce);
+			proxyAuthorizationHeader.setResponse(responseDigest);
+		} catch (ParseException parseException) {
+			//TODO log this error condition back to the application layer.
+			return false;
+		}
+		request.addHeader(proxyAuthorizationHeader);
+		return true;
 	}
 
 }
