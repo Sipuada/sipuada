@@ -1,6 +1,7 @@
 package org.github.sipuada;
 
 import java.text.ParseException;
+import java.util.Map;
 
 import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
@@ -9,6 +10,7 @@ import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
 import android.javax.sip.TimeoutEvent;
+import android.javax.sip.TransactionState;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
@@ -19,7 +21,8 @@ public class UserAgentServer {
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
-	private IIncomingRequestsListener requestsListener;
+	private Sipuada.Listener requestsListener;
+	private Map<String, ServerTransaction> inviteServerTransactions;
 
 	public UserAgentServer(SipProvider sipProvider, MessageFactory messageFactory, HeaderFactory headerFactory) {
 		provider = sipProvider;
@@ -33,7 +36,7 @@ public class UserAgentServer {
 			Request request = requestEvent.getRequest();
 			String requestMethod = request.getMethod();
 			handlerResquest(requestMethod, serverTransaction);
-		} 
+		}
 	}
 
 	private void handlerResquest(String requestMethod, ServerTransaction serverTransaction) {
@@ -99,9 +102,9 @@ public class UserAgentServer {
 		} catch (ParseException | SipException | InvalidArgumentException e) {
 			e.printStackTrace();
 		}
-		
-		ServerTransaction canceledTransaction = requestsListener.onCancelRequest(serverTransaction);
-		if(canceledTransaction!= null){
+		String cancelCallId = serverTransaction.getDialog().getCallId().getCallId();
+		ServerTransaction canceledTransaction = getServerTransationByCallId(cancelCallId);
+		if (canceledTransaction != null && ! isTransactionCompleted(canceledTransaction)) {
 			try {
 				Response response = messenger.createResponse(Response.REQUEST_TERMINATED, canceledTransaction.getRequest());
 				canceledTransaction.sendResponse(response);
@@ -110,7 +113,11 @@ public class UserAgentServer {
 				e.printStackTrace();
 			}
 		}
-		
+	}
+
+	private boolean isTransactionCompleted(ServerTransaction transaction) {
+		return transaction.getState().equals(TransactionState.COMPLETED)
+				|| transaction.getState().equals(TransactionState.TERMINATED);
 	}
 
 	private void handleByeRequest(ServerTransaction serverTransaction) {
@@ -136,8 +143,10 @@ public class UserAgentServer {
 
 	private void handleInviteRequest(ServerTransaction serverTransaction) {
 		if (requestsListener != null) {
-			if (requestsListener.onInviteRequest(serverTransaction)) {
+			String callId = serverTransaction.getDialog().getCallId().getCallId();
+			if (requestsListener.onCallReceived(callId)) {
 				sendRingingResponse(serverTransaction);
+				inviteServerTransactions.put(callId, serverTransaction);
 			} else {
 				try {
 					Response response = messenger.createResponse(Response.BUSY_HERE, serverTransaction.getRequest());
@@ -161,24 +170,23 @@ public class UserAgentServer {
 		}
 	}
 
-
-	public IIncomingRequestsListener getRequestsListener() {
-		return requestsListener;
-	}
-
-	public void setRequestsListener(IIncomingRequestsListener listener) {
+	public void setRequestsListener(Sipuada.Listener listener) {
 		this.requestsListener = listener;
 	}
 
-	
 	public void processRetransmission(TimeoutEvent retransmissionEvent) {
 		if (retransmissionEvent.isServerTransaction()) {
 			ServerTransaction serverTransaction = retransmissionEvent.getServerTransaction();
-			//TODO Dialog layer says we should retransmit a response. how?
+			// TODO Dialog layer says we should retransmit a response. how?
 		}
 	}
 
-	public void sendResponse(int method, ServerTransaction serverTransaction) {
+	public ServerTransaction getServerTransationByCallId(String callId) {
+		return inviteServerTransactions.get(callId);
+	}
+
+	public void sendResponse(int method, String callId) {
+		ServerTransaction serverTransaction = getServerTransationByCallId(callId);
 		try {
 			Response response = messenger.createResponse(method, serverTransaction.getRequest());
 			serverTransaction.sendResponse(response);
