@@ -74,7 +74,7 @@ public class UserAgentClient {
 	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
-	private long localCSeq = 1;
+	private long localCSeq = 0;
 	private final List<Address> configuredRouteSet = new LinkedList<>();
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
 	private Map<URI, Long> registerCSeqs = new HashMap<>();
@@ -986,6 +986,7 @@ public class UserAgentClient {
 		Request derived = (Request) original.clone();
 		ListIterator<?> iterator = original.getHeaders(ViaHeader.NAME);
 		String newBranchId = Utils.getInstance().generateBranchId();
+		derived.removeHeader(ViaHeader.NAME);
 		while (iterator.hasNext()) {
 			ViaHeader viaHeader = (ViaHeader) iterator.next();
 			if (viaHeader.getBranch() != null) {
