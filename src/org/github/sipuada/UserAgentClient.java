@@ -556,6 +556,8 @@ public class UserAgentClient {
 					&& proxyAuthNoncesCache.get(toHeaderValue).containsKey(realm)) {
 				String oldNonce = proxyAuthNoncesCache.get(toHeaderValue).get(realm);
 				if (oldNonce.equals(nonce)) {
+					proxyAuthNoncesCache.get(toHeaderValue).remove(realm);
+					proxyAuthCallIdCache.get(toHeaderValue).remove(realm);
 					continue;
 				}
 			}
@@ -792,16 +794,18 @@ public class UserAgentClient {
 	}
 
 	private void handleByReschedulingIfApplicable(Response response,
-			final ClientTransaction clientTransaction, boolean abortIfInDialog) {
-		if (response == null) {
-			handleThisRequestTerminated(clientTransaction);
-			return;
-		}
-		if (abortIfInDialog) {
+			final ClientTransaction clientTransaction, boolean isTimeout) {
+		if (isTimeout) {
+			boolean isError = true;
+			if (response == null) {
+				isError = !handleThisRequestTerminated(clientTransaction);
+			}
 			Dialog dialog = clientTransaction.getDialog();
 			if (dialog != null) {
 				dialog.delete();
-				//TODO report response error back to application layer.
+				if (isError) {
+					//TODO report response error back to application layer.
+				}
 				return;
 			}
 		}
@@ -837,18 +841,19 @@ public class UserAgentClient {
 		//TODO report response error back to application layer.
 	}
 	
-	private void handleThisRequestTerminated(ClientTransaction clientTransaction) {
+	private boolean handleThisRequestTerminated(ClientTransaction clientTransaction) {
 		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
-			case CANCEL:
+			case INVITE:
 			case BYE:
 				//This means a CANCEL or BYE request succeeded in canceling/terminating
 				//the original transaction!
 				//TODO report this condition back to the application layer.
 				//TODO also make sure to tell the application layer to get rid of the
 				//Client transaction associated with this request as it just became useless.
-				break;
+				return true;
 			default:
 				//This should never happen.
+				return false;
 		}
 	}
 
@@ -983,7 +988,7 @@ public class UserAgentClient {
 			}
 		}
 
-		ClientTransaction newClientTransaction;
+		ClientTransaction newClientTransaction = clientTransaction;
 		if (clientTransaction == null) {
 			newClientTransaction = provider.getNewClientTransaction(request);
 			ViaHeader viaHeader = (ViaHeader) request.getHeader(ViaHeader.NAME);
@@ -993,14 +998,15 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {
 			} catch (InvalidArgumentException ignore) {}
 		}
-		else {
-			newClientTransaction = clientTransaction;
-		}
 		if (dialog != null) {
 			try {
 				dialog.sendRequest(newClientTransaction);
 			}
-			catch (TransactionDoesNotExistException ignore) {}
+			catch (TransactionDoesNotExistException invalidTransaction) {
+				//A invalid (probably null) client transaction
+				//can't be used to send this request.
+				//TODO log this error condition back to the application layer.
+			}
 		}
 		else {
 			newClientTransaction.sendRequest();
