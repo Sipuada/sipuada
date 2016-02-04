@@ -149,6 +149,14 @@ public class UserAgentClient {
 				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
+	//TODO later implement the OPTIONS method.
+	//	public void sendOptionsRequest(String remoteUser, String remoteDomain) {
+	//		sendRequest(RequestMethod.OPTIONS, remoteUser, remoteDomain,
+	//				...);
+	//	}
+	//TODO when we do it, make sure that no dialog and session state is
+	//messed up with by the flow of incoming responses to this OPTIONS request.
+
 	public void sendInviteRequest(String remoteUser, String remoteDomain) {
 		URI requestUri;
 		try {
@@ -193,10 +201,27 @@ public class UserAgentClient {
 	}
 
 	public void sendReinviteRequest(Dialog dialog) {
+		//TODO everything related to sending RE-INVITE requests, such as
+		//making sure they are sent only when they should (it MUST NOT be sent
+		//while another INVITE transaction is in progress in either direction within the
+		//context of this dialog).
+		//TODO also it's important to make sure that failures to this RE-INVITE
+		//don't cause the current dialog and session to cease to exist, unless the received
+		//response is either a 481 (Call Does Not Exist) or a 408 (Request Timeout), in
+		//which case the dialog and session shall be terminated.
+		//This will probably need a review of almost all of this source code.
+		//TODO finally, also make sure this RE-INVITE is handled properly in the case
+		//a 491 response is received (given that the transaction layer doesn't already
+		//do this transparently for us, that is).
 		sendRequest(RequestMethod.INVITE, dialog);
 	}
 
 	public void sendByeRequest(Dialog dialog) {
+		//TODO make sure this is only sent by the callee if the dialog is NOT early and
+		//it has already received an ACK for it's 2xx response or until the server
+		//transaction timed out. The callee MUST NOT send it if the conditions
+		//above are not met.
+		//(The caller is allowed to send for either confirmed or early dialogs).
 		sendRequest(RequestMethod.BYE, dialog);
 	}
 
@@ -301,6 +326,9 @@ public class UserAgentClient {
 			//TODO *IF* this request is a INVITE, then please propagate
 			//this clientTransaction back to the application layer
 			//so that it can later cancel this request if desired.
+			//TODO *IF* this request is a BYE, please let the application layer
+			//know it should consider the session associated with this request
+			//terminated.
 		} catch (ParseException requestCouldNotBeBuilt) {
 			//Could not properly build this request.
 			//TODO report this error condition back to the application layer.
@@ -327,6 +355,9 @@ public class UserAgentClient {
 
 			@Override
 			public void run() {
+				if (clientTransaction.getState() == null) {
+					return;
+				}
 				switch (clientTransaction.getState().getValue()) {
 				case TransactionState._PROCEEDING:
 					try {
@@ -339,6 +370,10 @@ public class UserAgentClient {
 				case TransactionState._COMPLETED:
 				case TransactionState._TERMINATED:
 					timer.cancel();
+					//The request was accepted before we could cancel it.
+					//TODO decide whether we will send a BYE request here to
+					//terminate the established session, or just inform the application
+					//layer that it was too late to cancel.
 				}
 			}
 		}, 180, 180);
@@ -872,14 +907,6 @@ public class UserAgentClient {
 		}
 	}
 	
-	private void handleThisByRemovingEarlyDialogs(ClientTransaction clientTransaction) {
-		Dialog dialog = clientTransaction.getDialog();
-		if (dialog != null) {
-			//TODO tell the application layer to get rid of the early dialog associated
-			//with this request as it just became invalid.
-		}
-	}
-
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
 		boolean shouldSaveDialog = false;
 		Dialog dialog = clientTransaction.getDialog();
@@ -943,6 +970,17 @@ public class UserAgentClient {
 			default:
 				//This should never happen.
 				return false;
+		}
+	}
+
+	private void handleThisByRemovingEarlyDialogs(ClientTransaction clientTransaction) {
+		Dialog dialog = clientTransaction.getDialog();
+		if (dialog != null) {
+			//TODO tell the application layer to get rid of the early dialog associated
+			//with this request as it just became invalid.
+			//TODO According to "15 Terminating a Session", all sessions and dialogs
+			//that were created through responses to this request shall be terminated too,
+			//if this was a INVITE request.
 		}
 	}
 
