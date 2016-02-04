@@ -901,7 +901,7 @@ public class UserAgentClient {
 			//TODO report 481 error back to the application layer.
 		}
 	}
-	
+
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
 		Dialog dialog = clientTransaction.getDialog();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
