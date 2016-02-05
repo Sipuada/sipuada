@@ -3,6 +3,9 @@ package org.github.sipuada;
 import java.text.ParseException;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.RequestEvent;
@@ -23,6 +26,7 @@ public class UserAgentServer {
 	private final HeaderFactory headerMaker;
 	private Sipuada.Listener requestsListener;
 	private Map<String, ServerTransaction> inviteServerTransactions;
+	private Logger logger = LoggerFactory.getLogger(UserAgentServer.class);
 
 	public UserAgentServer(SipProvider sipProvider, MessageFactory messageFactory, HeaderFactory headerFactory) {
 		provider = sipProvider;
@@ -104,15 +108,20 @@ public class UserAgentServer {
 		}
 		String cancelCallId = serverTransaction.getDialog().getCallId().getCallId();
 		ServerTransaction canceledTransaction = getServerTransationByCallId(cancelCallId);
-		if (canceledTransaction != null && ! isTransactionCompleted(canceledTransaction)) {
+		if (canceledTransaction != null && !isTransactionCompleted(canceledTransaction)) {
+			logger.debug(" Cancel Request handled: sent request terminated.");
 			try {
-				Response response = messenger.createResponse(Response.REQUEST_TERMINATED, canceledTransaction.getRequest());
+				Response response = messenger.createResponse(Response.REQUEST_TERMINATED,
+						canceledTransaction.getRequest());
 				canceledTransaction.sendResponse(response);
 			} catch (SipException | InvalidArgumentException | ParseException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+		}else{
+			logger.debug(" Cancel Request handled: request already finished.");
 		}
+	
+	
 	}
 
 	private boolean isTransactionCompleted(ServerTransaction transaction) {
@@ -123,6 +132,7 @@ public class UserAgentServer {
 	private void handleByeRequest(ServerTransaction serverTransaction) {
 		Dialog dialog = serverTransaction.getDialog();
 		if (dialog == null) {
+			logger.debug(" Bye Request handled: Dialog is null");
 			Response response;
 			try {
 				response = messenger.createResponse(Response.REQUEST_TERMINATED, serverTransaction.getRequest());
@@ -131,6 +141,7 @@ public class UserAgentServer {
 				e.printStackTrace();
 			}
 		} else {
+			logger.debug(" Bye Request handled: Sent ok response");
 			try {
 				Response response = messenger.createResponse(Response.OK, serverTransaction.getRequest());
 				serverTransaction.sendResponse(response);
@@ -142,15 +153,18 @@ public class UserAgentServer {
 	}
 
 	private void handleInviteRequest(ServerTransaction serverTransaction) {
+		
 		if (requestsListener != null) {
 			String callId = serverTransaction.getDialog().getCallId().getCallId();
 			if (requestsListener.onCallReceived(callId)) {
+				logger.debug(" Invite Request handled: sent Ringing Response");
 				sendRingingResponse(serverTransaction);
 				inviteServerTransactions.put(callId, serverTransaction);
 			} else {
 				try {
 					Response response = messenger.createResponse(Response.BUSY_HERE, serverTransaction.getRequest());
 					serverTransaction.sendResponse(response);
+					logger.debug(" Invite Request handled: sent busy here");
 				} catch (ParseException | InvalidArgumentException | SipException e) {
 					e.printStackTrace();
 				}
