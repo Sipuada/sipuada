@@ -16,6 +16,10 @@ import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.eventbus.EventBus;
 
 import android.gov.nist.gnjvx.sip.Utils;
 import android.gov.nist.gnjvx.sip.address.SipUri;
@@ -60,6 +64,9 @@ import android.javax.sip.message.Response;
 
 public class UserAgentClient {
 
+	private final Logger logger = LoggerFactory.getLogger(UserAgentClient.class);
+
+	private final EventBus eventBus;
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
@@ -79,9 +86,10 @@ public class UserAgentClient {
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
 	private Map<URI, Long> registerCSeqs = new HashMap<>();
 
-	public UserAgentClient(SipProvider sipProvider, MessageFactory messageFactory,
-			HeaderFactory headerFactory, AddressFactory addressFactory,
-			String... credentials) {
+	public UserAgentClient(EventBus bus, SipProvider sipProvider,
+			MessageFactory messageFactory, HeaderFactory headerFactory,
+			AddressFactory addressFactory, String... credentials) {
+		eventBus = bus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
@@ -95,15 +103,16 @@ public class UserAgentClient {
 		transport = credentials.length > 5 && credentials[5] != null ? credentials[5] : "";
 	}
 	
-	public void sendRegisterRequest() {
+	public boolean sendRegisterRequest() {
 		URI requestUri;
 		try {
 			requestUri = addressMaker.createSipURI(null, localDomain);
 		} catch (ParseException parseException) {
-			//Could not properly parse the request URI for this request.
-			//Must be a valid URI.
-			//TODO report error condition back to the application layer.
-			return;
+			logger.error("Could not properly create URI for this REGISTER request to {}." +
+					"\nMust be a valid domain or IP address: {}.", localDomain,
+					parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 		if (!registerCallIds.containsKey(requestUri)) {
 			registerCallIds.put(requestUri, provider.getNewCallId());
@@ -117,10 +126,11 @@ public class UserAgentClient {
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
 		} catch (ParseException parseException) {
-			//Could not properly parse the contact URI for this request.
-			//Must be a valid URI.
-			//TODO report error condition back to the application layer.
-			return;
+			logger.error("Could not properly create the contact URI for {} at {}." +
+					"[username] must be a valid id, [localIp] must be a valid " +
+					"IP address: {}", username, localIp, parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 		contactUri.setPort(localPort);
 		Address contactAddress = addressMaker.createAddress(contactUri);
@@ -143,7 +153,7 @@ public class UserAgentClient {
 		 * Contact header so this doesn't apply to us yet.
 		 */
 
-		sendRequest(RequestMethod.REGISTER, username, localDomain,
+		return sendRequest(RequestMethod.REGISTER, username, localDomain,
 				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
@@ -155,15 +165,17 @@ public class UserAgentClient {
 	//TODO when we do it, make sure that no dialog and session state is
 	//messed up with by the flow of incoming responses to this OPTIONS request.
 
-	public void sendInviteRequest(String remoteUser, String remoteDomain) {
+	public boolean sendInviteRequest(String remoteUser, String remoteDomain) {
 		URI requestUri;
 		try {
 			requestUri = addressMaker.createSipURI(remoteUser, remoteDomain);
 		} catch (ParseException parseException) {
-			//Could not properly parse the request URI for this request.
-			//Must be a valid URI.
-			//TODO report error condition back to the application layer.
-			return;
+			logger.error("Could not properly create URI for this INVITE request " +
+					"to {} at {}.\n[remoteUser] must be a valid id, [remoteDomain] " +
+					"must be a valid IP address: {}.", remoteUser, remoteDomain,
+					parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 		CallIdHeader callIdHeader = provider.getNewCallId();
 		long cseq = ++localCSeq;
@@ -178,27 +190,31 @@ public class UserAgentClient {
 		 * (later support also: the offer/answer model
 		 */
 
-		sendRequest(RequestMethod.INVITE, remoteUser, remoteDomain,
+		return sendRequest(RequestMethod.INVITE, remoteUser, remoteDomain,
 				requestUri, callIdHeader, cseq);
 	}
 
-	private void sendRequest(RequestMethod method, String remoteUser, String remoteDomain,
+	private boolean sendRequest(RequestMethod method, String remoteUser, String remoteDomain,
 			URI requestUri, CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
 		try {
 			URI addresserUri = addressMaker.createSipURI(username, localDomain);
 			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteDomain);
-			sendRequest(method, requestUri, addresserUri, addresseeUri, null,
+			return sendRequest(method, requestUri, addresserUri, addresseeUri, null,
 					callIdHeader, cseq, additionalHeaders);
 		} catch (ParseException parseException) {
-			//Could not properly parse the addresser or addressee URI.
-			//Must be a valid URI.
-			//TODO report error condition back to the application layer.
-			return;
+			logger.error("Could not properly create addresser and addressee URIs for " +
+					"this {} request from {} at {} to {} at {}." +
+					"\n[username] and [remoteUser] must be valid ids; " +
+					"[localDomain] and [remoteDomain], valid domains or IP addresses: {}.",
+					method, username, localDomain, remoteUser, remoteDomain,
+					parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 	}
 
-	public void sendReinviteRequest(Dialog dialog) {
+	public boolean sendReinviteRequest(Dialog dialog) {
 		//TODO everything related to sending RE-INVITE requests, such as
 		//making sure they are sent only when they should (it MUST NOT be sent
 		//while another INVITE transaction is in progress in either direction within the
@@ -211,19 +227,19 @@ public class UserAgentClient {
 		//TODO finally, also make sure this RE-INVITE is handled properly in the case
 		//a 491 response is received (given that the transaction layer doesn't already
 		//do this transparently for us, that is).
-		sendRequest(RequestMethod.INVITE, dialog);
+		return sendRequest(RequestMethod.INVITE, dialog);
 	}
 
-	public void sendByeRequest(Dialog dialog) {
+	public boolean sendByeRequest(Dialog dialog) {
 		//TODO make sure this is only sent by the callee if the dialog is NOT early and
 		//it has already received an ACK for it's 2xx response or until the server
 		//transaction timed out. The callee MUST NOT send it if the conditions
 		//above are not met.
 		//(The caller is allowed to send for either confirmed or early dialogs).
-		sendRequest(RequestMethod.BYE, dialog);
+		return sendRequest(RequestMethod.BYE, dialog);
 	}
 
-	private void sendRequest(RequestMethod method, Dialog dialog) {
+	private boolean sendRequest(RequestMethod method, Dialog dialog) {
 		URI addresserUri = dialog.getLocalParty().getURI();
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
@@ -235,11 +251,11 @@ public class UserAgentClient {
 		if (localCSeq < cseq) {
 			localCSeq = cseq;
 		}
-		sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
+		return sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
 				callIdHeader, cseq);
 	}
 
-	private void sendRequest(RequestMethod method, URI requestUri, URI addresserUri,
+	private boolean sendRequest(RequestMethod method, URI requestUri, URI addresserUri,
 			URI addresseeUri, Dialog dialog, CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
@@ -247,8 +263,10 @@ public class UserAgentClient {
 			//This method is meant for the INVITE request and
 			//the following NON-INVITE requests: REGISTER, OPTIONS and BYE.
 			//(In the future, INFO and MESSAGE as well.)
-			//TODO log this wrong usage condition back to the application layer.
-			return;
+			logger.debug("[sendRequest(RequestMethod, URI, URI, URI, Dialog, CallIdHeader," +
+					"long, Header...)] method forbidden for {} requests.", method);
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 
 		Address from, to;
@@ -293,8 +311,9 @@ public class UserAgentClient {
 			}
 		}
 
+		ViaHeader viaHeader = null;
 		try {
-			ViaHeader viaHeader = headerMaker
+			viaHeader = headerMaker
 					.createViaHeader(localIp, localPort, transport, null);
 			viaHeader.setRPort();
 			Request request = messenger.createRequest(requestUri, method.toString(),
@@ -320,30 +339,41 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
-			doSendRequest(request, clientTransaction, dialog);
+			return doSendRequest(request, clientTransaction, dialog);
 			//TODO *IF* this request is a BYE, please let the application layer
 			//know it should consider the session associated with this request
 			//terminated.
 		} catch (ParseException requestCouldNotBeBuilt) {
-			//Could not properly build this request.
-			//TODO report this error condition back to the application layer.
+			logger.error("Could not properly create mandatory headers for " +
+					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
+					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+					requestCouldNotBeBuilt.getMessage());
 		} catch (SipException requestCouldNotBeSent) {
-			//This request could not be sent.
-			//TODO report this error condition back to the application layer.
+			logger.error("Could not send this {} request: {}.", method,
+					requestCouldNotBeSent.getMessage());
 		} catch (InvalidArgumentException ignore) {}
+		//No need for caller to wait for remote responses.
+		return false;
 	}
 
-	public void sendCancelRequest(final ClientTransaction clientTransaction) {
+	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
 		if (!clientTransaction.getRequest().getMethod().equals(RequestMethod.INVITE)) {
 			//This method is meant for canceling INVITE requests only.
-			//TODO log this wrong usage condition back to the application layer.
-			return;
+			logger.debug("[sendCancelRequest(clientTransaction)] method forbidden for" +
+					"{} requests.", clientTransaction.getRequest().getMethod());
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 		final Request cancelRequest;
 		try {
 			cancelRequest = clientTransaction.createCancel();
-		} catch (SipException ignore) {
-			return;
+		} catch (SipException requestCouldNotBeBuilt) {
+			//Could not properly build a CANCEL request - this shouldn't happen.
+			logger.debug("Could not properly create {} request: {}.",
+					RequestMethod.CANCEL, requestCouldNotBeBuilt.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 		final Timer timer = new Timer();
 		timer.schedule(new TimerTask() {
@@ -357,21 +387,22 @@ public class UserAgentClient {
 				case TransactionState._PROCEEDING:
 					try {
 						doSendRequest(cancelRequest, null, null);
+						logger.debug("{} request sent.", RequestMethod.CANCEL);
 					} catch (SipException requestCouldNotBeSent) {
-						//This request could not be sent.
-						//TODO report this error condition back to the application layer.
+						logger.error("Could not send this {} request: {}.",
+								RequestMethod.CANCEL, requestCouldNotBeSent.getMessage());
 					}
 					break;
 				case TransactionState._COMPLETED:
 				case TransactionState._TERMINATED:
 					timer.cancel();
 					//The request was accepted before we could cancel it.
-					//TODO decide whether we will send a BYE request here to
-					//terminate the established session, or just inform the application
-					//layer that it was too late to cancel.
+					//TODO send a BYE request here to terminate the established session.
 				}
 			}
 		}, 180, 180);
+		//Caller must expect remote responses.
+		return true;
 	}
 
 	protected void processResponse(ResponseEvent responseEvent) {
@@ -379,22 +410,27 @@ public class UserAgentClient {
 		if (clientTransaction != null) {
 			Response response = responseEvent.getResponse();
 			int statusCode = response.getStatusCode();
+			logger.debug("Response arrived to UAC with code {}.", statusCode);
 			handleResponse(statusCode, response, clientTransaction);
 		}
 		else {
-			//No request made by this UAC is associated with this response.
-			//The response then is considered stray, so it simply discards it.
+			logger.debug("Response arrived but no request made by this UAC is associated " +
+					"with it, so it's considered stray and discarded.");
 		}
 	}
 
 	protected void processTimeout(TimeoutEvent timeoutEvent) {
 		if (!timeoutEvent.isServerTransaction()) {
 			ClientTransaction clientTransaction = timeoutEvent.getClientTransaction();
+			logger.debug("Timeout arrived to UAC - translated into response with code {}.",
+					Response.REQUEST_TIMEOUT);
 			handleResponse(Response.REQUEST_TIMEOUT, null, clientTransaction);
 		}
 	}
 
 	protected void processFatalTransportError(IOExceptionEvent exceptionEvent) {
+		logger.debug("Fatal transport error occurred - translated into response " +
+				"with code {}.", Response.SERVICE_UNAVAILABLE);
 		handleResponse(Response.SERVICE_UNAVAILABLE, null, null);
 	}
 	
@@ -402,6 +438,8 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction) {
 		if (tryHandlingResponseGenerically(statusCode, response, clientTransaction)) {
 			if (response == null || clientTransaction == null) {
+				logger.debug("Response translated from Timeout or Fatal transport error " +
+						"couldn't be handled generically, so it's discarded.");
 				return;
 			}
 			switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
@@ -419,6 +457,7 @@ public class UserAgentClient {
 	
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
+		logger.debug("Attempting to handle response {}.", statusCode);
 		if (response != null) {
 			ListIterator<?> iterator = response.getHeaders(ViaHeader.NAME);
 			int viaHeaderCount = 0;
@@ -427,14 +466,16 @@ public class UserAgentClient {
 				viaHeaderCount++;
 			}
 			if (viaHeaderCount > 1) {
-				//Handle by simply discarding the response, it's corrupted.
+				logger.debug("Response is corrupted because it contains multiple " +
+						"Via headers, so it's discarded.");
+				//No method-specific handling is required.
 				return false;
 			}
 		}
 		switch (statusCode) {
 			case Response.PROXY_AUTHENTICATION_REQUIRED:
 			case Response.UNAUTHORIZED:
-				//Handle this by performing authorization procedures.
+				logger.debug("Performing required Authorization procedures.");
 				handleAuthorizationRequired(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
@@ -550,10 +591,11 @@ public class UserAgentClient {
 		try {
 			domainUri.setHost(localDomain);
 		} catch (ParseException parseException) {
-			//Could not properly parse domainUri.
+			logger.error("Could not create the domain URI for {}: {}.",
+					localDomain, parseException.getMessage());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 401/407 error back to application layer.
-			//TODO also log this error condition back to the application layer.
+			logger.info("{} response arrived.", response.getStatusCode());
 			return;
 		}
 
@@ -621,17 +663,26 @@ public class UserAgentClient {
 		if (worthAuthenticating) {
 			try {
 				doSendRequest(request, null, clientTransaction.getDialog(), false);
+				logger.info("{} request sent (with auth credentials).", request.getMethod());
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would authenticate could not be sent.
+				logger.error("Could not resend this {} request with authentication " +
+						"credentials: {}.", request.getMethod(),
+						requestCouldNotBeSent.getMessage());
 				handleThisByRemovingEarlyDialogs(clientTransaction);
 				//TODO report 401/407 error back to application layer.
+				logger.info("{} response arrived.", response.getStatusCode());
 			}
 		}
 		else {
 			//Not worth authenticating because server already denied
-			//this exact request.
+			//this exact request or no appropriate auth headers could be added.
+			logger.error("Credentials for {} request were denied, or no proper auth " +
+					"headers were passed along with the 401/407 response from the UAS.",
+					request.getMethod());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 401/407 error back to application layer.
+			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
 	
@@ -762,20 +813,32 @@ public class UserAgentClient {
 		if (overlappingEncodingsFound && overlappingContentTypesFound) {
 			try {
 				doSendRequest(request, null, clientTransaction.getDialog());
+				logger.info("{} request failed because it contained media types " +
+						"unsupported by the UAS. This UAC resent the request including" +
+						" only supported media types", request.getMethod());
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would amend this situation could not be sent.
+				logger.error("{} request failed because it contained media types" +
+						" unsupported by the UAS.\nCould not resend this request with" +
+						" supported media types: {}.", request.getMethod(),
+						requestCouldNotBeSent.getMessage());
 				handleThisByRemovingEarlyDialogs(clientTransaction);
 				//TODO report 415 error back to application layer.
+				logger.info("{} response arrived.", response.getStatusCode());
 			}
 		}
 		else {
 			//Cannot satisfy the media type requirements since this UAC doesn't
 			//support any that are accepted by the UAS that sent this response.
+			logger.error("{} request failed because it contained media types unsupported " +
+					"by the UAS.\nThis UAC cannot satisfy these media type requirements.",
+					request.getMethod());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 415 error back to application layer.
+			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
-	
+
 	private void handleUnsupportedExtension(Response response,
 			ClientTransaction clientTransaction) {
 		Request request = createFromRequest(clientTransaction.getRequest());
@@ -834,14 +897,22 @@ public class UserAgentClient {
 		}
 		try {
 			doSendRequest(request, null, clientTransaction.getDialog());
+			logger.info("{} request failed due to requiring some extensions unsupported" +
+					" the UAS.\nUAC just resent this request with supported extensions.",
+					request.getMethod());
 		} catch (SipException requestCouldNotBeSent) {
 			//Request that would amend this situation could not be sent.
+			logger.error("{} request failed due to requiring some extensions unsupported" +
+					" by the UAS.\nUAC could not send new request " +
+					"amending this situation: {}.", request.getMethod(),
+					requestCouldNotBeSent.getMessage());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
 			//TODO report 420 error back to application layer.
+			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
 
-	private void handleByReschedulingIfApplicable(Response response,
+	private void handleByReschedulingIfApplicable(final Response response,
 			final ClientTransaction clientTransaction, boolean isTimeout) {
 		if (isTimeout) {
 			boolean isError = true;
@@ -853,8 +924,9 @@ public class UserAgentClient {
 				dialog.delete();
 				if (isError) {
 					handleThisByRemovingEarlyDialogs(clientTransaction);
-					//TODO report response error back to application layer.
 				}
+				//TODO report response error back to application layer.
+				logger.info("{} response arrived.", response.getStatusCode());
 				return;
 			}
 		}
@@ -865,7 +937,7 @@ public class UserAgentClient {
 		RetryAfterHeader retryAfterHeader =
 				(RetryAfterHeader) response.getHeader(RetryAfterHeader.NAME);
 		if (retryAfterHeader != null) {
-			int retryAfterSeconds = retryAfterHeader.getRetryAfter();
+			final int retryAfterSeconds = retryAfterHeader.getRetryAfter();
 			int durationSeconds = retryAfterHeader.getDuration();
 			if (durationSeconds == 0 || durationSeconds > 300) {
 				Timer timer = new Timer();
@@ -877,28 +949,40 @@ public class UserAgentClient {
 							doSendRequest(request, null, clientTransaction.getDialog());
 						} catch (SipException requestCouldNotBeSent) {
 							//Could not reschedule request.
+							logger.error("Could not resend {} request after {} seconds: {}.",
+									request.getMethod(), retryAfterSeconds,
+									requestCouldNotBeSent.getMessage());
 							handleThisByRemovingEarlyDialogs(clientTransaction);
 							//TODO report response error back to application layer.
+							logger.info("{} response arrived.", response.getStatusCode());
 						}
 					}
 
 				}, retryAfterSeconds * 1000);
+				logger.info("{} request failed or timed out.\nUAC will resend " +
+						"in {} seconds.", request.getMethod(), retryAfterSeconds);
 				return;
 			}
 		}
 		//Request is not allowed to reschedule or it would be pointless to do so
 		//because availability frame is too short.
+		logger.error("{} request failed or timed out. UAC is not allowed to resend.",
+				request.getMethod());
 		handleThisByRemovingEarlyDialogs(clientTransaction);
 		//TODO report response error back to application layer.
+		logger.info("{} response arrived.", response.getStatusCode());
 	}
 
 	private void handleByTerminatingIfWithinDialog(ClientTransaction clientTransaction) {
+		logger.debug("{} request failed because call or transaction did not exist.",
+				clientTransaction.getRequest().getMethod());
 		Dialog dialog = clientTransaction.getDialog();
 		if (dialog != null) {
 			//TODO handle this by sending a BYE request within this dialog immediately.
 		}
 		else {
 			//TODO report 481 error back to the application layer.
+			logger.info("{} response arrived.", Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
 		}
 	}
 
@@ -915,6 +999,8 @@ public class UserAgentClient {
 					//TODO *HOWEVER* if the offer is not acceptable, after sending the ACK,
 					//a BYE request MUST be sent immediately.
 					dialog.sendAck(ackRequest);
+					logger.info("{} response to INVITE arrived, so {} sent.", statusCode,
+							RequestMethod.ACK);
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
 				//TODO propagate this dialog back to the application layer so that it can
@@ -928,7 +1014,9 @@ public class UserAgentClient {
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
 			if (statusCode == Response.RINGING) {
 				//TODO report response status code back to the application layer.
+				logger.info("Ringing!");
 			}
+			logger.info("{} response arrived.", statusCode);
 			//TODO please propagate this clientTransaction back to the application layer
 			//so that it can later cancel this request if desired, before this request
 			//produces a final response.
@@ -937,6 +1025,7 @@ public class UserAgentClient {
 
 	private void handleByeResponse(int statusCode, ClientTransaction clientTransaction) {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			logger.info("{} response to BYE arrived.", statusCode);
 			handleThisRequestTerminated(clientTransaction);
 			//TODO make sure to tell the application layer to get rid of the
 			//Dialog associated with this request as it just became invalid.
@@ -946,6 +1035,7 @@ public class UserAgentClient {
 	private boolean handleThisRequestTerminated(ClientTransaction clientTransaction) {
 		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
 			case INVITE:
+				logger.info("CANCEL succeded in canceling a call invitation.");
 				//This means a CANCEL succeeded in canceling the original INVITE request.
 				//TODO make sure to tell the application layer to get rid of the
 				//Client transaction associated with this request as it just became useless.
@@ -953,6 +1043,7 @@ public class UserAgentClient {
 				//TODO report this condition back to the application layer.
 				return true;
 			case BYE:
+				logger.info("BYE succeded in terminating a call.");
 				//This means a BYE succeeded in terminating a INVITE request within a Dialog.
 				//TODO make sure to tell the application layer to get rid of the
 				//Dialog associated with this request as it just became invalid.
@@ -967,6 +1058,7 @@ public class UserAgentClient {
 	private void handleThisByRemovingEarlyDialogs(ClientTransaction clientTransaction) {
 		Dialog dialog = clientTransaction.getDialog();
 		if (dialog != null) {
+			logger.debug("All dialogs (be it early or not) and all sessions terminated.");
 			//TODO tell the application layer to get rid of the early dialog associated
 			//with this request as it just became invalid.
 			//TODO According to "15 Terminating a Session", all sessions and dialogs
@@ -1004,13 +1096,13 @@ public class UserAgentClient {
 		request.setHeader(cseq);
 	}
 
-	private void doSendRequest(Request request,
+	private boolean doSendRequest(Request request,
 			ClientTransaction clientTransaction, Dialog dialog)
 			throws TransactionUnavailableException, SipException {
-		doSendRequest(request, clientTransaction, dialog, true);
+		return doSendRequest(request, clientTransaction, dialog, true);
 	}
 
-	private void doSendRequest(Request request, ClientTransaction clientTransaction,
+	private boolean doSendRequest(Request request, ClientTransaction clientTransaction,
 			Dialog dialog, boolean tryAddingAuthorizationHeaders)
 			throws TransactionUnavailableException, SipException {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
@@ -1020,12 +1112,16 @@ public class UserAgentClient {
 		try {
 			domainUri.setHost(localDomain);
 		} catch (ParseException parseException) {
-			//Could not properly parse domainUri.
-			//TODO also log this error condition back to the application layer.
-			return;
+			logger.error("Could not properly create the domain URI for this {} request." +
+					"\nMust be a valid domain or IP address: {}.", request.getMethod(),
+					localDomain, parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
 		}
 
 		if (tryAddingAuthorizationHeaders) {
+			logger.debug("About to try adding authorization headers before sending " +
+					"this {} request.", request.getMethod());
 			if (authNoncesCache.containsKey(toHeaderValue)) {
 				Map<String, String> probableRealms = new HashMap<>();
 				for (Entry<String, String> entry :
@@ -1078,15 +1174,24 @@ public class UserAgentClient {
 		if (dialog != null) {
 			try {
 				dialog.sendRequest(newClientTransaction);
+				logger.info("{} request sent.", request.getMethod());
+				//Caller must expect remote responses.
+				return true;
 			}
 			catch (TransactionDoesNotExistException invalidTransaction) {
 				//A invalid (probably null) client transaction
 				//can't be used to send this request.
-				//TODO log this error condition back to the application layer.
+				logger.debug("{} request could not be sent: {}.",
+						request.getMethod(), invalidTransaction.getMessage());
+				//No need for caller to wait for remote responses.
+				return false;
 			}
 		}
 		else {
 			newClientTransaction.sendRequest();
+			logger.info("{} request sent.", request.getMethod());
+			//Caller must expect remote responses.
+			return true;
 		}
 	}
 
@@ -1106,10 +1211,13 @@ public class UserAgentClient {
 			authorizationHeader.setNonce(nonce);
 			authorizationHeader.setResponse(responseDigest);
 		} catch (ParseException parseException) {
-			//TODO log this error condition back to the application layer.
+			logger.warn("Authorization header could not be added to authenticate " +
+					"a {} request: {}.", request.getMethod(), parseException.getMessage());
+			//Authorization header could not be added.
 			return false;
 		}
 		request.addHeader(authorizationHeader);
+		//Authorization header could be added.
 		return true;
 	}
 
@@ -1131,10 +1239,13 @@ public class UserAgentClient {
 			proxyAuthorizationHeader.setNonce(nonce);
 			proxyAuthorizationHeader.setResponse(responseDigest);
 		} catch (ParseException parseException) {
-			//TODO log this error condition back to the application layer.
+			logger.warn("ProxyAuthorization header could not be added to authenticate " +
+					"a {} request: {}.", request.getMethod(), parseException.getMessage());
+			//ProxyAuthorization header could not be added.
 			return false;
 		}
 		request.addHeader(proxyAuthorizationHeader);
+		//ProxyAuthorization header could be added.
 		return true;
 	}
 
