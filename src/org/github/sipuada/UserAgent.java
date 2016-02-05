@@ -1,10 +1,30 @@
 package org.github.sipuada;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.TooManyListenersException;
 
-import com.google.common.eventbus.EventBus;
+import org.github.sipuada.SipuadaApi.CallInvitationCallback;
+import org.github.sipuada.SipuadaApi.RegistrationCallback;
+import org.github.sipuada.SipuadaApi.SipuadaListener;
+import org.github.sipuada.events.CallInvitationDeclined;
+import org.github.sipuada.events.CallInvitationRinging;
+import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.RegistrationFailed;
+import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.events.RequestSent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.google.common.eventbus.DeadEvent;
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
+
+import android.gov.nist.gnjvx.sip.Utils;
+import android.javax.sip.ClientTransaction;
+import android.javax.sip.Dialog;
 import android.javax.sip.DialogTerminatedEvent;
 import android.javax.sip.IOExceptionEvent;
 import android.javax.sip.InvalidArgumentException;
@@ -27,6 +47,7 @@ import android.javax.sip.message.MessageFactory;
 
 public class UserAgent implements SipListener {
 
+	private final Logger logger = LoggerFactory.getLogger(UserAgent.class);
 	private final int MIN_PORT = 5000;
 	private final int MAX_PORT = 6000;
 
@@ -77,7 +98,7 @@ public class UserAgent implements SipListener {
 			}
 		} catch (PeerUnavailableException ignore) {}
 	}
-	
+
 	@Override
 	public void processRequest(RequestEvent requestEvent) {
 		uas.processRequest(requestEvent);
@@ -97,7 +118,7 @@ public class UserAgent implements SipListener {
 			uas.processRetransmission(timeoutOrRetransmissionEvent);
 		}
 	}
-
+	
 	@Override
 	public void processIOException(IOExceptionEvent exceptionEvent) {
 		uac.processFatalTransportError(exceptionEvent);
@@ -113,9 +134,113 @@ public class UserAgent implements SipListener {
 	public void processDialogTerminated(DialogTerminatedEvent dialogTerminatedEvent) {
 		
 	}
+
+	Map<String, Object> eventBusSubscribers = new HashMap<>();
+
+	public boolean sendRegisterRequest(final RegistrationCallback callback) {
+		final String eventBusSubscriberId = Utils.getInstance().generateTag();
+		Object eventBusSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(RegistrationSuccess event) {
+				callback.onRegistrationSuccess(event.getContactBindings());
+				eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+			}
+
+			@Subscribe
+			public void onEvent(RegistrationFailed event) {
+				callback.onRegistrationFailed(event.getReason());
+				eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+			}
+
+		};
+		eventBus.register(eventBusSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
+		boolean expectRemoteAnswer = uac.sendRegisterRequest();
+		if (!expectRemoteAnswer) {
+			eventBus.unregister(eventBusSubscriber);
+		}
+		return expectRemoteAnswer;
+	}
 	
-	public void destroy() {
-		eventBus.unregister(this);
+	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
+			final CallInvitationCallback callback, final SipuadaListener listener) {
+		final String eventBusSubscriberId = Utils.getInstance().generateTag();
+		Object eventBusSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(CallInvitationWaiting event) {
+				ClientTransaction transaction = event.getClientTransaction();
+				Dialog dialog = transaction.getDialog();
+				if (dialog != null) {
+					String callId = dialog.getCallId().getCallId();
+					callback.onWaitingForCallInvitationAnswer(callId);
+				}
+				else {
+					logger.error("Received [WaitingForCallInvitationAnswer] event with" +
+							" a NULL dialog! This should never happen.");
+				}
+			}
+
+			@Subscribe
+			public void onEvent(CallInvitationRinging event) {
+				ClientTransaction transaction = event.getClientTransaction();
+				Dialog dialog = transaction.getDialog();
+				if (dialog != null) {
+					String callId = dialog.getCallId().getCallId();
+					callback.onCallInvitationRinging(callId);
+				}
+				else {
+					logger.error("Received [CallInvitationRinging] event with" +
+							" a NULL dialog! This should never happen.");
+				}
+			}
+
+			@Subscribe
+			public void onEvent(CallInvitationDeclined event) {
+				callback.onCallInvitationDeclined(event.getReason());
+				eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+			}
+
+		};
+		eventBus.register(eventBusSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
+		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain);
+		if (!expectRemoteAnswer) {
+			eventBus.unregister(eventBusSubscriber);
+		}
+		return expectRemoteAnswer;
+	}
+
+	@Subscribe
+	public void processRequestSent(RequestSent event) {
+		System.out.println("Request sent: " + event.getClass() + "!");
+	}
+
+	@Subscribe
+	public void onEvent(DeadEvent deadEvent) {
+		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
+	}
+
+	public static void main(String[] args) {
+		UserAgent ua = new UserAgent("6001", "192.168.130.126:5060", "6001",
+				"192.168.130.207", 50400, "TCP");
+		ua.sendRegisterRequest(new RegistrationCallback() {
+
+			@Override
+			public void onRegistrationSuccess(List<String> registeredContacts) {
+				System.out.println("My registration success called: " + registeredContacts);
+			}
+
+			@Override
+			public void onRegistrationRenewed() {}
+
+			@Override
+			public void onRegistrationFailed(String reason) {
+				System.out.println("My registration failed called: " + reason + "!");
+			}
+
+		});
 	}
 
 }

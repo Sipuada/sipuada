@@ -43,7 +43,7 @@ public class ApiDraft {
 	 * 
 	 * 		}
 	 * 
-	 * 		public void onRinging() {
+	 * 		public void onRinging(String idOfClientTransaction) {
 	 * 
 	 * 		}
 	 * 

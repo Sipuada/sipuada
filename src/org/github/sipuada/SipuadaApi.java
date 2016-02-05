@@ -1,5 +1,7 @@
 package org.github.sipuada;
 
+import java.util.List;
+
 public interface SipuadaApi {
 
 	public interface SipuadaListener {
@@ -14,31 +16,33 @@ public interface SipuadaApi {
 
 	}
 
-	public interface RegistrationCallback {
+	public interface SipuadaCallback {}
 
-		void onRegistrationSuccess();
+	public interface RegistrationCallback extends SipuadaCallback {
+
+		void onRegistrationSuccess(List<String> registeredContacts);
 
 		void onRegistrationRenewed();
 
-		void onRegistrationFailed(String errorMessage);
+		void onRegistrationFailed(String reason);
 
 	}
 
-	boolean register(/*..., */ RegistrationCallback callback);
+	boolean register(RegistrationCallback callback);
 
-	public interface CallInvitationCallback {
+	public interface CallInvitationCallback extends SipuadaCallback {
 
 		void onWaitingForCallInvitationAnswer(String callId);
 
-		void onCallInvitationRinging();
+		void onCallInvitationRinging(String callId);
 
-		void onCallInvitationDeclined();
+		void onCallInvitationDeclined(String reason);
 
-		void onCallInvitationFailed(String errorMessage);
+		void onCallInvitationFailed(String reason);
 
 	}
 
-	boolean invite(/*..., */ CallInvitationCallback callback);
+	boolean invite(String remoteUser, String remoteDomain, CallInvitationCallback callback);
 
 	boolean cancelCallInvitation(String callId);
 

@@ -16,6 +16,13 @@ import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
+import org.github.sipuada.events.CallInvitationRinging;
+import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.RegistrationFailed;
+import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.events.RequestSent;
+import org.github.sipuada.events.ResponseDiscarded;
+import org.github.sipuada.events.ResponsePostponed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -136,7 +143,7 @@ public class UserAgentClient {
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 		try {
-			contactHeader.setExpires(3600);
+			contactHeader.setExpires(60);
 		} catch (InvalidArgumentException ignore) {}
 
 		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
@@ -339,10 +346,15 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
-			return doSendRequest(request, clientTransaction, dialog);
-			//TODO *IF* this request is a BYE, please let the application layer
-			//know it should consider the session associated with this request
-			//terminated.
+			boolean callerShouldWaitForRemoteResponses = doSendRequest(request,
+					clientTransaction, dialog);
+			if (callerShouldWaitForRemoteResponses) {
+				logger.info("{} request sent.", method);
+				//TODO *IF* this request is a BYE, please let the application layer
+				//know it should consider the session associated with this request
+				//terminated.
+			}
+			return callerShouldWaitForRemoteResponses;
 		} catch (ParseException requestCouldNotBeBuilt) {
 			logger.error("Could not properly create mandatory headers for " +
 					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
@@ -404,7 +416,7 @@ public class UserAgentClient {
 		//Caller must expect remote responses.
 		return true;
 	}
-
+	
 	protected void processResponse(ResponseEvent responseEvent) {
 		ClientTransaction clientTransaction = responseEvent.getClientTransaction();
 		if (clientTransaction != null) {
@@ -433,28 +445,38 @@ public class UserAgentClient {
 				"with code {}.", Response.SERVICE_UNAVAILABLE);
 		handleResponse(Response.SERVICE_UNAVAILABLE, null, null);
 	}
-	
+
 	private void handleResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
-		if (tryHandlingResponseGenerically(statusCode, response, clientTransaction)) {
-			if (response == null || clientTransaction == null) {
-				logger.debug("Response translated from Timeout or Fatal transport error " +
-						"couldn't be handled generically, so it's discarded.");
-				return;
+		try {
+			if (tryHandlingResponseGenerically(statusCode, response, clientTransaction)) {
+				if (response == null || clientTransaction == null) {
+					logger.debug("Response translated from Timeout or Fatal transport " +
+							"error couldn't be handled generically, so it's discarded.");
+					throw new ResponseDiscarded();
+				}
+				switch (Constants.getRequestMethod(clientTransaction
+						.getRequest().getMethod())) {
+					case REGISTER:
+						handleRegisterResponse(statusCode, response);
+						break;
+					case INVITE:
+						handleInviteResponse(statusCode, clientTransaction);
+						break;
+					case BYE:
+						handleByeResponse(statusCode, clientTransaction);
+					case UNKNOWN:
+					default:
+						break;
+				}
 			}
-			switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
-				case INVITE:
-					handleInviteResponse(statusCode, clientTransaction);
-					break;
-				case BYE:
-					handleByeResponse(statusCode, clientTransaction);
-				case UNKNOWN:
-				default:
-					break;
+			else {
+				reportResponseError(statusCode, response, clientTransaction);
 			}
-		}
+		} catch (ResponseDiscarded requestDiscarded) {
+		} catch (ResponsePostponed requestPostponed) {}
 	}
-	
+
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		logger.debug("Attempting to handle response {}.", statusCode);
@@ -469,7 +491,7 @@ public class UserAgentClient {
 				logger.debug("Response is corrupted because it contains multiple " +
 						"Via headers, so it's discarded.");
 				//No method-specific handling is required.
-				return false;
+				throw new ResponseDiscarded();
 			}
 		}
 		switch (statusCode) {
@@ -577,11 +599,29 @@ public class UserAgentClient {
 				return false;
 			case UNKNOWN:
 				//Handle this by simply discarding this unknown response.
-				return false;
+				throw new ResponseDiscarded();
 		}
 		return true;
 	}
-	
+
+	private void reportResponseError(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
+		String reasonPhrase = response.getReasonPhrase();
+		logger.info("{} response arrived: {}.", statusCode, reasonPhrase);
+		String codeAndReason = String.format("%d - %s", statusCode, reasonPhrase);
+		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
+			case REGISTER:
+				eventBus.post(new RegistrationFailed(codeAndReason));
+				break;
+			case INVITE:
+				break;
+			case BYE:
+			case UNKNOWN:
+			default:
+				break;
+		}
+	}
+
 	private void handleAuthorizationRequired(Response response,
 			ClientTransaction clientTransaction) {
 		Request request = createFromRequest(clientTransaction.getRequest());
@@ -594,8 +634,8 @@ public class UserAgentClient {
 			logger.error("Could not create the domain URI for {}: {}.",
 					localDomain, parseException.getMessage());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
-			//TODO report 401/407 error back to application layer.
-			logger.info("{} response arrived.", response.getStatusCode());
+//			//TODO report 401/407 error back to application layer.
+//			logger.info("{} response arrived.", response.getStatusCode());
 			return;
 		}
 
@@ -662,16 +702,27 @@ public class UserAgentClient {
 
 		if (worthAuthenticating) {
 			try {
-				doSendRequest(request, null, clientTransaction.getDialog(), false);
-				logger.info("{} request sent (with auth credentials).", request.getMethod());
+				if (doSendRequest(request, null, clientTransaction.getDialog(), false)) {
+					logger.info("{} request sent (with auth credentials).",
+							request.getMethod());
+					throw new ResponsePostponed();
+				}
+				else {
+					//Request that would authenticate could not be sent.
+					logger.error("Could not resend this {} request with authentication " +
+							"credentials.", request.getMethod());
+					handleThisByRemovingEarlyDialogs(clientTransaction);
+//					//TODO report 401/407 error back to application layer.
+//					logger.info("{} response arrived.", response.getStatusCode());
+				}
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would authenticate could not be sent.
 				logger.error("Could not resend this {} request with authentication " +
 						"credentials: {}.", request.getMethod(),
 						requestCouldNotBeSent.getMessage());
 				handleThisByRemovingEarlyDialogs(clientTransaction);
-				//TODO report 401/407 error back to application layer.
-				logger.info("{} response arrived.", response.getStatusCode());
+//				//TODO report 401/407 error back to application layer.
+//				logger.info("{} response arrived.", response.getStatusCode());
 			}
 		}
 		else {
@@ -681,11 +732,11 @@ public class UserAgentClient {
 					"headers were passed along with the 401/407 response from the UAS.",
 					request.getMethod());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
-			//TODO report 401/407 error back to application layer.
-			logger.info("{} response arrived.", response.getStatusCode());
+//			//TODO report 401/407 error back to application layer.
+//			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
-	
+
 	private void handleUnsupportedMediaTypes(Response response,
 			ClientTransaction clientTransaction) {
 		Request request = createFromRequest(clientTransaction.getRequest());
@@ -812,10 +863,21 @@ public class UserAgentClient {
 		}
 		if (overlappingEncodingsFound && overlappingContentTypesFound) {
 			try {
-				doSendRequest(request, null, clientTransaction.getDialog());
-				logger.info("{} request failed because it contained media types " +
-						"unsupported by the UAS. This UAC resent the request including" +
-						" only supported media types", request.getMethod());
+				if (doSendRequest(request, null, clientTransaction.getDialog())) {
+					logger.info("{} request failed because it contained media types " +
+							"unsupported by the UAS. This UAC resent the request including" +
+							" only supported media types", request.getMethod());
+					throw new ResponsePostponed();
+				}
+				else {
+					//Request that would amend this situation could not be sent.
+					logger.error("{} request failed because it contained media types" +
+							" unsupported by the UAS.\nCould not resend this request with" +
+							" supported media types.", request.getMethod());
+					handleThisByRemovingEarlyDialogs(clientTransaction);
+//					//TODO report 415 error back to application layer.
+//					logger.info("{} response arrived.", response.getStatusCode());
+				}
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would amend this situation could not be sent.
 				logger.error("{} request failed because it contained media types" +
@@ -823,8 +885,8 @@ public class UserAgentClient {
 						" supported media types: {}.", request.getMethod(),
 						requestCouldNotBeSent.getMessage());
 				handleThisByRemovingEarlyDialogs(clientTransaction);
-				//TODO report 415 error back to application layer.
-				logger.info("{} response arrived.", response.getStatusCode());
+//				//TODO report 415 error back to application layer.
+//				logger.info("{} response arrived.", response.getStatusCode());
 			}
 		}
 		else {
@@ -834,8 +896,8 @@ public class UserAgentClient {
 					"by the UAS.\nThis UAC cannot satisfy these media type requirements.",
 					request.getMethod());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
-			//TODO report 415 error back to application layer.
-			logger.info("{} response arrived.", response.getStatusCode());
+//			//TODO report 415 error back to application layer.
+//			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
 
@@ -896,10 +958,21 @@ public class UserAgentClient {
 			}
 		}
 		try {
-			doSendRequest(request, null, clientTransaction.getDialog());
-			logger.info("{} request failed due to requiring some extensions unsupported" +
-					" the UAS.\nUAC just resent this request with supported extensions.",
-					request.getMethod());
+			if (doSendRequest(request, null, clientTransaction.getDialog())) {
+				logger.info("{} request failed due to requiring some extensions" +
+						" unsupported the UAS.\nUAC just resent this request with" +
+						" supported extensions.", request.getMethod());
+				throw new ResponsePostponed();
+			}
+			else {
+				//Request that would amend this situation could not be sent.
+				logger.error("{} request failed due to requiring some extensions" +
+						" unsupported by the UAS.\nUAC could not send new request" +
+						" amending this situation.", request.getMethod());
+				handleThisByRemovingEarlyDialogs(clientTransaction);
+//				//TODO report 420 error back to application layer.
+//				logger.info("{} response arrived.", response.getStatusCode());
+			}
 		} catch (SipException requestCouldNotBeSent) {
 			//Request that would amend this situation could not be sent.
 			logger.error("{} request failed due to requiring some extensions unsupported" +
@@ -907,8 +980,8 @@ public class UserAgentClient {
 					"amending this situation: {}.", request.getMethod(),
 					requestCouldNotBeSent.getMessage());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
-			//TODO report 420 error back to application layer.
-			logger.info("{} response arrived.", response.getStatusCode());
+//			//TODO report 420 error back to application layer.
+//			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
 
@@ -925,8 +998,16 @@ public class UserAgentClient {
 				if (isError) {
 					handleThisByRemovingEarlyDialogs(clientTransaction);
 				}
-				//TODO report response error back to application layer.
-				logger.info("{} response arrived.", response.getStatusCode());
+//				//TODO report response error back to application layer.
+//				logger.info("{} response arrived.", response.getStatusCode());
+				return;
+			}
+			//TODO TODO TODO REVIEW THIS IN THE RFC, I THINK IT IS NOT CORRECT.
+		}
+		else {
+			if (response == null) {
+				logger.error("[handleByReschedulingIfApplicable] received NULL " +
+						"Non-Timeout response - this should never happen.");
 				return;
 			}
 		}
@@ -946,22 +1027,40 @@ public class UserAgentClient {
 					@Override
 					public void run() {
 						try {
-							doSendRequest(request, null, clientTransaction.getDialog());
+							if (doSendRequest(request, null,
+									clientTransaction.getDialog())) {
+								logger.info("{} request resent after {} seconds.",
+										request.getMethod(), retryAfterSeconds);
+							}
+							else {
+								//Could not reschedule request.
+								logger.error("Could not resend {} request " +
+									"after {} seconds.", request.getMethod(),
+									retryAfterSeconds);
+								handleThisByRemovingEarlyDialogs(clientTransaction);
+//								//TODO report response error back to application layer.
+//								logger.info("{} response arrived.",
+//								response.getStatusCode());
+								reportResponseError(response.getStatusCode(), response,
+										clientTransaction);
+							}
 						} catch (SipException requestCouldNotBeSent) {
 							//Could not reschedule request.
 							logger.error("Could not resend {} request after {} seconds: {}.",
 									request.getMethod(), retryAfterSeconds,
 									requestCouldNotBeSent.getMessage());
 							handleThisByRemovingEarlyDialogs(clientTransaction);
-							//TODO report response error back to application layer.
-							logger.info("{} response arrived.", response.getStatusCode());
+//							//TODO report response error back to application layer.
+//							logger.info("{} response arrived.", response.getStatusCode());
+							reportResponseError(response.getStatusCode(), response,
+									clientTransaction);
 						}
 					}
 
 				}, retryAfterSeconds * 1000);
 				logger.info("{} request failed or timed out.\nUAC will resend " +
 						"in {} seconds.", request.getMethod(), retryAfterSeconds);
-				return;
+				throw new ResponsePostponed();
 			}
 		}
 		//Request is not allowed to reschedule or it would be pointless to do so
@@ -969,8 +1068,8 @@ public class UserAgentClient {
 		logger.error("{} request failed or timed out. UAC is not allowed to resend.",
 				request.getMethod());
 		handleThisByRemovingEarlyDialogs(clientTransaction);
-		//TODO report response error back to application layer.
-		logger.info("{} response arrived.", response.getStatusCode());
+//		//TODO report response error back to application layer.
+//		logger.info("{} response arrived.", response.getStatusCode());
 	}
 
 	private void handleByTerminatingIfWithinDialog(ClientTransaction clientTransaction) {
@@ -979,10 +1078,18 @@ public class UserAgentClient {
 		Dialog dialog = clientTransaction.getDialog();
 		if (dialog != null) {
 			//TODO handle this by sending a BYE request within this dialog immediately.
+			throw new ResponsePostponed();
 		}
-		else {
-			//TODO report 481 error back to the application layer.
-			logger.info("{} response arrived.", Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
+//		else {
+//			//TODO report 481 error back to the application layer.
+//			logger.info("{} response arrived.", Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
+//		}
+	}
+
+	private void handleRegisterResponse(int statusCode, Response response) {
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			logger.info("{} response to REGISTER arrived.", statusCode);
+			eventBus.post(new RegistrationSuccess(response.getHeaders(ContactHeader.NAME)));
 		}
 	}
 
@@ -1012,14 +1119,17 @@ public class UserAgentClient {
 			}
 		}
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
-			if (statusCode == Response.RINGING) {
-				//TODO report response status code back to the application layer.
-				logger.info("Ringing!");
-			}
-			logger.info("{} response arrived.", statusCode);
 			//TODO please propagate this clientTransaction back to the application layer
 			//so that it can later cancel this request if desired, before this request
 			//produces a final response.
+			if (statusCode == Response.RINGING) {
+				logger.info("Ringing!");
+				eventBus.post(new CallInvitationRinging(clientTransaction));
+			}
+			else {
+				eventBus.post(new CallInvitationWaiting(clientTransaction));
+			}
+			logger.info("{} response arrived.", statusCode);
 		}
 	}
 
@@ -1173,8 +1283,9 @@ public class UserAgentClient {
 		}
 		if (dialog != null) {
 			try {
+				logger.info("Sending {} request...", request.getMethod());
 				dialog.sendRequest(newClientTransaction);
-				logger.info("{} request sent.", request.getMethod());
+				eventBus.post(new RequestSent());
 				//Caller must expect remote responses.
 				return true;
 			}
@@ -1188,8 +1299,9 @@ public class UserAgentClient {
 			}
 		}
 		else {
+			logger.info("Sending {} request...", request.getMethod());
 			newClientTransaction.sendRequest();
-			logger.info("{} request sent.", request.getMethod());
+			eventBus.post(new RequestSent());
 			//Caller must expect remote responses.
 			return true;
 		}
@@ -1248,5 +1360,5 @@ public class UserAgentClient {
 		//ProxyAuthorization header could be added.
 		return true;
 	}
-
+	
 }
