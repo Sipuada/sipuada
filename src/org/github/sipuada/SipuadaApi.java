@@ -4,9 +4,9 @@ public interface SipuadaApi {
 
 	public interface SipuadaListener {
 
-		boolean onInvitationArrived(String callId);
+		boolean onCallInvitationArrived(String callId);
 
-		void onInvitationCanceled(String callId);
+		void onCallInvitationCanceled(String callId);
 
 		void onCallEstablished(String callId);
 
@@ -26,25 +26,25 @@ public interface SipuadaApi {
 
 	boolean register(/*..., */ RegistrationCallback callback);
 
-	public interface InvitationCallback {
+	public interface CallInvitationCallback {
 
-		void onWaitingForInvitationAnswer(String callId);
+		void onWaitingForCallInvitationAnswer(String callId);
 
-		void onInvitationRinging();
+		void onCallInvitationRinging();
 
-		void onInvitationDeclined();
+		void onCallInvitationDeclined();
 
-		void onInvitationFailed(String errorMessage);
+		void onCallInvitationFailed(String errorMessage);
 
 	}
 
-	boolean invite(/*..., */ InvitationCallback callback);
+	boolean invite(/*..., */ CallInvitationCallback callback);
 
-	boolean cancelInvitation(String callId);
+	boolean cancelCallInvitation(String callId);
 
-	boolean acceptInvitation(String callId);
+	boolean acceptCallInvitation(String callId);
 
-	boolean declineInvitation(String callId);
+	boolean declineCallInvitation(String callId);
 
 	boolean finishCall(String callId);
 

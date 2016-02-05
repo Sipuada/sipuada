@@ -3,6 +3,8 @@ package org.github.sipuada;
 import java.util.Properties;
 import java.util.TooManyListenersException;
 
+import com.google.common.eventbus.EventBus;
+
 import android.javax.sip.DialogTerminatedEvent;
 import android.javax.sip.IOExceptionEvent;
 import android.javax.sip.InvalidArgumentException;
@@ -28,11 +30,13 @@ public class UserAgent implements SipListener {
 	private final int MIN_PORT = 5000;
 	private final int MAX_PORT = 6000;
 
+	private EventBus eventBus = new EventBus();
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
 	public UserAgent(String username, String domain, String password,
 			String localIp, int localPort, String transport) {
+		eventBus.register(this);
 		SipProvider provider;
 		MessageFactory messenger;
 		HeaderFactory headerMaker;
@@ -55,7 +59,7 @@ public class UserAgent implements SipListener {
 					listeningPointBound = true;
 					try {
 						provider = stack.createSipProvider(listeningPoint);
-						uac = new UserAgentClient(provider, messenger,
+						uac = new UserAgentClient(eventBus, provider, messenger,
 								headerMaker, addressMaker,
 								username, domain, password,
 								localIp, Integer.toString(localPort), transport);
@@ -100,13 +104,18 @@ public class UserAgent implements SipListener {
 	}
 
 	@Override
-	public void processTransactionTerminated(TransactionTerminatedEvent transactionTerminatedEvent) {
+	public void processTransactionTerminated(
+			TransactionTerminatedEvent transactionTerminatedEvent) {
 		
 	}
 
 	@Override
 	public void processDialogTerminated(DialogTerminatedEvent dialogTerminatedEvent) {
 		
+	}
+	
+	public void destroy() {
+		eventBus.unregister(this);
 	}
 
 }
