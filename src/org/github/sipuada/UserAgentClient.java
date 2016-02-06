@@ -262,8 +262,8 @@ public class UserAgentClient {
 				callIdHeader, cseq);
 	}
 
-	private boolean sendRequest(RequestMethod method, URI requestUri, URI addresserUri,
-			URI addresseeUri, Dialog dialog, CallIdHeader callIdHeader, long cseq,
+	private boolean sendRequest(final RequestMethod method, URI requestUri, URI addresserUri,
+			URI addresseeUri, final Dialog dialog, CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
 				|| method == RequestMethod.UNKNOWN) {
@@ -275,7 +275,6 @@ public class UserAgentClient {
 			//No need for caller to wait for remote responses.
 			return false;
 		}
-
 		Address from, to;
 		String fromTag, toTag;
 		List<Address> canonRouteSet = new LinkedList<>();
@@ -299,7 +298,6 @@ public class UserAgentClient {
 			
 			canonRouteSet.addAll(configuredRouteSet);
 		}
-
 		List<Address> normalizedRouteSet = new LinkedList<>();
 		URI remoteTargetUri = (URI) requestUri.clone();
 		if (!canonRouteSet.isEmpty()) {
@@ -317,13 +315,12 @@ public class UserAgentClient {
 				normalizedRouteSet.add(remoteTargetAddress);
 			}
 		}
-
 		ViaHeader viaHeader = null;
 		try {
 			viaHeader = headerMaker
 					.createViaHeader(localIp, localPort, transport, null);
 			viaHeader.setRPort();
-			Request request = messenger.createRequest(requestUri, method.toString(),
+			final Request request = messenger.createRequest(requestUri, method.toString(),
 					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
 					headerMaker.createFromHeader(from, fromTag),
 					headerMaker.createToHeader(to, toTag),
@@ -338,32 +335,47 @@ public class UserAgentClient {
 			else {
 				request.removeHeader(RouteHeader.NAME);
 			}
-
 			for (int i=0; i<additionalHeaders.length; i++) {
 				request.addHeader(additionalHeaders[i]);
 			}
-			
-			ClientTransaction clientTransaction = provider
+			final ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
-			boolean callerShouldWaitForRemoteResponses = doSendRequest(request,
-					clientTransaction, dialog);
-			if (callerShouldWaitForRemoteResponses) {
-				logger.info("{} request sent.", method);
-				//TODO *IF* this request is a BYE, please let the application layer
-				//know it should consider the session associated with this request
-				//terminated.
-			}
-			return callerShouldWaitForRemoteResponses;
+			new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					try {
+						if (doSendRequest(request, clientTransaction, dialog)) {
+							logger.info("{} request sent.", method);
+							//TODO *IF* this request is a BYE, please let
+							//the application layer know it should consider
+							//the session associated with this request terminated.
+						}
+						else {
+							logger.error("Could not send this {} request.", method);
+							eventBus.post(new RegistrationFailed("Request could not be " +
+									"parsed or contained invalid state."));
+						}
+					} catch (SipException requestCouldNotBeSent) {
+						logger.error("Could not send this {} request: {} ({}).",
+								method, requestCouldNotBeSent.getMessage(),
+								requestCouldNotBeSent.getCause().getMessage());
+						eventBus.post(new RegistrationFailed("Request could not be sent: " +
+								String.format("%s (%s).", requestCouldNotBeSent.getMessage(),
+										requestCouldNotBeSent.getCause().getMessage())));
+					}
+				}
+
+			}).start();
+			return true;
 		} catch (ParseException requestCouldNotBeBuilt) {
 			logger.error("Could not properly create mandatory headers for " +
 					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
 					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
 					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
 					requestCouldNotBeBuilt.getMessage());
-		} catch (SipException requestCouldNotBeSent) {
-			logger.error("Could not send this {} request: {}.", method,
-					requestCouldNotBeSent.getMessage());
+		} catch (TransactionUnavailableException ignore) {
 		} catch (InvalidArgumentException ignore) {}
 		//No need for caller to wait for remote responses.
 		return false;
@@ -382,8 +394,9 @@ public class UserAgentClient {
 			cancelRequest = clientTransaction.createCancel();
 		} catch (SipException requestCouldNotBeBuilt) {
 			//Could not properly build a CANCEL request - this shouldn't happen.
-			logger.debug("Could not properly create {} request: {}.",
-					RequestMethod.CANCEL, requestCouldNotBeBuilt.getMessage());
+			logger.debug("Could not properly create {} request: {} ({}).",
+					RequestMethod.CANCEL, requestCouldNotBeBuilt.getMessage(),
+					requestCouldNotBeBuilt.getCause().getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
 		}
@@ -396,20 +409,27 @@ public class UserAgentClient {
 					return;
 				}
 				switch (clientTransaction.getState().getValue()) {
-				case TransactionState._PROCEEDING:
-					try {
-						doSendRequest(cancelRequest, null, null);
-						logger.debug("{} request sent.", RequestMethod.CANCEL);
-					} catch (SipException requestCouldNotBeSent) {
-						logger.error("Could not send this {} request: {}.",
-								RequestMethod.CANCEL, requestCouldNotBeSent.getMessage());
-					}
-					break;
-				case TransactionState._COMPLETED:
-				case TransactionState._TERMINATED:
-					timer.cancel();
-					//The request was accepted before we could cancel it.
-					//TODO send a BYE request here to terminate the established session.
+					case TransactionState._PROCEEDING:
+						try {
+							if (doSendRequest(cancelRequest, null, null)) {
+								logger.debug("{} request sent.", RequestMethod.CANCEL);
+							}
+							else {
+								logger.error("Could not send this {} request.",
+										RequestMethod.CANCEL);
+							}
+						} catch (SipException requestCouldNotBeSent) {
+							logger.error("Could not send this {} request: {} ({}).",
+									RequestMethod.CANCEL,
+									requestCouldNotBeSent.getMessage(),
+									requestCouldNotBeSent.getCause().getMessage());
+						}
+					case TransactionState._COMPLETED:
+					case TransactionState._TERMINATED:
+						timer.cancel();
+						//The request was accepted before we could cancel it.
+						//TODO send a BYE request here to terminate
+						//the established session.
 				}
 			}
 		}, 180, 180);
@@ -608,7 +628,8 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction) {
 		String reasonPhrase = response.getReasonPhrase();
 		logger.info("{} response arrived: {}.", statusCode, reasonPhrase);
-		String codeAndReason = String.format("%d - %s", statusCode, reasonPhrase);
+		String codeAndReason = String.format("Following response arrived: %d (%s).",
+				statusCode, reasonPhrase);
 		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
 			case REGISTER:
 				eventBus.post(new RegistrationFailed(codeAndReason));
@@ -718,8 +739,9 @@ public class UserAgentClient {
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would authenticate could not be sent.
 				logger.error("Could not resend this {} request with authentication " +
-						"credentials: {}.", request.getMethod(),
-						requestCouldNotBeSent.getMessage());
+						"credentials: {} ({}).", request.getMethod(),
+						requestCouldNotBeSent.getMessage(),
+						requestCouldNotBeSent.getCause().getMessage());
 				handleThisByRemovingEarlyDialogs(clientTransaction);
 //				//TODO report 401/407 error back to application layer.
 //				logger.info("{} response arrived.", response.getStatusCode());
@@ -977,8 +999,9 @@ public class UserAgentClient {
 			//Request that would amend this situation could not be sent.
 			logger.error("{} request failed due to requiring some extensions unsupported" +
 					" by the UAS.\nUAC could not send new request " +
-					"amending this situation: {}.", request.getMethod(),
-					requestCouldNotBeSent.getMessage());
+					"amending this situation: {} ({}).", request.getMethod(),
+					requestCouldNotBeSent.getMessage(),
+					requestCouldNotBeSent.getCause().getMessage());
 			handleThisByRemovingEarlyDialogs(clientTransaction);
 //			//TODO report 420 error back to application layer.
 //			logger.info("{} response arrived.", response.getStatusCode());
@@ -1046,9 +1069,10 @@ public class UserAgentClient {
 							}
 						} catch (SipException requestCouldNotBeSent) {
 							//Could not reschedule request.
-							logger.error("Could not resend {} request after {} seconds: {}.",
+							logger.error("Could not resend {} request after {} seconds: {} ({}).",
 									request.getMethod(), retryAfterSeconds,
-									requestCouldNotBeSent.getMessage());
+									requestCouldNotBeSent.getMessage(),
+									requestCouldNotBeSent.getCause().getMessage());
 							handleThisByRemovingEarlyDialogs(clientTransaction);
 //							//TODO report response error back to application layer.
 //							logger.info("{} response arrived.", response.getStatusCode());
