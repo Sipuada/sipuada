@@ -16,6 +16,7 @@ import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
+import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.RegistrationFailed;
@@ -197,8 +198,28 @@ public class UserAgentClient {
 		 * (later support also: the offer/answer model
 		 */
 
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the contact URI for {} at {}." +
+					"[username] must be a valid id, [localIp] must be a valid " +
+					"IP address: {}", username, localIp, parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		contactUri.setPort(localPort);
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		try {
+			contactHeader.setExpires(60);
+		} catch (InvalidArgumentException ignore) {}
+
+		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
+				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
+
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteDomain,
-				requestUri, callIdHeader, cseq);
+				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser, String remoteDomain,
@@ -375,8 +396,16 @@ public class UserAgentClient {
 					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
 					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
 					requestCouldNotBeBuilt.getMessage());
-		} catch (TransactionUnavailableException ignore) {
-		} catch (InvalidArgumentException ignore) {}
+		} catch (TransactionUnavailableException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create client transaction to handle" +
+					" this {} request: {}.", method, requestCouldNotBeBuilt.getMessage());
+		} catch (InvalidArgumentException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create mandatory headers for " +
+					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
+					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+					requestCouldNotBeBuilt.getMessage());
+		}
 		//No need for caller to wait for remote responses.
 		return false;
 	}
@@ -635,9 +664,8 @@ public class UserAgentClient {
 				eventBus.post(new RegistrationFailed(codeAndReason));
 				break;
 			case INVITE:
+				eventBus.post(new CallInvitationFailed(codeAndReason));
 				break;
-			case BYE:
-			case UNKNOWN:
 			default:
 				break;
 		}
