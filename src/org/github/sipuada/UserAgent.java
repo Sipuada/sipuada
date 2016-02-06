@@ -1,13 +1,17 @@
 package org.github.sipuada;
 
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TooManyListenersException;
 
+import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
+import org.github.sipuada.SipuadaApi.SipuadaCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.events.CallInvitationAccepted;
 import org.github.sipuada.events.CallInvitationDeclined;
@@ -55,6 +59,13 @@ public class UserAgent implements SipListener {
 
 	private final EventBus eventBus = new EventBus();
 	private final Map<String, Object> eventBusSubscribers = new HashMap<>();
+	private final Map<RequestMethod, Boolean> operationsInProgress = new HashMap<>();
+	{
+		for (RequestMethod method : RequestMethod.values()) {
+			operationsInProgress.put(method, false);
+		}
+	}
+	private final List<Operation> postponedOperations = new LinkedList<>();
 
 	private UserAgentClient uac;
 	private UserAgentServer uas;
@@ -138,35 +149,75 @@ public class UserAgent implements SipListener {
 	public void processDialogTerminated(DialogTerminatedEvent dialogTerminatedEvent) {
 		
 	}
+	
+	private class Operation {
 
-	public boolean sendRegisterRequest(final RegistrationCallback callback) {
+		public final SipuadaCallback callback;
+		public final String[] arguments;
+		
+		public Operation(SipuadaCallback callback, String... arguments) {
+			this.callback = callback;
+			this.arguments = arguments;
+		}
+
+	}
+
+	public synchronized boolean sendRegisterRequest(final RegistrationCallback callback) {
+		if (operationsInProgress.get(RequestMethod.REGISTER)) {
+			postponedOperations.add(new Operation(callback));
+			logger.info("REGISTER request postponed because another is in progress.");
+			return true;
+		}
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
 			@Subscribe
 			public void onEvent(RegistrationSuccess event) {
 				callback.onRegistrationSuccess(event.getContactBindings());
-				eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+				registerOperationFinished(eventBusSubscriberId);
 			}
 
 			@Subscribe
 			public void onEvent(RegistrationFailed event) {
 				callback.onRegistrationFailed(event.getReason());
-				eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+				registerOperationFinished(eventBusSubscriberId);
 			}
 
 		};
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = uac.sendRegisterRequest();
-		if (!expectRemoteAnswer) {
+		if (expectRemoteAnswer) {
+			operationsInProgress.put(RequestMethod.REGISTER, true);
+		}
+		else {
 			eventBus.unregister(eventBusSubscriber);
 		}
 		return expectRemoteAnswer;
 	}
-	
+
+	private synchronized void registerOperationFinished(String eventBusSubscriberId) {
+		eventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
+		operationsInProgress.put(RequestMethod.REGISTER, false);
+		Iterator<Operation> iterator = postponedOperations.iterator();
+		while (iterator.hasNext()) {
+			Operation operation = iterator.next();
+			if (operation.callback instanceof RegistrationCallback) {
+				sendRegisterRequest((RegistrationCallback) operation.callback);
+				iterator.remove();
+				break;
+			}
+		}
+	}
+
+	boolean inviteRequestInProgress = false;
 	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
 			final CallInvitationCallback callback, final SipuadaListener listener) {
+		if (inviteRequestInProgress) {
+			logger.error("INVITE request cannot be sent because another one is " +
+					"still in progress.\n Please wait until the other one completes.");
+			return false;
+		}
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
@@ -179,8 +230,10 @@ public class UserAgent implements SipListener {
 					callback.onWaitingForCallInvitationAnswer(callId);
 				}
 				else {
-					logger.error("Received [WaitingForCallInvitationAnswer] event with" +
-							" a NULL dialog! This should never happen.");
+					String error = "Received [CallInvitationWaiting] event with" +
+							" a NULL dialog! This should never happen.";
+					logger.error(error);
+					eventBus.post(new CallInvitationFailed(error));
 				}
 			}
 
@@ -193,8 +246,10 @@ public class UserAgent implements SipListener {
 					callback.onCallInvitationRinging(callId);
 				}
 				else {
-					logger.error("Received [CallInvitationRinging] event with" +
-							" a NULL dialog! This should never happen.");
+					String error = "Received [CallInvitationRinging] event with" +
+							" a NULL dialog! This should never happen.";
+					logger.error(error);
+					eventBus.post(new CallInvitationFailed(error));
 				}
 			}
 			
@@ -204,10 +259,14 @@ public class UserAgent implements SipListener {
 				if (dialog != null) {
 					String callId = dialog.getCallId().getCallId();
 					listener.onCallEstablished(callId);
+					eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+					inviteRequestInProgress = false;
 				}
 				else {
-					logger.error("Received [CallInvitationAccepted] event with" +
-							" a NULL dialog! This should never happen.");
+					String error = "Received [CallInvitationAccepted] event with" +
+							" a NULL dialog! This should never happen.";
+					logger.error(error);
+					eventBus.post(new CallInvitationFailed(error));
 				}
 			}
 
@@ -215,19 +274,24 @@ public class UserAgent implements SipListener {
 			public void onEvent(CallInvitationDeclined event) {
 				callback.onCallInvitationDeclined(event.getReason());
 				eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+				inviteRequestInProgress = false;
 			}
 
 			@Subscribe
 			public void onEvent(CallInvitationFailed event) {
 				callback.onCallInvitationFailed(event.getReason());
 				eventBus.unregister(eventBusSubscribers.get(eventBusSubscriberId));
+				inviteRequestInProgress = false;
 			}
 
 		};
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain);
-		if (!expectRemoteAnswer) {
+		if (expectRemoteAnswer) {
+			inviteRequestInProgress = true;
+		}
+		else {
 			eventBus.unregister(eventBusSubscriber);
 		}
 		return expectRemoteAnswer;
@@ -250,7 +314,7 @@ public class UserAgent implements SipListener {
 
 			@Override
 			public void onRegistrationSuccess(List<String> registeredContacts) {
-				System.out.println("Registration success: " + registeredContacts);
+				System.out.println("Registration 1 success: " + registeredContacts);
 			}
 
 			@Override
@@ -258,10 +322,55 @@ public class UserAgent implements SipListener {
 
 			@Override
 			public void onRegistrationFailed(String reason) {
-				System.out.println("Registration failed: " + reason + "!");
+				System.out.println("Registration 1 failed: " + reason);
 			}
 
 		});
+		System.out.println("Registration 1 sent!");
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		ua.sendRegisterRequest(new RegistrationCallback() {
+
+			@Override
+			public void onRegistrationSuccess(List<String> registeredContacts) {
+				System.out.println("Registration 2 success: " + registeredContacts);
+			}
+
+			@Override
+			public void onRegistrationRenewed() {}
+
+			@Override
+			public void onRegistrationFailed(String reason) {
+				System.out.println("Registration 2 failed: " + reason);
+			}
+
+		});
+		System.out.println("Registration 2 sent!");
+		try {
+			Thread.sleep(50000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		ua.sendRegisterRequest(new RegistrationCallback() {
+
+			@Override
+			public void onRegistrationSuccess(List<String> registeredContacts) {
+				System.out.println("Registration 3 success: " + registeredContacts);
+			}
+
+			@Override
+			public void onRegistrationRenewed() {}
+
+			@Override
+			public void onRegistrationFailed(String reason) {
+				System.out.println("Registration 3 failed: " + reason);
+			}
+
+		});
+		System.out.println("Registration 3 sent!");
 	}
 
 }
