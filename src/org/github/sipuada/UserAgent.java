@@ -21,6 +21,7 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.events.RequestSent;
@@ -196,10 +197,12 @@ public class UserAgent implements SipListener {
 						
 						@Subscribe
 						public void onEvent(CallInvitationCanceled event) {
-							wipeAnswerableInviteOperation(callId,
-									eventBusSubscriberId);
-							eventBus.unregister(this);
-							listener.onCallInvitationCanceled(callId);
+							if (event.getCallId().equals(callId)) {
+								wipeAnswerableInviteOperation(callId,
+										eventBusSubscriberId);
+								eventBus.unregister(this);
+								listener.onCallInvitationCanceled(callId);
+							}
 						}
 
 					};
@@ -230,6 +233,27 @@ public class UserAgent implements SipListener {
 				.synchronizedList(new LinkedList<ServerTransaction>()));
 		}
 		answerableInviteOperations.get(eventBusSubscriberId).add(serverTransaction);
+	}
+
+	private synchronized void wipeAnswerableInviteOperation(String callId,
+			String eventBusSubscriberId) {
+		callIdToEventBusSubscriberId.remove(callId);
+		List<ServerTransaction> operations = answerableInviteOperations
+				.get(eventBusSubscriberId);
+		synchronized (operations) {
+			Iterator<ServerTransaction> iterator = operations.iterator();
+			while (iterator.hasNext()) {
+				ServerTransaction serverTransaction = iterator.next();
+				if (serverTransaction.getDialog().getCallId()
+						.getCallId().equals(callId)) {
+					iterator.remove();
+					break;
+				}
+			}
+			if (operations.isEmpty()) {
+				answerableInviteOperations.remove(eventBusSubscriberId);
+			}
+		}
 	}
 
 	public synchronized boolean sendRegisterRequest(final RegistrationCallback callback) {
@@ -389,11 +413,13 @@ public class UserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(CallInvitationDeclined event) {
-				inviteOperationFinished(eventBusSubscriberId, callId);
-				wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-				scheduleNextInviteRequest();
-				eventBus.unregister(this);
-				callback.onCallInvitationDeclined(event.getReason());
+				if (event.getCallId().equals(callId)) {
+					inviteOperationFinished(eventBusSubscriberId, callId);
+					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
+					scheduleNextInviteRequest();
+					eventBus.unregister(this);
+					callback.onCallInvitationDeclined(event.getReason());
+				}
 			}
 
 		};
@@ -447,14 +473,44 @@ public class UserAgent implements SipListener {
 			}
 		}
 	}
-	
-	//TODO implement cancelInviteRequest(String callId).
+
+	public synchronized boolean cancelInviteRequest(String callId) {
+		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot cancel invitation.\nINVITE request with callId " +
+					"'{}' not found.", callId);
+			return false;
+		}
+		List<ClientTransaction> operations = cancelableInviteOperations
+				.get(eventBusSubscriberId);
+		synchronized (operations) {
+			Iterator<ClientTransaction> iterator = operations.iterator();
+			try {
+				while (iterator.hasNext()) {
+					ClientTransaction clientTransaction = iterator.next();
+					Dialog dialog = clientTransaction.getDialog();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						iterator.remove();
+						return uac.sendCancelRequest(clientTransaction);
+					}
+				}
+			} finally {
+				if (operations.isEmpty()) {
+					cancelableInviteOperations.remove(eventBusSubscriberId);
+				}
+			}
+		}
+		logger.error("Cannot cancel invitation.\nINVITE request with callId " +
+				"'{}' not found.", callId);
+		return false;
+	}
 
 	public synchronized boolean answerInviteRequest(String callId,
 			boolean acceptCallInvitation) {
 		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
 		if (eventBusSubscriberId == null) {
-			logger.error("INVITE request with callId '{}' not found.", callId);
+			logger.error("Cannot {} invitation.\nINVITE request with callId '{}' " +
+					"not found.", acceptCallInvitation ? "accept" : "decline", callId);
 			return false;
 		}
 		List<ServerTransaction> operations = answerableInviteOperations
@@ -467,24 +523,23 @@ public class UserAgent implements SipListener {
 					Dialog dialog = serverTransaction.getDialog();
 					if (dialog.getCallId().getCallId().equals(callId)) {
 						iterator.remove();
-						wipeAnswerableInviteOperation(callId, eventBusSubscriberId);
 						if (acceptCallInvitation) {
-							boolean responseSent = true;//TODO uas.sendResponse() to pass
+							boolean okSent = true;//TODO uas.sendResponse() to pass
 							//a OK response back to ServerTransaction associated
 							//with this event.
-							if (responseSent) {
+							if (okSent) {
 								callEstablished(eventBusSubscriberId, callId, dialog);
 								listener.onCallEstablished(callId);
 							}
-							return responseSent;
+							return okSent;
 						}
 						else {
-							boolean responseSent = true;//TODO uas.sendResponse() to pass
+							boolean busySent = true;//TODO uas.sendResponse() to pass
 							//a BUSY_HERE response back to ServerTransaction
 							//associated with this event.
-							if (responseSent) {
+							if (busySent) {
 							}
-							return responseSent;
+							return busySent;
 						}
 					}
 				}
@@ -494,49 +549,88 @@ public class UserAgent implements SipListener {
 				}
 			}
 		}
+		logger.error("Cannot {} invitation.\nINVITE request with callId '{}' " +
+				"not found.", acceptCallInvitation ? "accept" : "decline", callId);
 		return false;
 	}
 
-	private synchronized void wipeAnswerableInviteOperation(String callId,
-			String eventBusSubscriberId) {
-		if (callId == null) {
-			//No data relation should have been assigned for this callId
-			//in the first place, so we wouldn't have any links to remove.
-			return;
-		}
-		callIdToEventBusSubscriberId.remove(callId);
-		List<ServerTransaction> operations = answerableInviteOperations
-				.get(eventBusSubscriberId);
-		synchronized (operations) {
-			Iterator<ServerTransaction> iterator = operations.iterator();
-			while (iterator.hasNext()) {
-				ServerTransaction serverTransaction = iterator.next();
-				if (serverTransaction.getDialog().getCallId()
-						.getCallId().equals(callId)) {
-					iterator.remove();
-					break;
-				}
-			}
-			if (operations.isEmpty()) {
-				answerableInviteOperations.remove(eventBusSubscriberId);
-			}
-		}
-	}
-
-	private synchronized void callEstablished(String eventBusSubscriberId,
-			String callId, Dialog dialog) {
+	private synchronized void callEstablished(final String eventBusSubscriberId,
+			final String callId, Dialog dialog) {
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
 		if (!establishedCalls.containsKey(eventBusSubscriberId)) {
 			establishedCalls.put(eventBusSubscriberId, Collections
 					.synchronizedList(new LinkedList<Dialog>()));
 		}
 		establishedCalls.get(eventBusSubscriberId).add(dialog);
-		//TODO add eventBusSubscriber to capture onEvent(CallFinished) here.
-		//This should eventually call listener.onCallFinished(String callId).
+		Object callFinisherEventBusSubscriber = new Object() {
+			
+			@Subscribe
+			public void onEvent(EstablishedCallFinished event) {
+				if (event.getCallId().equals(callId)) {
+					wipeEstablishedCall(callId, eventBusSubscriberId);
+					eventBus.unregister(this);
+					listener.onCallFinished(callId);
+				}
+			}
+
+		};
+		eventBus.register(callFinisherEventBusSubscriber);
 	}
 
-	//TODO implement finishCall(String callId).
-	//This should eventually call listener.onCallFinished(String callId).
+	public synchronized void wipeEstablishedCall(String callId,
+			String eventBusSubscriberId) {
+		callIdToEventBusSubscriberId.remove(callId);
+		List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+		synchronized (calls) {
+			Iterator<Dialog> iterator = calls.iterator();
+			try {
+				while (iterator.hasNext()) {
+					Dialog dialog = iterator.next();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						iterator.remove();
+						break;
+					}
+				}
+			} finally {
+				if (calls.isEmpty()) {
+					establishedCalls.remove(eventBusSubscriberId);
+				}
+			}
+		}
+	}
+
+	public synchronized boolean finishCall(String callId) {
+		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot finish call.\nEstablished call with callId " +
+					"'{}' not found.", callId);
+			return false;
+		}
+		List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+		synchronized (calls) {
+			Iterator<Dialog> iterator = calls.iterator();
+			try {
+				while (iterator.hasNext()) {
+					Dialog dialog = iterator.next();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						iterator.remove();
+						boolean byeSent = uac.sendByeRequest(dialog);
+						if (byeSent) {
+							listener.onCallFinished(callId);
+						}
+						return byeSent;
+					}
+				}
+			} finally {
+				if (calls.isEmpty()) {
+					establishedCalls.remove(eventBusSubscriberId);
+				}
+			}
+		}
+		logger.error("Cannot finish call.\nEstablished call with callId " +
+				"'{}' not found.", callId);
+		return false;
+	}
 
 	@Subscribe
 	public void processRequestSent(RequestSent event) {
