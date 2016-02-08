@@ -22,9 +22,9 @@ import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
+import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
-import org.github.sipuada.events.RequestSent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +53,7 @@ import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.TransportNotSupportedException;
 import android.javax.sip.address.AddressFactory;
+import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 
@@ -96,13 +97,13 @@ public class UserAgent implements SipListener {
 			Collections.synchronizedMap(new HashMap<String, List<Dialog>>());
 
 	private SipuadaListener listener;
+	private SipProvider provider;
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
 	public UserAgent(String username, String domain, String password, String localIp,
 			int localPort, String transport, SipuadaListener listener) {
 		eventBus.register(this);
-		SipProvider provider;
 		MessageFactory messenger;
 		HeaderFactory headerMaker;
 		AddressFactory addressMaker;
@@ -183,7 +184,7 @@ public class UserAgent implements SipListener {
 	public void assignSipuadaListener(final SipuadaListener listener) {
 		final String eventBusSubscriberId =
 				Utils.getInstance().generateTag();
-		Object inviteReceiverEventBusSubscriber = new Object() {
+		Object eventBusSubscriber = new Object() {
 
 			@Subscribe
 			public void onEvent(CallInvitationArrived event) {
@@ -222,7 +223,7 @@ public class UserAgent implements SipListener {
 			}
 
 		};
-		eventBus.register(inviteReceiverEventBusSubscriber);
+		eventBus.register(eventBusSubscriber);
 	}
 
 	private synchronized void inviteOperationIsAnswerable(String eventBusSubscriberId,
@@ -314,6 +315,8 @@ public class UserAgent implements SipListener {
 			logger.info("INVITE request postponed because another is in progress.");
 			return true;
 		}
+		CallIdHeader callIdHeader = provider.getNewCallId();
+		final String callId = callIdHeader.getCallId();
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
@@ -322,11 +325,11 @@ public class UserAgent implements SipListener {
 				ClientTransaction transaction = event.getClientTransaction();
 				Dialog dialog = transaction.getDialog();
 				if (dialog != null) {
-					String callId = dialog.getCallId().getCallId();
-					inviteOperationIsCancelable(eventBusSubscriberId,
-							callId, transaction);
-					inviteOperationIsDeclineable(eventBusSubscriberId, callId, callback);
-					callback.onWaitingForCallInvitationAnswer(callId);
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						inviteOperationIsCancelable(eventBusSubscriberId,
+								callId, transaction);
+						callback.onWaitingForCallInvitationAnswer(callId);
+					}
 				}
 				else {
 					String error = "Received [CallInvitationWaiting] event with" +
@@ -341,11 +344,11 @@ public class UserAgent implements SipListener {
 				ClientTransaction transaction = event.getClientTransaction();
 				Dialog dialog = transaction.getDialog();
 				if (dialog != null) {
-					final String callId = dialog.getCallId().getCallId();
-					inviteOperationIsCancelable(eventBusSubscriberId,
-							callId, transaction);
-					inviteOperationIsDeclineable(eventBusSubscriberId, callId, callback);
-					callback.onCallInvitationRinging(callId);
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						inviteOperationIsCancelable(eventBusSubscriberId,
+								callId, transaction);
+						callback.onCallInvitationRinging(callId);
+					}
 				}
 				else {
 					String error = "Received [CallInvitationRinging] event with" +
@@ -354,17 +357,28 @@ public class UserAgent implements SipListener {
 					eventBus.post(new CallInvitationFailed(error, null));
 				}
 			}
-			
+
+			@Subscribe
+			public void onEvent(CallInvitationDeclined event) {
+				if (event.getCallId().equals(callId)) {
+					inviteOperationFinished(eventBusSubscriberId, callId);
+					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
+					callback.onCallInvitationDeclined(event.getReason());
+					scheduleNextInviteRequest();
+				}
+			}
+
 			@Subscribe
 			public void onEvent(CallInvitationAccepted event) {
 				Dialog dialog = event.getDialog();
 				if (dialog != null) {
-					String callId = dialog.getCallId().getCallId();
-					inviteOperationFinished(eventBusSubscriberId, callId);
-					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-					callEstablished(eventBusSubscriberId, callId, dialog);
-					scheduleNextInviteRequest();
-					listener.onCallEstablished(callId);
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						inviteOperationFinished(eventBusSubscriberId, callId);
+						wipeCancelableInviteOperation(callId, eventBusSubscriberId);
+						callEstablished(eventBusSubscriberId, callId, dialog);
+						listener.onCallEstablished(callId);
+						scheduleNextInviteRequest();
+					}
 				}
 				else {
 					String error = "Received [CallInvitationAccepted] event with" +
@@ -376,17 +390,19 @@ public class UserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(CallInvitationFailed event) {
-				String callId = event.getCallId();
-				inviteOperationFinished(eventBusSubscriberId, callId);
-				wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-				scheduleNextInviteRequest();
-				callback.onCallInvitationFailed(event.getReason());
+				if (event.getCallId().equals(callId)) {
+					inviteOperationFinished(eventBusSubscriberId, callId);
+					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
+					listener.onCallInvitationFailed(event.getReason(), callId);
+					scheduleNextInviteRequest();
+				}
 			}
 
 		};
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain);
+		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain,
+				callIdHeader);
 		if (expectRemoteAnswer) {
 			operationsInProgress.put(RequestMethod.INVITE, true);
 		}
@@ -405,25 +421,6 @@ public class UserAgent implements SipListener {
 				.synchronizedList(new LinkedList<ClientTransaction>()));
 		}
 		cancelableInviteOperations.get(eventBusSubscriberId).add(clientTransaction);
-	}
-
-	private void inviteOperationIsDeclineable(final String eventBusSubscriberId,
-			final String callId, final CallInvitationCallback callback) {
-		Object inviteDeclinerEventBusSubscriber = new Object() {
-
-			@Subscribe
-			public void onEvent(CallInvitationDeclined event) {
-				if (event.getCallId().equals(callId)) {
-					inviteOperationFinished(eventBusSubscriberId, callId);
-					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-					scheduleNextInviteRequest();
-					eventBus.unregister(this);
-					callback.onCallInvitationDeclined(event.getReason());
-				}
-			}
-
-		};
-		eventBus.register(inviteDeclinerEventBusSubscriber);
 	}
 
 	private synchronized void wipeCancelableInviteOperation(String callId,
@@ -474,8 +471,8 @@ public class UserAgent implements SipListener {
 		}
 	}
 
-	public synchronized boolean cancelInviteRequest(String callId) {
-		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+	public synchronized boolean cancelInviteRequest(final String callId) {
+		final String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
 		if (eventBusSubscriberId == null) {
 			logger.error("Cannot cancel invitation.\nINVITE request with callId " +
 					"'{}' not found.", callId);
@@ -491,6 +488,27 @@ public class UserAgent implements SipListener {
 					Dialog dialog = clientTransaction.getDialog();
 					if (dialog.getCallId().getCallId().equals(callId)) {
 						iterator.remove();
+						Object eventBusSubscriber = new Object() {
+
+							@Subscribe
+							public void onEvent(CallInvitationCanceled event) {
+								if (event.getCallId().equals(callId)) {
+									eventBus.unregister(this);
+									listener.onCallInvitationCanceled(callId);
+								}
+							}
+
+							@Subscribe
+							public void onEvent(CallInvitationFailed event) {
+								if (event.getCallId().equals(callId)) {
+									eventBus.unregister(this);
+									listener.onCallInvitationFailed(event.getReason(),
+											callId);
+								}
+							}
+
+						};
+						eventBus.register(eventBusSubscriber);
 						return uac.sendCancelRequest(clientTransaction);
 					}
 				}
@@ -505,9 +523,9 @@ public class UserAgent implements SipListener {
 		return false;
 	}
 
-	public synchronized boolean answerInviteRequest(String callId,
-			boolean acceptCallInvitation) {
-		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+	public synchronized boolean answerInviteRequest(final String callId,
+			final boolean acceptCallInvitation) {
+		final String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
 		if (eventBusSubscriberId == null) {
 			logger.error("Cannot {} invitation.\nINVITE request with callId '{}' " +
 					"not found.", acceptCallInvitation ? "accept" : "decline", callId);
@@ -520,17 +538,35 @@ public class UserAgent implements SipListener {
 			try {
 				while (iterator.hasNext()) {
 					ServerTransaction serverTransaction = iterator.next();
-					Dialog dialog = serverTransaction.getDialog();
+					final Dialog dialog = serverTransaction.getDialog();
 					if (dialog.getCallId().getCallId().equals(callId)) {
 						iterator.remove();
+						Object eventBusSubscriber = new Object() {
+
+							@Subscribe
+							public void onEvent(EstablishedCallStarted event) {
+								if (event.getCallId().equals(callId)) {
+									callEstablished(eventBusSubscriberId, callId, dialog);
+									eventBus.unregister(this);
+									listener.onCallEstablished(callId);
+								}
+							}
+
+							@Subscribe
+							public void onEvent(CallInvitationFailed event) {
+								if (event.getCallId().equals(callId)) {
+									eventBus.unregister(this);
+									listener.onCallInvitationFailed(event.getReason(),
+											callId);
+								}
+							}
+
+						};
+						eventBus.register(eventBusSubscriber);
 						if (acceptCallInvitation) {
 							boolean okSent = true;//TODO uas.sendResponse() to pass
 							//a OK response back to ServerTransaction associated
 							//with this event.
-							if (okSent) {
-								callEstablished(eventBusSubscriberId, callId, dialog);
-								listener.onCallEstablished(callId);
-							}
 							return okSent;
 						}
 						else {
@@ -562,7 +598,7 @@ public class UserAgent implements SipListener {
 					.synchronizedList(new LinkedList<Dialog>()));
 		}
 		establishedCalls.get(eventBusSubscriberId).add(dialog);
-		Object callFinisherEventBusSubscriber = new Object() {
+		Object eventBusSubscriber = new Object() {
 			
 			@Subscribe
 			public void onEvent(EstablishedCallFinished event) {
@@ -574,7 +610,7 @@ public class UserAgent implements SipListener {
 			}
 
 		};
-		eventBus.register(callFinisherEventBusSubscriber);
+		eventBus.register(eventBusSubscriber);
 	}
 
 	public synchronized void wipeEstablishedCall(String callId,
@@ -633,11 +669,6 @@ public class UserAgent implements SipListener {
 	}
 
 	@Subscribe
-	public void processRequestSent(RequestSent event) {
-		System.out.println("Request sent: " + event.getClass() + "!");
-	}
-
-	@Subscribe
 	public void onEvent(DeadEvent deadEvent) {
 		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
 	}
@@ -655,6 +686,11 @@ public class UserAgent implements SipListener {
 					@Override
 					public void onCallInvitationCanceled(String callId) {
 						System.out.println("Incoming invite canceled: " + callId);
+					}
+
+					@Override
+					public void onCallInvitationFailed(String reason, String callId) {
+						System.out.println("'Incoming invite'/'outgoing invite answer' failed: " + reason);
 					}
 
 					@Override
@@ -730,11 +766,6 @@ public class UserAgent implements SipListener {
 				System.out.println("Invite 1 declined: " + reason);
 			}
 
-			@Override
-			public void onCallInvitationFailed(String reason) {
-				System.out.println("Invite 1 failed: " + reason);
-			}
-
 		});
 		System.out.println("Invitation 1 sent!");
 //		try {
@@ -774,11 +805,6 @@ public class UserAgent implements SipListener {
 			@Override
 			public void onCallInvitationDeclined(String reason) {
 				System.out.println("Invite 2 declined: " + reason);
-			}
-
-			@Override
-			public void onCallInvitationFailed(String reason) {
-				System.out.println("Invite 2 failed: " + reason);
 			}
 
 		});

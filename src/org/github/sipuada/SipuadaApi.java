@@ -10,6 +10,8 @@ public interface SipuadaApi {
 
 		void onCallInvitationCanceled(String callId);
 
+		void onCallInvitationFailed(String reason, String callId);
+
 		void onCallEstablished(String callId);
 
 		void onCallFinished(String callId);
@@ -38,11 +40,9 @@ public interface SipuadaApi {
 
 		void onCallInvitationDeclined(String reason);
 
-		void onCallInvitationFailed(String reason);
-
 	}
 
-	boolean invite(String remoteUser, String remoteDomain, CallInvitationCallback callback);
+	boolean inviteToCall(String remoteUser, String remoteDomain, CallInvitationCallback callback);
 
 	boolean cancelCallInvitation(String callId);
 
