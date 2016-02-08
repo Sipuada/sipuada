@@ -282,7 +282,7 @@ public class UserAgentClient {
 	}
 
 	private boolean sendRequest(final RequestMethod method, URI requestUri, URI addresserUri,
-			URI addresseeUri, final Dialog dialog, CallIdHeader callIdHeader, long cseq,
+			URI addresseeUri, final Dialog dialog, final CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
 				|| method == RequestMethod.UNKNOWN) {
@@ -370,15 +370,16 @@ public class UserAgentClient {
 						}
 						else {
 							logger.error("Could not send this {} request.", method);
-							reportRequestError(clientTransaction, "Request could not be " +
-									"parsed or contained invalid state.");
+							reportRequestError(callIdHeader.getCallId(), clientTransaction,
+									"Request could not be parsed or contained invalid state.");
 						}
 					} catch (SipException requestCouldNotBeSent) {
 						logger.error("Could not send this {} request: {} ({}).",
 								method, requestCouldNotBeSent.getMessage(),
 								requestCouldNotBeSent.getCause().getMessage());
-						reportRequestError(clientTransaction, "Request could not be sent: " +
-								String.format("%s (%s).", requestCouldNotBeSent.getMessage(),
+						reportRequestError(callIdHeader.getCallId(), clientTransaction,
+								"Request could not be sent: " + String.format("%s (%s).",
+										requestCouldNotBeSent.getMessage(),
 										requestCouldNotBeSent.getCause().getMessage()));
 					}
 				}
@@ -459,13 +460,14 @@ public class UserAgentClient {
 		return true;
 	}
 
-	private void reportRequestError(ClientTransaction clientTransaction, String errorMessage) {
+	private void reportRequestError(String callId,
+			ClientTransaction clientTransaction, String errorMessage) {
 		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
 			case REGISTER:
 				eventBus.post(new RegistrationFailed(errorMessage));
 				break;
 			case INVITE:
-				eventBus.post(new CallInvitationFailed(errorMessage, null));
+				eventBus.post(new CallInvitationFailed(errorMessage, callId));
 				break;
 			default:
 				break;
@@ -663,12 +665,9 @@ public class UserAgentClient {
 		logger.info("{} response arrived: {}.", statusCode, reasonPhrase);
 		String codeAndReason = String.format("Following response arrived: %d (%s).",
 				statusCode, reasonPhrase);
-		Dialog dialog = clientTransaction.getDialog();
-		String callId = null;
-		if (dialog != null) {
-			callId = dialog.getCallId().getCallId();
-		}
-		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
+		Request request = clientTransaction.getRequest();
+		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
+		switch (Constants.getRequestMethod(request.getMethod())) {
 			case REGISTER:
 				eventBus.post(new RegistrationFailed(codeAndReason));
 				break;
@@ -1118,12 +1117,13 @@ public class UserAgentClient {
 	}
 
 	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
+		Request request = clientTransaction.getRequest();
+		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		Dialog dialog = clientTransaction.getDialog();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			if (dialog != null) {
 				try {
-					CSeqHeader cseqHeader = (CSeqHeader) clientTransaction
-							.getRequest().getHeader(CSeqHeader.NAME);
+					CSeqHeader cseqHeader = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
 					//TODO *IF* the INVITE request contained a offer, this ACK
 					//MUST carry an answer to that offer, given that the offer is acceptable!
@@ -1132,7 +1132,7 @@ public class UserAgentClient {
 					dialog.sendAck(ackRequest);
 					logger.info("{} response to INVITE arrived, so {} sent.", statusCode,
 							RequestMethod.ACK);
-					eventBus.post(new CallInvitationAccepted(dialog));
+					eventBus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
 			}
@@ -1140,10 +1140,10 @@ public class UserAgentClient {
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
 			if (statusCode == Response.RINGING) {
 				logger.info("Ringing!");
-				eventBus.post(new CallInvitationRinging(clientTransaction));
+				eventBus.post(new CallInvitationRinging(callId, clientTransaction));
 			}
 			else {
-				eventBus.post(new CallInvitationWaiting(clientTransaction));
+				eventBus.post(new CallInvitationWaiting(callId, clientTransaction));
 			}
 			logger.info("{} response arrived.", statusCode);
 		}
