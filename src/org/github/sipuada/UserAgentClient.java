@@ -214,6 +214,7 @@ public class UserAgentClient {
 		try {
 			contactHeader.setExpires(60);
 		} catch (InvalidArgumentException ignore) {}
+		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
 
 		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
 				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
@@ -375,16 +376,16 @@ public class UserAgentClient {
 						}
 						else {
 							logger.error("Could not send this {} request.", method);
-							eventBus.post(new RegistrationFailed("Request could not be " +
-									"parsed or contained invalid state."));
+							reportRequestError(clientTransaction, "Request could not be " +
+									"parsed or contained invalid state.");
 						}
 					} catch (SipException requestCouldNotBeSent) {
 						logger.error("Could not send this {} request: {} ({}).",
 								method, requestCouldNotBeSent.getMessage(),
 								requestCouldNotBeSent.getCause().getMessage());
-						eventBus.post(new RegistrationFailed("Request could not be sent: " +
+						reportRequestError(clientTransaction, "Request could not be sent: " +
 								String.format("%s (%s).", requestCouldNotBeSent.getMessage(),
-										requestCouldNotBeSent.getCause().getMessage())));
+										requestCouldNotBeSent.getCause().getMessage()));
 					}
 				}
 
@@ -465,7 +466,20 @@ public class UserAgentClient {
 		//Caller must expect remote responses.
 		return true;
 	}
-	
+
+	private void reportRequestError(ClientTransaction clientTransaction, String errorMessage) {
+		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
+			case REGISTER:
+				eventBus.post(new RegistrationFailed(errorMessage));
+				break;
+			case INVITE:
+				eventBus.post(new CallInvitationFailed(errorMessage, null));
+				break;
+			default:
+				break;
+		}
+	}
+
 	protected void processResponse(ResponseEvent responseEvent) {
 		ClientTransaction clientTransaction = responseEvent.getClientTransaction();
 		if (clientTransaction != null) {
@@ -546,7 +560,7 @@ public class UserAgentClient {
 		switch (statusCode) {
 			case Response.PROXY_AUTHENTICATION_REQUIRED:
 			case Response.UNAUTHORIZED:
-				logger.debug("Performing required Authorization procedures.");
+				logger.debug("Performing necessary authorization procedures.");
 				handleAuthorizationRequired(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
@@ -561,9 +575,8 @@ public class UserAgentClient {
 				//No method-specific handling is required.
 				return false;
 			case Response.UNSUPPORTED_MEDIA_TYPE:
-				//TODO handle this by retrying after filtering any media types not listed in
-				//the Accept header field in the response, with encodings listed in the
-				//Accept-Encoding header field in the response, and with languages listed in
+				logger.debug("Performing necessary media types negotiation.");
+				//TODO missing: filtering any media types without languages listed in
 				//the Accept-Language in the response.
 				handleUnsupportedMediaTypes(response, clientTransaction);
 				//No method-specific handling is required.
@@ -571,6 +584,7 @@ public class UserAgentClient {
 			case Response.BAD_EXTENSION:
 				//TODO handle this by retrying, this time omitting any extensions listed in
 				//the Unsupported header field in the response.
+				logger.debug("Performing necessary extensions negotiation.");
 				handleUnsupportedExtension(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
@@ -578,15 +592,16 @@ public class UserAgentClient {
 			case Response.BUSY_HERE:
 			case Response.BUSY_EVERYWHERE:
 			case Response.DECLINE:
-				//TODO handle this by retrying if a better time to call is indicated in
-				//the Retry-After header field.
+				logger.debug("Callee is busy or not found at the moment." +
+						"\nWill attempt a retry if it is allowed at a later time.");
 				handleByReschedulingIfApplicable(response, clientTransaction, false);
 				//No method-specific handling is required.
 				return false;
 			case Response.SERVER_INTERNAL_ERROR:
 			case Response.SERVICE_UNAVAILABLE:
-				//TODO handle this by retrying if expected available time is indicated in
-				//the Retry-After header field.
+				logger.debug("Attempt to reach callee failed due to errors " +
+						"or service unavailability. \nWill attempt a retry if it is " +
+						"allowed at a later time.");
 				handleByReschedulingIfApplicable(response, clientTransaction, false);
 				//No method-specific handling is required.
 				return false;
@@ -594,6 +609,8 @@ public class UserAgentClient {
 			case Response.SERVER_TIMEOUT:
 				//TODO handle this by retrying the same request after a while if it is
 				//outside of a dialog, otherwise consider the dialog and session terminated.
+				logger.debug("Attempt to reach callee timed out." +
+						"\nWill attempt a retry if it is allowed at a later time.");
 				handleByReschedulingIfApplicable(response, clientTransaction, true);
 				//No method-specific handling is required.
 				return false;
@@ -659,12 +676,17 @@ public class UserAgentClient {
 		logger.info("{} response arrived: {}.", statusCode, reasonPhrase);
 		String codeAndReason = String.format("Following response arrived: %d (%s).",
 				statusCode, reasonPhrase);
+		Dialog dialog = clientTransaction.getDialog();
+		String callId = null;
+		if (dialog != null) {
+			callId = dialog.getCallId().getCallId();
+		}
 		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
 			case REGISTER:
 				eventBus.post(new RegistrationFailed(codeAndReason));
 				break;
 			case INVITE:
-				eventBus.post(new CallInvitationFailed(codeAndReason));
+				eventBus.post(new CallInvitationFailed(codeAndReason, callId));
 				break;
 			default:
 				break;
