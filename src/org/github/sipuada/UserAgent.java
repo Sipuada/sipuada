@@ -96,13 +96,14 @@ public class UserAgent implements SipListener {
 	private final Map<String, List<Dialog>> establishedCalls =
 			Collections.synchronizedMap(new HashMap<String, List<Dialog>>());
 
-	private SipuadaListener listener;
+	private final SipuadaListener listener;
 	private SipProvider provider;
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
 	public UserAgent(String username, String domain, String password, String localIp,
-			int localPort, String transport, SipuadaListener listener) {
+			int localPort, String transport, SipuadaListener sipuadaListener) {
+		listener = sipuadaListener;
 		eventBus.register(this);
 		MessageFactory messenger;
 		HeaderFactory headerMaker;
@@ -133,7 +134,7 @@ public class UserAgent implements SipListener {
 						try {
 							provider.addSipListener(this);
 						} catch (TooManyListenersException ignore) {}
-						assignSipuadaListener(listener);
+						initSipuadaListener(listener);
 					} catch (ObjectInUseException e) {
 						e.printStackTrace();
 					}
@@ -181,7 +182,7 @@ public class UserAgent implements SipListener {
 		
 	}
 
-	public void assignSipuadaListener(final SipuadaListener listener) {
+	public void initSipuadaListener(final SipuadaListener listener) {
 		final String eventBusSubscriberId =
 				Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
@@ -229,9 +230,21 @@ public class UserAgent implements SipListener {
 
 	private synchronized void wipeAnswerableInviteOperation(String callId,
 			String eventBusSubscriberId) {
-		callIdToEventBusSubscriberId.remove(callId);
+		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
+		if (foundSubscriberId == null ||
+				!foundSubscriberId.equals(eventBusSubscriberId)) {
+			//No data relation should have been assigned for this callId
+			//in the first place, so we wouldn't have any links to remove.
+			//Otherwise state is pretty inconsistent.
+			return;
+		}
 		List<ServerTransaction> operations = answerableInviteOperations
 				.get(eventBusSubscriberId);
+		if (operations == null) {
+			//No data relation should have been assigned for this callId
+			//in the first place, so we wouldn't have any links to remove.
+			return;
+		}
 		synchronized (operations) {
 			Iterator<ServerTransaction> iterator = operations.iterator();
 			while (iterator.hasNext()) {
@@ -395,9 +408,21 @@ public class UserAgent implements SipListener {
 			//in the first place, so we wouldn't have any links to remove.
 			return;
 		}
-		callIdToEventBusSubscriberId.remove(callId);
+		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
+		if (foundSubscriberId == null ||
+				!foundSubscriberId.equals(eventBusSubscriberId)) {
+			//No data relation should have been assigned for this callId
+			//in the first place, so we wouldn't have any links to remove.
+			//Otherwise state is pretty inconsistent.
+			return;
+		}
 		List<ClientTransaction> operations = cancelableInviteOperations
 				.get(eventBusSubscriberId);
+		if (operations == null) {
+			//No data relation should have been assigned for this callId
+			//in the first place, so we wouldn't have any links to remove.
+			return;
+		}
 		synchronized (operations) {
 			Iterator<ClientTransaction> iterator = operations.iterator();
 			while (iterator.hasNext()) {
@@ -445,6 +470,11 @@ public class UserAgent implements SipListener {
 		}
 		List<ClientTransaction> operations = cancelableInviteOperations
 				.get(eventBusSubscriberId);
+		if (operations == null) {
+			logger.error("Cannot cancel invitation.\nINVITE request with callId " +
+					"'{}' not found.", callId);
+			return false;
+		}
 		synchronized (operations) {
 			Iterator<ClientTransaction> iterator = operations.iterator();
 			try {
@@ -498,6 +528,11 @@ public class UserAgent implements SipListener {
 		}
 		List<ServerTransaction> operations = answerableInviteOperations
 				.get(eventBusSubscriberId);
+		if (operations == null) {
+			logger.error("Cannot {} invitation.\nINVITE request with callId '{}' " +
+					"not found.", acceptCallInvitation ? "accept" : "decline", callId);
+			return false;
+		}
 		synchronized (operations) {
 			Iterator<ServerTransaction> iterator = operations.iterator();
 			try {
@@ -580,8 +615,20 @@ public class UserAgent implements SipListener {
 
 	public synchronized void wipeEstablishedCall(String callId,
 			String eventBusSubscriberId) {
-		callIdToEventBusSubscriberId.remove(callId);
+		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
+		if (foundSubscriberId == null ||
+				!foundSubscriberId.equals(eventBusSubscriberId)) {
+			//No data relation should have been assigned for this callId
+			//in the first place, so we wouldn't have any links to remove.
+			//Otherwise state is pretty inconsistent.
+			return;
+		}
 		List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+		if (calls == null) {
+			//No data relation should have been assigned for this callId
+			//in the first place, so we wouldn't have any links to remove.
+			return;
+		}
 		synchronized (calls) {
 			Iterator<Dialog> iterator = calls.iterator();
 			try {
@@ -608,6 +655,11 @@ public class UserAgent implements SipListener {
 			return false;
 		}
 		List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+		if (calls == null) {
+			logger.error("Cannot finish call.\nEstablished call with callId " +
+					"'{}' not found.", callId);
+			return false;
+		}
 		synchronized (calls) {
 			Iterator<Dialog> iterator = calls.iterator();
 			try {
