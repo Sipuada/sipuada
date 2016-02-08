@@ -189,36 +189,27 @@ public class UserAgent implements SipListener {
 			@Subscribe
 			public void onEvent(CallInvitationArrived event) {
 				ServerTransaction transaction = event.getServerTransaction();
-				Dialog dialog = transaction.getDialog();
-				if (dialog != null) {
-					final String callId = dialog.getCallId().getCallId();
-					inviteOperationIsAnswerable(eventBusSubscriberId,
-							callId, transaction);
-					Object inviteCancelerEventBusSubscriber = new Object() {
-						
-						@Subscribe
-						public void onEvent(CallInvitationCanceled event) {
-							if (event.getCallId().equals(callId)) {
-								wipeAnswerableInviteOperation(callId,
-										eventBusSubscriberId);
-								eventBus.unregister(this);
-								listener.onCallInvitationCanceled(callId);
-							}
+				final String callId = event.getCallId();
+				inviteOperationIsAnswerable(eventBusSubscriberId,
+						callId, transaction);
+				Object inviteCancelerEventBusSubscriber = new Object() {
+					
+					@Subscribe
+					public void onEvent(CallInvitationCanceled event) {
+						if (event.getCallId().equals(callId)) {
+							wipeAnswerableInviteOperation(callId,
+									eventBusSubscriberId);
+							eventBus.unregister(this);
+							listener.onCallInvitationCanceled(callId);
 						}
-
-					};
-					eventBus.register(inviteCancelerEventBusSubscriber);
-					boolean currentlyBusy = listener.onCallInvitationArrived(callId);
-					if (currentlyBusy) {
-						eventBus.unregister(inviteCancelerEventBusSubscriber);
-						//TODO uas.sendResponse() to pass a BUSY_HERE response back to
-						//ServerTransaction associated with this event.
 					}
-				}
-				else {
-					String error = "Received [CallInvitationArrived] event with" +
-							" a NULL dialog! This should never happen.";
-					logger.error(error);
+
+				};
+				eventBus.register(inviteCancelerEventBusSubscriber);
+				boolean currentlyBusy = listener.onCallInvitationArrived(callId);
+				if (currentlyBusy) {
+					eventBus.unregister(inviteCancelerEventBusSubscriber);
+					answerInviteRequest(callId, false);
 				}
 			}
 
@@ -323,38 +314,20 @@ public class UserAgent implements SipListener {
 			@Subscribe
 			public void onEvent(CallInvitationWaiting event) {
 				ClientTransaction transaction = event.getClientTransaction();
-				Dialog dialog = transaction.getDialog();
-				if (dialog != null) {
-					if (dialog.getCallId().getCallId().equals(callId)) {
-						inviteOperationIsCancelable(eventBusSubscriberId,
-								callId, transaction);
-						callback.onWaitingForCallInvitationAnswer(callId);
-					}
-				}
-				else {
-					String error = "Received [CallInvitationWaiting] event with" +
-							" a NULL dialog! This should never happen.";
-					logger.error(error);
-					eventBus.post(new CallInvitationFailed(error, null));
+				if (event.getCallId().equals(callId)) {
+					inviteOperationIsCancelable(eventBusSubscriberId,
+							callId, transaction);
+					callback.onWaitingForCallInvitationAnswer(callId);
 				}
 			}
 
 			@Subscribe
 			public void onEvent(CallInvitationRinging event) {
 				ClientTransaction transaction = event.getClientTransaction();
-				Dialog dialog = transaction.getDialog();
-				if (dialog != null) {
-					if (dialog.getCallId().getCallId().equals(callId)) {
-						inviteOperationIsCancelable(eventBusSubscriberId,
-								callId, transaction);
-						callback.onCallInvitationRinging(callId);
-					}
-				}
-				else {
-					String error = "Received [CallInvitationRinging] event with" +
-							" a NULL dialog! This should never happen.";
-					logger.error(error);
-					eventBus.post(new CallInvitationFailed(error, null));
+				if (event.getCallId().equals(callId)) {
+					inviteOperationIsCancelable(eventBusSubscriberId,
+							callId, transaction);
+					callback.onCallInvitationRinging(callId);
 				}
 			}
 
@@ -371,27 +344,18 @@ public class UserAgent implements SipListener {
 			@Subscribe
 			public void onEvent(CallInvitationAccepted event) {
 				Dialog dialog = event.getDialog();
-				if (dialog != null) {
-					if (dialog.getCallId().getCallId().equals(callId)) {
-						inviteOperationFinished(eventBusSubscriberId, callId);
-						wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-						callEstablished(eventBusSubscriberId, callId, dialog);
-						listener.onCallEstablished(callId);
-						scheduleNextInviteRequest();
-					}
-				}
-				else {
-					String error = "Received [CallInvitationAccepted] event with" +
-							" a NULL dialog! This should never happen.";
-					logger.error(error);
-					eventBus.post(new CallInvitationFailed(error, null));
+				if (event.getCallId().equals(callId)) {
+					inviteOperationFinished(eventBusSubscriberId, callId);
+					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
+					callEstablished(eventBusSubscriberId, callId, dialog);
+					listener.onCallEstablished(callId);
+					scheduleNextInviteRequest();
 				}
 			}
 
 			@Subscribe
 			public void onEvent(CallInvitationFailed event) {
-				String eventCallId = event.getCallId();
-				if (eventCallId == null || eventCallId.equals(callId)) {
+				if (event.getCallId().equals(callId)) {
 					inviteOperationFinished(eventBusSubscriberId, callId);
 					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
 					listener.onCallInvitationFailed(event.getReason(), callId);
