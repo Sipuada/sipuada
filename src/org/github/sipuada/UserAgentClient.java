@@ -16,12 +16,14 @@ import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
+import org.github.sipuada.events.CallInvitationAccepted;
+import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
-import org.github.sipuada.events.RequestSent;
 import org.github.sipuada.events.ResponseDiscarded;
 import org.github.sipuada.events.ResponsePostponed;
 import org.slf4j.Logger;
@@ -173,7 +175,8 @@ public class UserAgentClient {
 	//TODO when we do it, make sure that no dialog and session state is
 	//messed up with by the flow of incoming responses to this OPTIONS request.
 
-	public boolean sendInviteRequest(String remoteUser, String remoteDomain) {
+	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
+			CallIdHeader callIdHeader) {
 		URI requestUri;
 		try {
 			requestUri = addressMaker.createSipURI(remoteUser, remoteDomain);
@@ -185,7 +188,6 @@ public class UserAgentClient {
 			//No need for caller to wait for remote responses.
 			return false;
 		}
-		CallIdHeader callIdHeader = provider.getNewCallId();
 		long cseq = ++localCSeq;
 
 		//TODO *IF* request is a INVITE, make sure to add the following headers:
@@ -260,11 +262,6 @@ public class UserAgentClient {
 	}
 
 	public boolean sendByeRequest(Dialog dialog) {
-		//TODO make sure this is only sent by the callee if the dialog is NOT early and
-		//it has already received an ACK for it's 2xx response or until the server
-		//transaction timed out. The callee MUST NOT send it if the conditions
-		//above are not met.
-		//(The caller is allowed to send for either confirmed or early dialogs).
 		return sendRequest(RequestMethod.BYE, dialog);
 	}
 
@@ -370,9 +367,6 @@ public class UserAgentClient {
 					try {
 						if (doSendRequest(request, clientTransaction, dialog)) {
 							logger.info("{} request sent.", method);
-							//TODO *IF* this request is a BYE, please let
-							//the application layer know it should consider
-							//the session associated with this request terminated.
 						}
 						else {
 							logger.error("Could not send this {} request.", method);
@@ -457,9 +451,7 @@ public class UserAgentClient {
 					case TransactionState._COMPLETED:
 					case TransactionState._TERMINATED:
 						timer.cancel();
-						//The request was accepted before we could cancel it.
-						//TODO send a BYE request here to terminate
-						//the established session.
+						sendByeRequest(clientTransaction.getDialog());
 				}
 			}
 		}, 180, 180);
@@ -582,8 +574,6 @@ public class UserAgentClient {
 				//No method-specific handling is required.
 				return false;
 			case Response.BAD_EXTENSION:
-				//TODO handle this by retrying, this time omitting any extensions listed in
-				//the Unsupported header field in the response.
 				logger.debug("Performing necessary extensions negotiation.");
 				handleUnsupportedExtension(response, clientTransaction);
 				//No method-specific handling is required.
@@ -652,7 +642,6 @@ public class UserAgentClient {
 				//TODO remember to, if no redirect is sent, remove any early dialogs
 				//associated with this request and tell the application layer about it.
 				//FIXME for now we are always doing the task above for obvious reasons.
-				handleThisByRemovingEarlyDialogs(clientTransaction);
 				//TODO also remember to implement the AMBIGUOUS case above as it's similar.
 				return false;
 			case CLIENT_ERROR:
@@ -660,8 +649,6 @@ public class UserAgentClient {
 			case GLOBAL_ERROR:
 				//TODO remove any early dialogs associated with this request
 				//and tell the application layer about it.
-				//TODO report this response error back to the application layer.
-				handleThisByRemovingEarlyDialogs(clientTransaction);
 				return false;
 			case UNKNOWN:
 				//Handle this by simply discarding this unknown response.
@@ -686,7 +673,13 @@ public class UserAgentClient {
 				eventBus.post(new RegistrationFailed(codeAndReason));
 				break;
 			case INVITE:
-				eventBus.post(new CallInvitationFailed(codeAndReason, callId));
+				if (statusCode == Response.BUSY_HERE ||
+					statusCode == Response.BUSY_EVERYWHERE) {
+					eventBus.post(new CallInvitationDeclined(codeAndReason, callId));
+				}
+				else {
+					eventBus.post(new CallInvitationFailed(codeAndReason, callId));
+				}
 				break;
 			default:
 				break;
@@ -704,9 +697,6 @@ public class UserAgentClient {
 		} catch (ParseException parseException) {
 			logger.error("Could not create the domain URI for {}: {}.",
 					localDomain, parseException.getMessage());
-			handleThisByRemovingEarlyDialogs(clientTransaction);
-//			//TODO report 401/407 error back to application layer.
-//			logger.info("{} response arrived.", response.getStatusCode());
 			return;
 		}
 
@@ -782,9 +772,6 @@ public class UserAgentClient {
 					//Request that would authenticate could not be sent.
 					logger.error("Could not resend this {} request with authentication " +
 							"credentials.", request.getMethod());
-					handleThisByRemovingEarlyDialogs(clientTransaction);
-//					//TODO report 401/407 error back to application layer.
-//					logger.info("{} response arrived.", response.getStatusCode());
 				}
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would authenticate could not be sent.
@@ -792,9 +779,6 @@ public class UserAgentClient {
 						"credentials: {} ({}).", request.getMethod(),
 						requestCouldNotBeSent.getMessage(),
 						requestCouldNotBeSent.getCause().getMessage());
-				handleThisByRemovingEarlyDialogs(clientTransaction);
-//				//TODO report 401/407 error back to application layer.
-//				logger.info("{} response arrived.", response.getStatusCode());
 			}
 		}
 		else {
@@ -803,9 +787,6 @@ public class UserAgentClient {
 			logger.error("Credentials for {} request were denied, or no proper auth " +
 					"headers were passed along with the 401/407 response from the UAS.",
 					request.getMethod());
-			handleThisByRemovingEarlyDialogs(clientTransaction);
-//			//TODO report 401/407 error back to application layer.
-//			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
 
@@ -946,9 +927,6 @@ public class UserAgentClient {
 					logger.error("{} request failed because it contained media types" +
 							" unsupported by the UAS.\nCould not resend this request with" +
 							" supported media types.", request.getMethod());
-					handleThisByRemovingEarlyDialogs(clientTransaction);
-//					//TODO report 415 error back to application layer.
-//					logger.info("{} response arrived.", response.getStatusCode());
 				}
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would amend this situation could not be sent.
@@ -956,9 +934,6 @@ public class UserAgentClient {
 						" unsupported by the UAS.\nCould not resend this request with" +
 						" supported media types: {}.", request.getMethod(),
 						requestCouldNotBeSent.getMessage());
-				handleThisByRemovingEarlyDialogs(clientTransaction);
-//				//TODO report 415 error back to application layer.
-//				logger.info("{} response arrived.", response.getStatusCode());
 			}
 		}
 		else {
@@ -967,9 +942,6 @@ public class UserAgentClient {
 			logger.error("{} request failed because it contained media types unsupported " +
 					"by the UAS.\nThis UAC cannot satisfy these media type requirements.",
 					request.getMethod());
-			handleThisByRemovingEarlyDialogs(clientTransaction);
-//			//TODO report 415 error back to application layer.
-//			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
 
@@ -1041,9 +1013,6 @@ public class UserAgentClient {
 				logger.error("{} request failed due to requiring some extensions" +
 						" unsupported by the UAS.\nUAC could not send new request" +
 						" amending this situation.", request.getMethod());
-				handleThisByRemovingEarlyDialogs(clientTransaction);
-//				//TODO report 420 error back to application layer.
-//				logger.info("{} response arrived.", response.getStatusCode());
 			}
 		} catch (SipException requestCouldNotBeSent) {
 			//Request that would amend this situation could not be sent.
@@ -1052,9 +1021,6 @@ public class UserAgentClient {
 					"amending this situation: {} ({}).", request.getMethod(),
 					requestCouldNotBeSent.getMessage(),
 					requestCouldNotBeSent.getCause().getMessage());
-			handleThisByRemovingEarlyDialogs(clientTransaction);
-//			//TODO report 420 error back to application layer.
-//			logger.info("{} response arrived.", response.getStatusCode());
 		}
 	}
 
@@ -1069,10 +1035,8 @@ public class UserAgentClient {
 			if (dialog != null) {
 				dialog.delete();
 				if (isError) {
-					handleThisByRemovingEarlyDialogs(clientTransaction);
+//					handleThisByRemovingEarlyDialogs(clientTransaction);
 				}
-//				//TODO report response error back to application layer.
-//				logger.info("{} response arrived.", response.getStatusCode());
 				return;
 			}
 			//TODO TODO TODO REVIEW THIS IN THE RFC, I THINK IT IS NOT CORRECT.
@@ -1110,10 +1074,6 @@ public class UserAgentClient {
 								logger.error("Could not resend {} request " +
 									"after {} seconds.", request.getMethod(),
 									retryAfterSeconds);
-								handleThisByRemovingEarlyDialogs(clientTransaction);
-//								//TODO report response error back to application layer.
-//								logger.info("{} response arrived.",
-//								response.getStatusCode());
 								reportResponseError(response.getStatusCode(), response,
 										clientTransaction);
 							}
@@ -1123,9 +1083,6 @@ public class UserAgentClient {
 									request.getMethod(), retryAfterSeconds,
 									requestCouldNotBeSent.getMessage(),
 									requestCouldNotBeSent.getCause().getMessage());
-							handleThisByRemovingEarlyDialogs(clientTransaction);
-//							//TODO report response error back to application layer.
-//							logger.info("{} response arrived.", response.getStatusCode());
 							reportResponseError(response.getStatusCode(), response,
 									clientTransaction);
 						}
@@ -1141,9 +1098,6 @@ public class UserAgentClient {
 		//because availability frame is too short.
 		logger.error("{} request failed or timed out. UAC is not allowed to resend.",
 				request.getMethod());
-		handleThisByRemovingEarlyDialogs(clientTransaction);
-//		//TODO report response error back to application layer.
-//		logger.info("{} response arrived.", response.getStatusCode());
 	}
 
 	private void handleByTerminatingIfWithinDialog(ClientTransaction clientTransaction) {
@@ -1151,13 +1105,9 @@ public class UserAgentClient {
 				clientTransaction.getRequest().getMethod());
 		Dialog dialog = clientTransaction.getDialog();
 		if (dialog != null) {
-			//TODO handle this by sending a BYE request within this dialog immediately.
+			sendByeRequest(dialog);
 			throw new ResponsePostponed();
 		}
-//		else {
-//			//TODO report 481 error back to the application layer.
-//			logger.info("{} response arrived.", Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
-//		}
 	}
 
 	private void handleRegisterResponse(int statusCode, Response response) {
@@ -1182,20 +1132,12 @@ public class UserAgentClient {
 					dialog.sendAck(ackRequest);
 					logger.info("{} response to INVITE arrived, so {} sent.", statusCode,
 							RequestMethod.ACK);
+					eventBus.post(new CallInvitationAccepted(dialog));
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
-				//TODO propagate this dialog back to the application layer so that it can
-				//pass it back when desiring to perform subsequent dialog operations.
-				//TODO also make sure to tell the application layer to get rid of the
-				//Client transaction associated with this request as it just became useless,
-				//since now CANCEL's are forbidden as they would effectively be no-ops.
-				//Now to terminate a call the application layer shall send a BYE request.
 			}
 		}
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
-			//TODO please propagate this clientTransaction back to the application layer
-			//so that it can later cancel this request if desired, before this request
-			//produces a final response.
 			if (statusCode == Response.RINGING) {
 				logger.info("Ringing!");
 				eventBus.post(new CallInvitationRinging(clientTransaction));
@@ -1211,8 +1153,11 @@ public class UserAgentClient {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to BYE arrived.", statusCode);
 			handleThisRequestTerminated(clientTransaction);
-			//TODO make sure to tell the application layer to get rid of the
-			//Dialog associated with this request as it just became invalid.
+			String callId = null; Dialog dialog = clientTransaction.getDialog();
+			if (dialog != null) {
+				callId = dialog.getCallId().getCallId();
+			}
+			eventBus.post(new EstablishedCallFinished(callId));
 		}
 	}
 
@@ -1221,33 +1166,14 @@ public class UserAgentClient {
 			case INVITE:
 				logger.info("CANCEL succeded in canceling a call invitation.");
 				//This means a CANCEL succeeded in canceling the original INVITE request.
-				//TODO make sure to tell the application layer to get rid of the
-				//Client transaction associated with this request as it just became useless.
-				handleThisByRemovingEarlyDialogs(clientTransaction);
-				//TODO report this condition back to the application layer.
 				return true;
 			case BYE:
 				logger.info("BYE succeded in terminating a call.");
 				//This means a BYE succeeded in terminating a INVITE request within a Dialog.
-				//TODO make sure to tell the application layer to get rid of the
-				//Dialog associated with this request as it just became invalid.
-				//TODO report this condition back to the application layer.
 				return true;
 			default:
 				//This should never happen.
 				return false;
-		}
-	}
-
-	private void handleThisByRemovingEarlyDialogs(ClientTransaction clientTransaction) {
-		Dialog dialog = clientTransaction.getDialog();
-		if (dialog != null) {
-			logger.debug("All dialogs (be it early or not) and all sessions terminated.");
-			//TODO tell the application layer to get rid of the early dialog associated
-			//with this request as it just became invalid.
-			//TODO According to "15 Terminating a Session", all sessions and dialogs
-			//that were created through responses to this request shall be terminated too,
-			//if this was a INVITE request.
 		}
 	}
 
@@ -1359,7 +1285,6 @@ public class UserAgentClient {
 			try {
 				logger.info("Sending {} request...", request.getMethod());
 				dialog.sendRequest(newClientTransaction);
-				eventBus.post(new RequestSent());
 				//Caller must expect remote responses.
 				return true;
 			}
@@ -1375,7 +1300,6 @@ public class UserAgentClient {
 		else {
 			logger.info("Sending {} request...", request.getMethod());
 			newClientTransaction.sendRequest();
-			eventBus.post(new RequestSent());
 			//Caller must expect remote responses.
 			return true;
 		}

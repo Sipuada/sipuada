@@ -16,14 +16,14 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean invite(String remoteUser, String remoteDomain,
+	public boolean inviteToCall(String remoteUser, String remoteDomain,
 			CallInvitationCallback callback) {
 		return userAgent.sendInviteRequest(remoteUser, remoteDomain, callback);
 	}
 
 	@Override
 	public boolean cancelCallInvitation(String callId) {
-		return false;
+		return userAgent.cancelInviteRequest(callId);
 	}
 
 	@Override
@@ -38,7 +38,7 @@ public class Sipuada implements SipuadaApi {
 
 	@Override
 	public boolean finishCall(String callId) {
-		return false;
+		return userAgent.finishCall(callId);
 	}
 
 }
