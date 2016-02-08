@@ -390,7 +390,8 @@ public class UserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(CallInvitationFailed event) {
-				if (event.getCallId().equals(callId)) {
+				String eventCallId = event.getCallId();
+				if (eventCallId == null || eventCallId.equals(callId)) {
 					inviteOperationFinished(eventBusSubscriberId, callId);
 					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
 					listener.onCallInvitationFailed(event.getReason(), callId);
