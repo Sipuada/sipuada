@@ -92,8 +92,8 @@ public class UserAgent implements SipListener {
 			Collections.synchronizedMap(new HashMap<String, String>());
 	private final Map<String, List<ClientTransaction>> cancelableInviteOperations =
 			Collections.synchronizedMap(new HashMap<String, List<ClientTransaction>>());
-	private final Map<String, List<Request>> answerableInviteOperations =
-			Collections.synchronizedMap(new HashMap<String, List<Request>>());
+	private final Map<String, List<ServerTransaction>> answerableInviteOperations =
+			Collections.synchronizedMap(new HashMap<String, List<ServerTransaction>>());
 	private final Map<String, List<Dialog>> establishedCalls =
 			Collections.synchronizedMap(new HashMap<String, List<Dialog>>());
 
@@ -131,7 +131,7 @@ public class UserAgent implements SipListener {
 								headerMaker, addressMaker, username, domain, password,
 								localIp, Integer.toString(localPort), transport);
 						uas = new UserAgentServer(eventBus, provider, messenger,
-								headerMaker, addressMaker, username, domain);
+								headerMaker, username, domain);
 						try {
 							provider.addSipListener(this);
 						} catch (TooManyListenersException ignore) {}
@@ -199,10 +199,10 @@ public class UserAgent implements SipListener {
 				//the onCallInvitationArrived listener take to run, so UAS has to make
 				//sure at least the 180 response is sent back before figuring out
 				//if the application callee is in fact busy.
-				Request request = event.getRequest();
+				ServerTransaction serverTransaction = event.getServerTransaction();
 				final String callId = event.getCallId();
 				inviteOperationIsAnswerable(eventBusSubscriberId,
-						callId, request);
+						callId, serverTransaction);
 				Object inviteCancelerEventBusSubscriber = new Object() {
 
 					@Subscribe
@@ -219,6 +219,7 @@ public class UserAgent implements SipListener {
 				eventBus.register(inviteCancelerEventBusSubscriber);
 				boolean currentlyBusy = listener.onCallInvitationArrived(callId);
 				if (currentlyBusy) {
+					logger.info("Callee is currently busy.");
 					eventBus.unregister(inviteCancelerEventBusSubscriber);
 					answerInviteRequest(callId, false);
 				}
@@ -229,13 +230,13 @@ public class UserAgent implements SipListener {
 	}
 
 	private synchronized void inviteOperationIsAnswerable(String eventBusSubscriberId,
-			String callId, Request request) {
+			String callId, ServerTransaction serverTransaction) {
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
 		if (!answerableInviteOperations.containsKey(eventBusSubscriberId)) {
 			answerableInviteOperations.put(eventBusSubscriberId, Collections
-				.synchronizedList(new LinkedList<Request>()));
+				.synchronizedList(new LinkedList<ServerTransaction>()));
 		}
-		answerableInviteOperations.get(eventBusSubscriberId).add(request);
+		answerableInviteOperations.get(eventBusSubscriberId).add(serverTransaction);
 	}
 
 	private synchronized void wipeAnswerableInviteOperation(String callId,
@@ -248,7 +249,7 @@ public class UserAgent implements SipListener {
 			//Otherwise state is pretty inconsistent.
 			return;
 		}
-		List<Request> operations = answerableInviteOperations
+		List<ServerTransaction> operations = answerableInviteOperations
 				.get(eventBusSubscriberId);
 		if (operations == null) {
 			//No data relation should have been assigned for this callId
@@ -256,9 +257,10 @@ public class UserAgent implements SipListener {
 			return;
 		}
 		synchronized (operations) {
-			Iterator<Request> iterator = operations.iterator();
+			Iterator<ServerTransaction> iterator = operations.iterator();
 			while (iterator.hasNext()) {
-				Request request = iterator.next();
+				ServerTransaction serverTransaction = iterator.next();
+				Request request = serverTransaction.getRequest();
 				CallIdHeader callIdHeader = (CallIdHeader) request
 						.getHeader(CallIdHeader.NAME);
 				String transactionCallId = callIdHeader.getCallId();
@@ -544,17 +546,18 @@ public class UserAgent implements SipListener {
 					"not found.", acceptCallInvitation ? "accept" : "decline", callId);
 			return false;
 		}
-		List<Request> operations = answerableInviteOperations.get(eventBusSubscriberId);
+		List<ServerTransaction> operations = answerableInviteOperations.get(eventBusSubscriberId);
 		if (operations == null) {
 			logger.error("Cannot {} invitation.\nINVITE request with callId '{}' " +
 					"not found.", acceptCallInvitation ? "accept" : "decline", callId);
 			return false;
 		}
 		synchronized (operations) {
-			Iterator<Request> iterator = operations.iterator();
+			Iterator<ServerTransaction> iterator = operations.iterator();
 			try {
 				while (iterator.hasNext()) {
-					Request request = iterator.next();
+					ServerTransaction serverTransaction = iterator.next();
+					Request request = serverTransaction.getRequest();
 					CallIdHeader callIdHeader = (CallIdHeader) request
 							.getHeader(CallIdHeader.NAME);
 					String transactionCallId = callIdHeader.getCallId();
@@ -584,19 +587,17 @@ public class UserAgent implements SipListener {
 
 						};
 						eventBus.register(eventBusSubscriber);
+						RequestMethod method = RequestMethod.UNKNOWN;
+						try {
+							method = RequestMethod.valueOf(request.getMethod());
+						} catch (IllegalArgumentException ignore) {};
 						if (acceptCallInvitation) {
-							boolean okSent = true;//TODO uas.sendResponse() to pass
-							//a OK response back to the request associated
-							//with this event.
-							return okSent;
+							return uas.sendAcceptResponse(method,
+									request, serverTransaction);
 						}
 						else {
-							boolean busySent = true;//TODO uas.sendResponse() to pass
-							//a BUSY_HERE response back to the request
-							//associated with this event.
-							if (busySent) {
-							}
-							return busySent;
+							return uas.sendRejectResponse(method,
+									request, serverTransaction);
 						}
 					}
 				}
@@ -718,7 +719,7 @@ public class UserAgent implements SipListener {
 					@Override
 					public boolean onCallInvitationArrived(String callId) {
 						System.out.println("Incoming invite arrived: " + callId);
-						return false;
+						return true;
 					}
 
 					@Override
