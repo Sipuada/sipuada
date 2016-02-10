@@ -146,7 +146,7 @@ public class UserAgentClient {
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 		try {
-			contactHeader.setExpires(60);
+			contactHeader.setExpires(300);
 		} catch (InvalidArgumentException ignore) {}
 
 		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
@@ -1026,19 +1026,15 @@ public class UserAgentClient {
 	private void handleByReschedulingIfApplicable(final Response response,
 			final ClientTransaction clientTransaction, boolean isTimeout) {
 		if (isTimeout) {
-			boolean isError = true;
+			boolean shouldSendBye = true;
 			if (response == null) {
-				isError = !handleThisRequestTerminated(clientTransaction);
+				shouldSendBye = !handleThisRequestTerminated(clientTransaction);
 			}
 			Dialog dialog = clientTransaction.getDialog();
-			if (dialog != null) {
-				dialog.delete();
-				if (isError) {
-//					handleThisByRemovingEarlyDialogs(clientTransaction);
-				}
-				return;
+			if (dialog != null && shouldSendBye) {
+				sendByeRequest(dialog);
+				throw new ResponsePostponed();
 			}
-			//TODO TODO TODO REVIEW THIS IN THE RFC, I THINK IT IS NOT CORRECT.
 		}
 		else {
 			if (response == null) {

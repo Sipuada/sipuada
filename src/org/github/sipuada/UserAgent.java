@@ -691,7 +691,7 @@ public class UserAgent implements SipListener {
 	}
 
 	public static void main(String[] args) {
-		UserAgent ua = new UserAgent("gui", "192.168.25.217:5060", "gui",
+		UserAgent ua = new UserAgent("vic", "192.168.25.217:5060", "vic",
 				"192.168.25.217", 50400, "TCP", new SipuadaListener() {
 
 					@Override
@@ -766,7 +766,7 @@ public class UserAgent implements SipListener {
 //		} catch (InterruptedException e) {
 //			e.printStackTrace();
 //		}
-		ua.sendInviteRequest("vic", "192.168.25.217:5060", new CallInvitationCallback() {
+		ua.sendInviteRequest("gui", "192.168.25.217:5060", new CallInvitationCallback() {
 
 			@Override
 			public void onWaitingForCallInvitationAnswer(String callId) {
@@ -807,25 +807,25 @@ public class UserAgent implements SipListener {
 //
 //		});
 //		System.out.println("Registration 3 sent!");
-		ua.sendInviteRequest("and", "192.168.25.217:5060", new CallInvitationCallback() {
-
-			@Override
-			public void onWaitingForCallInvitationAnswer(String callId) {
-				System.out.println("Invite 2 waiting for answer: " + callId);
-			}
-
-			@Override
-			public void onCallInvitationRinging(String callId) {
-				System.out.println("Invite 2 ringing: " + callId);
-			}
-
-			@Override
-			public void onCallInvitationDeclined(String reason) {
-				System.out.println("Invite 2 declined: " + reason);
-			}
-
-		});
-		System.out.println("Invitation 2 sent!");
+//		ua.sendInviteRequest("and", "192.168.25.217:5060", new CallInvitationCallback() {
+//
+//			@Override
+//			public void onWaitingForCallInvitationAnswer(String callId) {
+//				System.out.println("Invite 2 waiting for answer: " + callId);
+//			}
+//
+//			@Override
+//			public void onCallInvitationRinging(String callId) {
+//				System.out.println("Invite 2 ringing: " + callId);
+//			}
+//
+//			@Override
+//			public void onCallInvitationDeclined(String reason) {
+//				System.out.println("Invite 2 declined: " + reason);
+//			}
+//
+//		});
+//		System.out.println("Invitation 2 sent!");
 	}
 
 }
