@@ -8,6 +8,8 @@ import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
 import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
+import org.github.sipuada.events.EstablishedCallFinished;
+import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.RequestCouldNotBeAddressed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +26,6 @@ import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionAlreadyExistsException;
 import android.javax.sip.TransactionUnavailableException;
 import android.javax.sip.address.Address;
-import android.javax.sip.address.AddressFactory;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.CallIdHeader;
@@ -43,19 +44,17 @@ public class UserAgentServer {
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
-	private final AddressFactory addressMaker;
 
 	private final String username;
 	private final String localDomain;
 
 	public UserAgentServer(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
-			AddressFactory addressFactory, String... identity) {
+			String... identity) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
-		addressMaker = addressFactory;
 		username = identity.length > 0 && identity[0] != null ? identity[0] : "";
 		localDomain = identity.length > 1 && identity[1] != null ? identity[1] : "";
 	}
@@ -80,15 +79,20 @@ public class UserAgentServer {
 						handleCancelRequest(request, serverTransaction);
 						break;
 					case OPTIONS:
-						break;
+						//FIXME later handle OPTIONS request as well.
+						throw new RequestCouldNotBeAddressed();
 					case INVITE:
 						handleInviteRequest(request, serverTransaction);
 						break;
+					case ACK:
+						handleAckRequest(request, serverTransaction);
+						break;
 					case BYE:
+						handleByeRequest(request, serverTransaction);
 						break;
 					case UNKNOWN:
 					default:
-						break;
+						throw new RequestCouldNotBeAddressed();
 				}
 			}
 		} catch (RequestCouldNotBeAddressed requestCouldNotBeAddressed) {
@@ -121,13 +125,15 @@ public class UserAgentServer {
 			} catch (ParseException ignore) {}
 			if (doSendResponse(Response.METHOD_NOT_ALLOWED, method,
 					request, serverTransaction, allowedMethods
-					.toArray(new Header[allowedMethods.size()]))) {
+					.toArray(new Header[allowedMethods.size()])) != null) {
 				logger.info("{} response sent.",
 						Response.METHOD_NOT_ALLOWED);
 				return false;
 			}
 			throw new RequestCouldNotBeAddressed();
 		}
+		//TODO if UAS performs auth challenges, remember that it MUST NOT do it
+		//for CANCEL requests.
 		if (!requestShouldBeAddressed(method, request, serverTransaction)) {
 			logger.info("{} request should not be addressed by this UAS.", method);
 			return false;
@@ -176,7 +182,7 @@ public class UserAgentServer {
 		}
 		if (shouldForbid) {
 			if (doSendResponse(Response.FORBIDDEN, method,
-					request, serverTransaction)) {
+					request, serverTransaction) != null) {
 				logger.info("{} response sent.", Response.FORBIDDEN);
 				return false;
 			}
@@ -197,7 +203,7 @@ public class UserAgentServer {
 		}
 		if (shouldNotFound) {
 			if (doSendResponse(Response.NOT_FOUND, method,
-					request, serverTransaction)) {
+					request, serverTransaction) != null) {
 				logger.info("{} response sent.", Response.NOT_FOUND);
 				return false;
 			}
@@ -211,7 +217,8 @@ public class UserAgentServer {
 	private void handleCancelRequest(Request request, ServerTransaction serverTransaction) {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
-		if (doSendResponse(Response.OK, RequestMethod.CANCEL, request, serverTransaction)) {
+		if (doSendResponse(Response.OK, RequestMethod.CANCEL,
+				request, serverTransaction) != null) {
 			logger.info("{} response sent.", Response.OK);
 			bus.post(new CallInvitationCanceled("Call invitation canceled by the caller " +
 					"or callee took longer than roughly 30 seconds to answer.", callId));
@@ -231,31 +238,76 @@ public class UserAgentServer {
 		//when appropriate, by using identifiers within the SDP session description.
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
-		if (doSendResponse(Response.RINGING, RequestMethod.INVITE, request,
-				serverTransaction)) {
+		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING,
+				RequestMethod.INVITE, request, serverTransaction);
+		if (newServerTransaction != null) {
 			logger.info("{} response sent.", Response.RINGING);
-			bus.post(new CallInvitationArrived(callId, request));
+			bus.post(new CallInvitationArrived(callId, newServerTransaction));
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
 	}
 
-	private void handleReinviteRequest(Request request, ServerTransaction serverTransaction) {}
+	private void handleReinviteRequest(Request request, ServerTransaction serverTransaction) {
+		//FIXME later implement REINVITE as well.
+		throw new RequestCouldNotBeAddressed();
+	}
+	
+	private void handleAckRequest(Request request, ServerTransaction serverTransaction) {
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		bus.post(new EstablishedCallStarted(callId, serverTransaction.getDialog()));
+		logger.info("New call established: {}." + callId);
+	}
+
+	private void handleByeRequest(Request request, ServerTransaction serverTransaction) {
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		if (doSendResponse(Response.OK, RequestMethod.BYE,
+				request, serverTransaction) != null) {
+			logger.info("{} response sent.", Response.OK);
+			bus.post(new EstablishedCallFinished(callId));
+			return;
+		}
+		throw new RequestCouldNotBeAddressed();
+	}
 
 	public void processRetransmission(TimeoutEvent retransmissionEvent) {
 		if (retransmissionEvent.isServerTransaction()) {
 			ServerTransaction serverTransaction = retransmissionEvent.getServerTransaction();
 			//TODO Dialog layer says we should retransmit a response. how?
-			logger.warn("<RETRANSMISSION event>: " + retransmissionEvent.getServerTransaction());
+			logger.warn("<RETRANSMISSION event>: " + serverTransaction);
 		}
 	}
 
-	public void sendResponse() {
-		
+	public boolean sendAcceptResponse(RequestMethod method, Request request,
+			ServerTransaction serverTransaction) {
+		if (doSendResponse(Response.OK,
+				method, request, serverTransaction) != null) {
+			logger.info("{} response sent.", Response.OK);
+			return true;
+		}
+		return false;
 	}
 
-	private boolean doSendResponse(int statusCode, RequestMethod method, Request request,
-			ServerTransaction serverTransaction, Header... additionalHeaders) {
+	public boolean sendRejectResponse(RequestMethod method, Request request,
+			ServerTransaction serverTransaction) {
+		if (doSendResponse(Response.BUSY_HERE,
+				method, request, serverTransaction) != null) {
+			logger.info("{} response sent.", Response.BUSY_HERE);
+			return true;
+		}
+		return false;
+	}
+
+	private ServerTransaction doSendResponse(int statusCode, RequestMethod method,
+			Request request, ServerTransaction serverTransaction, Header... additionalHeaders) {
+		if (method == RequestMethod.UNKNOWN) {
+			logger.debug("[doSendResponse(int, RequestMethod, Request, " +
+					"ServerTransaction, Header...)] method forbidden for " +
+					"{} requests.", method);
+			return null;
+		}
 		boolean withinDialog = true;
 		ServerTransaction newServerTransaction = serverTransaction;
 		if (newServerTransaction == null) {
@@ -267,14 +319,14 @@ public class UserAgentServer {
 				logger.debug("{} response could not be sent to {} request: {}.",
 						statusCode, request.getMethod(),
 						requestIsRetransmit.getMessage());
-				return false;
+				return null;
 			} catch (TransactionUnavailableException invalidTransaction) {
 				//A invalid (maybe null) server transaction
 				//can't be used to send this response.
 				logger.debug("{} response could not be sent to {} request: {}.",
 						statusCode, request.getMethod(),
 						invalidTransaction.getMessage());
-				return false;
+				return null;
 			}
 		}
 		Dialog dialog = newServerTransaction.getDialog();
@@ -288,7 +340,7 @@ public class UserAgentServer {
 				}
 				logger.info("Sending {} response to {} request...", statusCode, method);
 				dialog.sendReliableProvisionalResponse(response);
-				return true;
+				return newServerTransaction;
 			} catch (InvalidArgumentException ignore) {
 			} catch (SipException invalidResponse) {
 				//A final response to this request was already sent, so this
@@ -298,7 +350,7 @@ public class UserAgentServer {
 				logger.debug("{} response could not be sent to {} request: {} ({}).",
 						statusCode, method, invalidResponse.getMessage(),
 						invalidResponse.getCause().getMessage());
-				return false;
+				return null;
 			}
 		}
 		try {
@@ -308,7 +360,7 @@ public class UserAgentServer {
 			}
 			logger.info("Sending {} response to {} request...", statusCode, method);
 			newServerTransaction.sendResponse(response);
-			return true;
+			return newServerTransaction;
 		} catch (ParseException ignore) {
 		} catch (InvalidArgumentException ignore) {
 		} catch (SipException responseCouldNotBeSent) {
@@ -316,7 +368,7 @@ public class UserAgentServer {
 					statusCode, method, responseCouldNotBeSent.getMessage(),
 					responseCouldNotBeSent.getCause().getMessage());
 		}
-		return false;
+		return null;
 	}
 
 }
