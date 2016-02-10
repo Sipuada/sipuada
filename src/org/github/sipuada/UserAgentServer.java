@@ -292,9 +292,13 @@ public class UserAgentServer {
 
 	public boolean sendRejectResponse(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
 		if (doSendResponse(Response.BUSY_HERE,
 				method, request, serverTransaction) != null) {
 			logger.info("{} response sent.", Response.BUSY_HERE);
+			bus.post(new CallInvitationCanceled("Call invitation rejected by the callee " +
+					" or callee is currently busy and couldn't take another call.", callId));
 			return true;
 		}
 		return false;

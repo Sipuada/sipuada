@@ -8,7 +8,7 @@ public interface SipuadaApi {
 
 		boolean onCallInvitationArrived(String callId);
 
-		void onCallInvitationCanceled(String callId);
+		void onCallInvitationCanceled(String reason, String callId);
 
 		void onCallInvitationFailed(String reason, String callId);
 
