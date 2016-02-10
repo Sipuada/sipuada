@@ -211,7 +211,8 @@ public class UserAgent implements SipListener {
 							wipeAnswerableInviteOperation(callId,
 									eventBusSubscriberId);
 							eventBus.unregister(this);
-							listener.onCallInvitationCanceled(callId);
+							listener.onCallInvitationCanceled(event.getReason(),
+									callId);
 						}
 					}
 
@@ -220,7 +221,6 @@ public class UserAgent implements SipListener {
 				boolean currentlyBusy = listener.onCallInvitationArrived(callId);
 				if (currentlyBusy) {
 					logger.info("Callee is currently busy.");
-					eventBus.unregister(inviteCancelerEventBusSubscriber);
 					answerInviteRequest(callId, false);
 				}
 			}
@@ -509,7 +509,8 @@ public class UserAgent implements SipListener {
 							public void onEvent(CallInvitationCanceled event) {
 								if (event.getCallId().equals(callId)) {
 									eventBus.unregister(this);
-									listener.onCallInvitationCanceled(callId);
+									listener.onCallInvitationCanceled(event.getReason(),
+											callId);
 								}
 							}
 
@@ -723,13 +724,13 @@ public class UserAgent implements SipListener {
 					}
 
 					@Override
-					public void onCallInvitationCanceled(String callId) {
-						System.out.println("Incoming invite canceled: " + callId);
+					public void onCallInvitationCanceled(String reason, String callId) {
+						System.out.println("Incoming invite canceled (" + reason + "): " + callId);
 					}
 
 					@Override
 					public void onCallInvitationFailed(String reason, String callId) {
-						System.out.println("'Incoming invite'/'outgoing invite answer' failed: " + reason);
+						System.out.println("'Incoming invite'/'outgoing invite answer' failed (" + reason + "): " + callId);
 					}
 
 					@Override
