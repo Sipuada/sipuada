@@ -1,6 +1,7 @@
 package org.github.sipuada;
 
 import java.text.ParseException;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -26,9 +27,12 @@ import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionAlreadyExistsException;
 import android.javax.sip.TransactionUnavailableException;
 import android.javax.sip.address.Address;
+import android.javax.sip.address.AddressFactory;
+import android.javax.sip.address.SipURI;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.CallIdHeader;
+import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ToHeader;
@@ -44,19 +48,26 @@ public class UserAgentServer {
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
+	private final AddressFactory addressMaker;
 
 	private final String username;
 	private final String localDomain;
+	private final String localIp;
+	private final int localPort;
 
 	public UserAgentServer(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
-			String... identity) {
+			AddressFactory addressFactory, String... identity) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
+		addressMaker = addressFactory;
 		username = identity.length > 0 && identity[0] != null ? identity[0] : "";
 		localDomain = identity.length > 1 && identity[1] != null ? identity[1] : "";
+		localIp = identity.length > 3 && identity[2] != null ? identity[2] : "";
+		localPort = identity.length > 3 && identity[3] != null ?
+				Integer.parseInt(identity[3]) : 5060;
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -153,6 +164,7 @@ public class UserAgentServer {
 			case CANCEL:
 			case OPTIONS:
 			case INVITE:
+			case ACK:
 			case BYE:
 				return true;
 			}
@@ -257,7 +269,7 @@ public class UserAgentServer {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
 		bus.post(new EstablishedCallStarted(callId, serverTransaction.getDialog()));
-		logger.info("New call established: {}." + callId);
+		logger.info("New call established: {}.", callId);
 	}
 
 	private void handleByeRequest(Request request, ServerTransaction serverTransaction) {
@@ -282,8 +294,28 @@ public class UserAgentServer {
 
 	public boolean sendAcceptResponse(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
-		if (doSendResponse(Response.OK,
-				method, request, serverTransaction) != null) {
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the contact URI for {} at {}." +
+					"[username] must be a valid id, [localIp] must be a valid " +
+					"IP address: {}", username, localIp, parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		contactUri.setPort(localPort);
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		try {
+			contactHeader.setExpires(60);
+		} catch (InvalidArgumentException ignore) {}
+		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
+
+		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
+				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
+		if (doSendResponse(Response.OK, method, request,
+				serverTransaction, additionalHeaders) != null) {
 			logger.info("{} response sent.", Response.OK);
 			return true;
 		}
@@ -368,9 +400,10 @@ public class UserAgentServer {
 		} catch (ParseException ignore) {
 		} catch (InvalidArgumentException ignore) {
 		} catch (SipException responseCouldNotBeSent) {
-			logger.debug("{} response could not be sent to {} request: {} ({}).",
+			logger.debug("{} response could not be sent to {} request: {} {}.",
 					statusCode, method, responseCouldNotBeSent.getMessage(),
-					responseCouldNotBeSent.getCause().getMessage());
+					responseCouldNotBeSent.getCause() == null ? "" :
+					"(" + responseCouldNotBeSent.getCause().getMessage() + ")");
 		}
 		return null;
 	}

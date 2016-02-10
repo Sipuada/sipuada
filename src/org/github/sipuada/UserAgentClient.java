@@ -147,7 +147,7 @@ public class UserAgentClient {
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 		try {
-			contactHeader.setExpires(450);
+			contactHeader.setExpires(3600);
 		} catch (InvalidArgumentException ignore) {}
 
 		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
@@ -263,10 +263,32 @@ public class UserAgentClient {
 	}
 
 	public boolean sendByeRequest(Dialog dialog) {
-		return sendRequest(RequestMethod.BYE, dialog);
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the contact URI for {} at {}." +
+					"[username] must be a valid id, [localIp] must be a valid " +
+					"IP address: {}", username, localIp, parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		contactUri.setPort(localPort);
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		try {
+			contactHeader.setExpires(60);
+		} catch (InvalidArgumentException ignore) {}
+		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
+
+		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
+				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
+		
+		return sendRequest(RequestMethod.BYE, dialog, additionalHeaders);
 	}
 
-	private boolean sendRequest(RequestMethod method, Dialog dialog) {
+	private boolean sendRequest(RequestMethod method, Dialog dialog,
+			Header... additionalHeaders) {
 		URI addresserUri = dialog.getLocalParty().getURI();
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
@@ -279,7 +301,7 @@ public class UserAgentClient {
 			localCSeq = cseq;
 		}
 		return sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
-				callIdHeader, cseq);
+				callIdHeader, cseq, additionalHeaders);
 	}
 
 	private boolean sendRequest(final RequestMethod method, URI requestUri, URI addresserUri,
@@ -1131,6 +1153,7 @@ public class UserAgentClient {
 					dialog.sendAck(ackRequest);
 					logger.info("{} response to INVITE arrived, so {} sent.", statusCode,
 							RequestMethod.ACK);
+					logger.info("New call established: {}.", callId);
 					bus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}

@@ -131,7 +131,8 @@ public class UserAgent implements SipListener {
 								headerMaker, addressMaker, username, domain, password,
 								localIp, Integer.toString(localPort), transport);
 						uas = new UserAgentServer(eventBus, provider, messenger,
-								headerMaker, username, domain);
+								headerMaker, addressMaker, username, domain,
+								localIp, Integer.toString(localPort));
 						try {
 							provider.addSipListener(this);
 						} catch (TooManyListenersException ignore) {}
@@ -713,14 +714,19 @@ public class UserAgent implements SipListener {
 		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
 	}
 
+	static UserAgent ua;
 	public static void main(String[] args) {
-		UserAgent ua = new UserAgent("larson", "192.168.25.217:5060", "larson",
-				"192.168.25.217", 50550, "TCP", new SipuadaListener() {
+		ua = new UserAgent("xibaca", "192.168.25.217:5060", "xibaca",
+				"192.168.25.217", 50650, "TCP", new SipuadaListener() {
 
 					@Override
 					public boolean onCallInvitationArrived(String callId) {
 						System.out.println("Incoming invite arrived: " + callId);
-						return true;
+//						try {
+//							Thread.sleep(10000);
+//						} catch (InterruptedException ignore) {}
+//						ua.answerInviteRequest(callId, true);
+						return false;
 					}
 
 					@Override
@@ -736,6 +742,10 @@ public class UserAgent implements SipListener {
 					@Override
 					public void onCallEstablished(String callId) {
 						System.out.println("New call established: " + callId);
+						try {
+							Thread.sleep(40000);
+						} catch (InterruptedException ignore) {}
+						ua.finishCall(callId);
 					}
 
 					@Override
@@ -762,7 +772,7 @@ public class UserAgent implements SipListener {
 
 		});
 		System.out.println("Registration 1 sent!");
-		ua.sendInviteRequest("xibaca", "192.168.25.217:5060", new CallInvitationCallback() {
+		ua.sendInviteRequest("larson", "192.168.25.217:5060", new CallInvitationCallback() {
 
 			@Override
 			public void onWaitingForCallInvitationAnswer(String callId) {
