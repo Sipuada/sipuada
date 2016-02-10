@@ -1,23 +1,23 @@
 package org.github.sipuada.events;
 
-import android.javax.sip.ServerTransaction;
+import android.javax.sip.message.Request;
 
 public class CallInvitationArrived {
 
 	private final String callId;
-	private final ServerTransaction serverTransaction;
+	private final Request request;
 
-	public CallInvitationArrived(String callId, ServerTransaction transaction) {
+	public CallInvitationArrived(String callId, Request request) {
 		this.callId = callId;
-		serverTransaction = transaction;
+		this.request = request;
 	}
 
 	public String getCallId() {
 		return callId;
 	}
 
-	public ServerTransaction getServerTransaction() {
-		return serverTransaction;
+	public Request getRequest() {
+		return request;
 	}
 
 }
