@@ -77,7 +77,7 @@ public class UserAgentClient {
 
 	private final Logger logger = LoggerFactory.getLogger(UserAgentClient.class);
 
-	private final EventBus eventBus;
+	private final EventBus bus;
 	private final SipProvider provider;
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
@@ -97,10 +97,10 @@ public class UserAgentClient {
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
 	private Map<URI, Long> registerCSeqs = new HashMap<>();
 
-	public UserAgentClient(EventBus bus, SipProvider sipProvider,
+	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
 			AddressFactory addressFactory, String... credentials) {
-		eventBus = bus;
+		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
@@ -113,7 +113,7 @@ public class UserAgentClient {
 				Integer.parseInt(credentials[4]) : 5060;
 		transport = credentials.length > 5 && credentials[5] != null ? credentials[5] : "";
 	}
-	
+
 	public boolean sendRegisterRequest() {
 		URI requestUri;
 		try {
@@ -465,10 +465,10 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction, String errorMessage) {
 		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
 			case REGISTER:
-				eventBus.post(new RegistrationFailed(errorMessage));
+				bus.post(new RegistrationFailed(errorMessage));
 				break;
 			case INVITE:
-				eventBus.post(new CallInvitationFailed(errorMessage, callId));
+				bus.post(new CallInvitationFailed(errorMessage, callId));
 				break;
 			default:
 				break;
@@ -670,15 +670,15 @@ public class UserAgentClient {
 		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		switch (Constants.getRequestMethod(request.getMethod())) {
 			case REGISTER:
-				eventBus.post(new RegistrationFailed(codeAndReason));
+				bus.post(new RegistrationFailed(codeAndReason));
 				break;
 			case INVITE:
 				if (statusCode == Response.BUSY_HERE ||
 					statusCode == Response.BUSY_EVERYWHERE) {
-					eventBus.post(new CallInvitationDeclined(codeAndReason, callId));
+					bus.post(new CallInvitationDeclined(codeAndReason, callId));
 				}
 				else {
-					eventBus.post(new CallInvitationFailed(codeAndReason, callId));
+					bus.post(new CallInvitationFailed(codeAndReason, callId));
 				}
 				break;
 			default:
@@ -1111,7 +1111,7 @@ public class UserAgentClient {
 	private void handleRegisterResponse(int statusCode, Response response) {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to REGISTER arrived.", statusCode);
-			eventBus.post(new RegistrationSuccess(response.getHeaders(ContactHeader.NAME)));
+			bus.post(new RegistrationSuccess(response.getHeaders(ContactHeader.NAME)));
 		}
 	}
 
@@ -1131,7 +1131,7 @@ public class UserAgentClient {
 					dialog.sendAck(ackRequest);
 					logger.info("{} response to INVITE arrived, so {} sent.", statusCode,
 							RequestMethod.ACK);
-					eventBus.post(new CallInvitationAccepted(callId, dialog));
+					bus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
 			}
@@ -1139,10 +1139,10 @@ public class UserAgentClient {
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
 			if (statusCode == Response.RINGING) {
 				logger.info("Ringing!");
-				eventBus.post(new CallInvitationRinging(callId, clientTransaction));
+				bus.post(new CallInvitationRinging(callId, clientTransaction));
 			}
 			else {
-				eventBus.post(new CallInvitationWaiting(callId, clientTransaction));
+				bus.post(new CallInvitationWaiting(callId, clientTransaction));
 			}
 			logger.info("{} response arrived.", statusCode);
 		}
@@ -1156,7 +1156,7 @@ public class UserAgentClient {
 			if (dialog != null) {
 				callId = dialog.getCallId().getCallId();
 			}
-			eventBus.post(new EstablishedCallFinished(callId));
+			bus.post(new EstablishedCallFinished(callId));
 		}
 	}
 
