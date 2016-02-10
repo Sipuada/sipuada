@@ -35,6 +35,7 @@ import android.gov.nist.gnjvx.sip.Utils;
 import android.gov.nist.gnjvx.sip.address.SipUri;
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
+import android.javax.sip.DialogState;
 import android.javax.sip.IOExceptionEvent;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.ResponseEvent;
@@ -146,7 +147,7 @@ public class UserAgentClient {
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 		try {
-			contactHeader.setExpires(300);
+			contactHeader.setExpires(450);
 		} catch (InvalidArgumentException ignore) {}
 
 		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
@@ -1031,7 +1032,8 @@ public class UserAgentClient {
 				shouldSendBye = !handleThisRequestTerminated(clientTransaction);
 			}
 			Dialog dialog = clientTransaction.getDialog();
-			if (dialog != null && shouldSendBye) {
+			if (dialog != null && !(dialog.getState() == DialogState.EARLY ||
+					dialog.getState() == DialogState.TERMINATED) && shouldSendBye) {
 				sendByeRequest(dialog);
 				throw new ResponsePostponed();
 			}
@@ -1099,7 +1101,8 @@ public class UserAgentClient {
 		logger.debug("{} request failed because call or transaction did not exist.",
 				clientTransaction.getRequest().getMethod());
 		Dialog dialog = clientTransaction.getDialog();
-		if (dialog != null) {
+		if (dialog != null && !(dialog.getState() == DialogState.EARLY ||
+				dialog.getState() == DialogState.TERMINATED)) {
 			sendByeRequest(dialog);
 			throw new ResponsePostponed();
 		}

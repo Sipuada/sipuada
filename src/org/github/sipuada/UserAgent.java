@@ -174,12 +174,16 @@ public class UserAgent implements SipListener {
 	@Override
 	public void processTransactionTerminated(
 			TransactionTerminatedEvent transactionTerminatedEvent) {
-		
+		logger.warn("<TRANSACTION terminated event>: " + (transactionTerminatedEvent
+				.isServerTransaction() ? transactionTerminatedEvent
+						.getServerTransaction() : transactionTerminatedEvent
+						.getClientTransaction()));
 	}
 
 	@Override
 	public void processDialogTerminated(DialogTerminatedEvent dialogTerminatedEvent) {
-		
+		logger.warn("<DIALOG terminated event>: " + dialogTerminatedEvent
+				.getDialog());
 	}
 
 	public void initSipuadaListener(final SipuadaListener listener) {
@@ -739,33 +743,6 @@ public class UserAgent implements SipListener {
 
 		});
 		System.out.println("Registration 1 sent!");
-//		try {
-//			Thread.sleep(5000);
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
-//		}
-//		ua.sendRegisterRequest(new RegistrationCallback() {
-//
-//			@Override
-//			public void onRegistrationSuccess(List<String> registeredContacts) {
-//				System.out.println("Registration 2 success: " + registeredContacts);
-//			}
-//
-//			@Override
-//			public void onRegistrationRenewed() {}
-//
-//			@Override
-//			public void onRegistrationFailed(String reason) {
-//				System.out.println("Registration 2 failed: " + reason);
-//			}
-//
-//		});
-//		System.out.println("Registration 2 sent!");
-//		try {
-//			Thread.sleep(3000);
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
-//		}
 		ua.sendInviteRequest("gui", "192.168.25.217:5060", new CallInvitationCallback() {
 
 			@Override
@@ -785,28 +762,6 @@ public class UserAgent implements SipListener {
 
 		});
 		System.out.println("Invitation 1 sent!");
-//		try {
-//			Thread.sleep(50000);
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
-//		}
-//		ua.sendRegisterRequest(new RegistrationCallback() {
-//
-//			@Override
-//			public void onRegistrationSuccess(List<String> registeredContacts) {
-//				System.out.println("Registration 3 success: " + registeredContacts);
-//			}
-//
-//			@Override
-//			public void onRegistrationRenewed() {}
-//
-//			@Override
-//			public void onRegistrationFailed(String reason) {
-//				System.out.println("Registration 3 failed: " + reason);
-//			}
-//
-//		});
-//		System.out.println("Registration 3 sent!");
 //		ua.sendInviteRequest("and", "192.168.25.217:5060", new CallInvitationCallback() {
 //
 //			@Override
