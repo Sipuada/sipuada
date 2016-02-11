@@ -730,6 +730,26 @@ public class UserAgentClient {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String toHeaderValue = toHeader.getAddress().getURI().toString();
 
+		Map<String, String> possiblyFailedAuthRealms = new HashMap<>();
+		ListIterator<?> usedAuthHeaders = request
+				.getHeaders(AuthorizationHeader.NAME);
+		while (usedAuthHeaders.hasNext()) {
+			AuthorizationHeader authHeader = (AuthorizationHeader)
+					usedAuthHeaders.next();
+			possiblyFailedAuthRealms.put(authHeader.getRealm(),
+					authHeader.getNonce());
+		}
+
+		Map<String, String> possiblyFailedProxyAuthRealms = new HashMap<>();
+		ListIterator<?> usedProxyAuthHeaders = request
+				.getHeaders(ProxyAuthorizationHeader.NAME);
+		while (usedProxyAuthHeaders.hasNext()) {
+			ProxyAuthorizationHeader authHeader = (ProxyAuthorizationHeader)
+					usedProxyAuthHeaders.next();
+			possiblyFailedProxyAuthRealms.put(authHeader.getRealm(),
+					authHeader.getNonce());
+		}
+
 		boolean worthAuthenticating = false;
 		ListIterator<?> wwwAuthenticateHeaders = response
 				.getHeaders(WWWAuthenticateHeader.NAME);
@@ -741,9 +761,11 @@ public class UserAgentClient {
 			if (authNoncesCache.containsKey(toHeaderValue)
 					&& authNoncesCache.get(toHeaderValue).containsKey(realm)) {
 				String oldNonce = authNoncesCache.get(toHeaderValue).get(realm);
-				if (oldNonce.equals(nonce)) {
-					authNoncesCache.get(toHeaderValue).remove(realm);
-					continue;
+				if (possiblyFailedAuthRealms.containsKey(realm)) {
+					if (oldNonce.equals(possiblyFailedAuthRealms.get(realm))) {
+						authNoncesCache.get(toHeaderValue).remove(realm);
+						continue;
+					}
 				}
 			}
 			worthAuthenticating = addAuthorizationHeader(request, domainUri,
@@ -763,10 +785,12 @@ public class UserAgentClient {
 			if (proxyAuthNoncesCache.containsKey(toHeaderValue)
 					&& proxyAuthNoncesCache.get(toHeaderValue).containsKey(realm)) {
 				String oldNonce = proxyAuthNoncesCache.get(toHeaderValue).get(realm);
-				if (oldNonce.equals(nonce)) {
-					proxyAuthNoncesCache.get(toHeaderValue).remove(realm);
-					proxyAuthCallIdCache.get(toHeaderValue).remove(realm);
-					continue;
+				if (possiblyFailedProxyAuthRealms.containsKey(realm)) {
+					if (oldNonce.equals(possiblyFailedProxyAuthRealms.get(realm))) {
+						proxyAuthNoncesCache.get(toHeaderValue).remove(realm);
+						proxyAuthCallIdCache.get(toHeaderValue).remove(realm);
+						continue;
+					}
 				}
 			}
 			worthAuthenticating = addProxyAuthorizationHeader(request, domainUri,
