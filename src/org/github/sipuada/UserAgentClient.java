@@ -523,11 +523,28 @@ public class UserAgentClient {
 	protected void processFatalTransportError(IOExceptionEvent exceptionEvent) {
 		logger.debug("Fatal transport error occurred - translated into response " +
 				"with code {}.", Response.SERVICE_UNAVAILABLE);
-		handleResponse(Response.SERVICE_UNAVAILABLE, null, null);
+		Object source = exceptionEvent.getSource();
+		String callIdInAdvance = null;
+		if (source instanceof Dialog) {
+			callIdInAdvance = ((Dialog) source).getCallId().getCallId();
+		}
+		else if (source instanceof ClientTransaction) {
+			ClientTransaction clientTransaction = ((ClientTransaction) source);
+			if (clientTransaction.getDialog() != null) {
+				callIdInAdvance = clientTransaction
+						.getDialog().getCallId().getCallId();
+			}
+		}
+		handleResponse(Response.SERVICE_UNAVAILABLE, null, null, callIdInAdvance);
+	}
+	
+	private void handleResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
+		handleResponse(statusCode, response, clientTransaction, null);
 	}
 
 	private void handleResponse(int statusCode, Response response,
-			ClientTransaction clientTransaction) {
+			ClientTransaction clientTransaction, String callIdInAdvance) {
 		try {
 			if (tryHandlingResponseGenerically(statusCode, response, clientTransaction)) {
 				if (response == null || clientTransaction == null) {
@@ -551,7 +568,8 @@ public class UserAgentClient {
 				}
 			}
 			else {
-				reportResponseError(statusCode, response, clientTransaction);
+				reportResponseError(statusCode, response,
+						clientTransaction, callIdInAdvance);
 			}
 		} catch (ResponseDiscarded requestDiscarded) {
 		} catch (ResponsePostponed requestPostponed) {}
@@ -683,11 +701,24 @@ public class UserAgentClient {
 	}
 
 	private void reportResponseError(int statusCode, Response response,
-			ClientTransaction clientTransaction) {
-		String reasonPhrase = response.getReasonPhrase();
+			ClientTransaction clientTransaction, String callIdInAdvance) {
+		String reasonPhrase = response != null ? response.getReasonPhrase() :
+			clientTransaction == null ? "Fatal error" : "Time out";
 		logger.info("{} response arrived: {}.", statusCode, reasonPhrase);
 		String codeAndReason = String.format("Following response arrived: %d (%s).",
 				statusCode, reasonPhrase);
+		if (clientTransaction == null) {
+			logger.error("A Fatal error occurred.{}", statusCode,
+					callIdInAdvance != null ? "" : " If it was NOT during processing of" +
+							" a REGISTER request, no end-user callback might get fired.");
+			//Just in case this error is associated with a REGISTER or INVITE request,
+			//a RegistrationFailed event and a CallInvitationFailed event are sent.");
+			bus.post(new RegistrationFailed(codeAndReason));
+			if (callIdInAdvance != null) {
+				bus.post(new CallInvitationFailed(codeAndReason, callIdInAdvance));
+			}
+			return;
+		}
 		Request request = clientTransaction.getRequest();
 		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		switch (Constants.getRequestMethod(request.getMethod())) {
@@ -1081,10 +1112,15 @@ public class UserAgentClient {
 			if (dialog != null && !(dialog.getState() == DialogState.EARLY ||
 					dialog.getState() == DialogState.TERMINATED) && shouldSendBye) {
 				sendByeRequest(dialog);
-				throw new ResponsePostponed();
 			}
+			return;
 		}
 		else {
+			if (clientTransaction == null) {
+				//This means a Fatal IO error occurred. Simply return error back to
+				//application layer in this case, as there's nothing this UAC can do.
+				return;
+			}
 			if (response == null) {
 				logger.error("[handleByReschedulingIfApplicable] received NULL " +
 						"Non-Timeout response - this should never happen.");
@@ -1118,7 +1154,7 @@ public class UserAgentClient {
 									"after {} seconds.", request.getMethod(),
 									retryAfterSeconds);
 								reportResponseError(response.getStatusCode(), response,
-										clientTransaction);
+										clientTransaction, null);
 							}
 						} catch (SipException requestCouldNotBeSent) {
 							//Could not reschedule request.
@@ -1127,7 +1163,7 @@ public class UserAgentClient {
 									requestCouldNotBeSent.getMessage(),
 									requestCouldNotBeSent.getCause().getMessage());
 							reportResponseError(response.getStatusCode(), response,
-									clientTransaction);
+									clientTransaction, null);
 						}
 					}
 
@@ -1150,7 +1186,6 @@ public class UserAgentClient {
 		if (dialog != null && !(dialog.getState() == DialogState.EARLY ||
 				dialog.getState() == DialogState.TERMINATED)) {
 			sendByeRequest(dialog);
-			throw new ResponsePostponed();
 		}
 	}
 
