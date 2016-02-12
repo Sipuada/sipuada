@@ -170,19 +170,17 @@ public class UserAgentServer {
 	
 	private boolean requestShouldBeAddressed(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
-		boolean shouldForbid = true;
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String identityUser = username.toLowerCase();
 		String identityHost = localIp;
 		if (toHeader != null) {
+			boolean shouldForbid = true;
 			Address toAddress = toHeader.getAddress();
 			URI toUri = toAddress.getURI();
 			String[] toUriParts = toUri.toString().split("@");
 			if (toUriParts.length > 1) {
 				String toUriUser = toUriParts[0].split(":")[1].trim().toLowerCase();
-				String toUriHost = toUriParts[1].split(":")[0].trim().toLowerCase();
-				if (toUriUser.equals(identityUser) &&
-						toUriHost.equals(identityHost)) {
+				if (toUriUser.equals(identityUser)) {
 					shouldForbid = false;
 				}
 				else {
@@ -191,18 +189,15 @@ public class UserAgentServer {
 							toUri, identityUser, identityHost);
 				}
 			}
-		}
-		else {
-			logger.error("Incoming request {} contains no 'To' header.", method);
-		}
-		if (shouldForbid) {
-			if (doSendResponse(Response.FORBIDDEN, method,
-					request, serverTransaction) != null) {
-				logger.info("{} response sent.", Response.FORBIDDEN);
-				return false;
-			}
-			else {
-				throw new RequestCouldNotBeAddressed();
+			if (shouldForbid) {
+				if (doSendResponse(Response.FORBIDDEN, method,
+						request, serverTransaction) != null) {
+					logger.info("{} response sent.", Response.FORBIDDEN);
+					return false;
+				}
+				else {
+					throw new RequestCouldNotBeAddressed();
+				}
 			}
 		}
 		URI requestUri = request.getRequestURI();
