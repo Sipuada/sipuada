@@ -1,6 +1,7 @@
 package org.github.sipuada;
 
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -25,6 +26,7 @@ import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.exceptions.SipuadaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +53,7 @@ import android.javax.sip.SipStack;
 import android.javax.sip.Timeout;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
+import android.javax.sip.TransportAlreadySupportedException;
 import android.javax.sip.TransportNotSupportedException;
 import android.javax.sip.address.AddressFactory;
 import android.javax.sip.header.CallIdHeader;
@@ -61,8 +64,6 @@ import android.javax.sip.message.Request;
 public class UserAgent implements SipListener {                                           
 
 	private final Logger logger = LoggerFactory.getLogger(UserAgent.class);
-	private final int MIN_PORT = 5000;
-	private final int MAX_PORT = 50600;
 
 	private class Operation {
 
@@ -102,15 +103,15 @@ public class UserAgent implements SipListener {
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
-	public UserAgent(String username, String domain, String password, String localIp,
-			int localPort, String transport, SipuadaListener sipuadaListener) {
+	public UserAgent(SipuadaListener sipuadaListener, String username, String primaryHost,
+			String password, String... localAddresses) throws SipuadaException {
 		listener = sipuadaListener;
 		eventBus.register(this);
 		MessageFactory messenger;
 		HeaderFactory headerMaker;
 		AddressFactory addressMaker;
 		Properties properties = new Properties();
-		properties.setProperty("android.javax.sip.STACK_NAME", "UserAgent");
+		properties.setProperty("android.javax.sip.STACK_NAME", "SipuadaUserAgentv0");
 		SipStack stack;
 		try {
 			SipFactory factory = SipFactory.getInstance();
@@ -118,33 +119,92 @@ public class UserAgent implements SipListener {
 			messenger = factory.createMessageFactory();
 			headerMaker = factory.createHeaderFactory();
 			addressMaker = factory.createAddressFactory();
-			ListeningPoint listeningPoint;
-			boolean listeningPointBound = false;
-			while (!listeningPointBound) {
+
+			List<ListeningPoint> listeningPoints = new LinkedList<>();
+			for (String localAddress : localAddresses) {
+				String localIp = null, localPort = null, transport = null;
 				try {
-					listeningPoint = stack
-							.createListeningPoint(localIp, localPort, transport);
-					listeningPointBound = true;
-					try {
-						provider = stack.createSipProvider(listeningPoint);
-						uac = new UserAgentClient(eventBus, provider, messenger,
-								headerMaker, addressMaker, username, domain, password,
-								localIp, Integer.toString(localPort), transport);
-						uas = new UserAgentServer(eventBus, provider, messenger,
-								headerMaker, addressMaker, username, localIp,
-								Integer.toString(localPort));
-						try {
-							provider.addSipListener(this);
-						} catch (TooManyListenersException ignore) {}
-						initSipuadaListener(listener);
-					} catch (ObjectInUseException e) {
-						e.printStackTrace();
-					}
-				} catch (TransportNotSupportedException ignore) {
-				} catch (InvalidArgumentException portUsed) {
-					localPort = (int) ((MAX_PORT - MIN_PORT) * Math.random()) + MIN_PORT;
+					localIp = localAddress.split(":")[0];
+					localPort = localAddress.split(":")[1].split("/")[0];
+					transport = localAddress.split("/")[1];
+					ListeningPoint listeningPoint = stack.createListeningPoint(localIp,
+							Integer.parseInt(localPort), transport);
+					listeningPoints.add(listeningPoint);
+				} catch (IndexOutOfBoundsException malformedAddress) {
+					logger.error("Malformed address: {}.", localAddress);
+					throw new SipuadaException("Malformed address provided: " + localAddress,
+							malformedAddress);
+				} catch (NumberFormatException invalidPort) {
+					logger.error("Invalid port for address {}: {}.", localAddress, localPort);
+					throw new SipuadaException("Invalid port provided for address "
+							+ localAddress + ": " + localPort, invalidPort);
+				} catch (TransportNotSupportedException invalidTransport) {
+					logger.error("Invalid transport for address {}: {}.", localAddress, transport);
+					throw new SipuadaException("Invalid transport provided for address "
+							+ localAddress + ": " + transport, invalidTransport);
+				} catch (InvalidArgumentException invalidAddress) {
+					logger.error("Invalid address provided: {}.", localAddress);
+					throw new SipuadaException("Invalid address provided: " + localAddress,
+							invalidAddress);
 				}
 			}
+			if (listeningPoints.isEmpty()) {
+				logger.error("No local address provided.");
+				throw new SipuadaException("No local address provided.", null);
+			}
+
+			try {
+				provider = stack.createSipProvider(listeningPoints.get(0));
+				for (int i=1; i<listeningPoints.size(); i++) {
+					ListeningPoint listeningPoint = listeningPoints.get(i);					
+					try {
+						provider.addListeningPoint(listeningPoint);
+					} catch (TransportAlreadySupportedException invalidTransport) {
+						logger.error("Cannot use {} because another address provided " +
+								"already supports the {} transport protocol.",
+								listeningPoint.toString(), listeningPoint.getTransport());
+						throw new SipuadaException("Cannot use " + listeningPoint.toString() +
+							" because another address provided already supports the " +
+							listeningPoint.getTransport() + " transport protocol.",
+							invalidTransport);
+					}
+				}
+			} catch (ObjectInUseException ignore) {}
+
+			Comparator<ListeningPoint> addressComparator = new Comparator<ListeningPoint>() {
+				
+				private String[] priorityTransports = {"TLS", "TCP", "UDP"};
+
+				@Override
+				public int compare(ListeningPoint thisAddress, ListeningPoint thatAddress) {
+					String thisTransport = thisAddress.getTransport().toUpperCase(); 
+					String thatTransport = thatAddress.getTransport().toUpperCase();
+					if (thisTransport.equals(thatTransport)) {
+						return 0;
+					}
+					for (String transport : priorityTransports) {
+						if (thisTransport.equals(transport)) {
+							return -1;
+						}
+						else if (thatTransport.equals(transport)) {
+							return 1;
+						}
+					}
+					return 0;
+				}
+
+			};
+
+			uac = new UserAgentClient(eventBus, provider, messenger, headerMaker,
+					addressMaker, listeningPoints, addressComparator,
+					username, primaryHost, password);
+			uas = new UserAgentServer(eventBus, provider, messenger, headerMaker,
+					addressMaker, listeningPoints, addressComparator, username);
+			try {
+				provider.addSipListener(this);
+			} catch (TooManyListenersException ignore) {}
+			initSipuadaListener(listener);
+
 		} catch (PeerUnavailableException ignore) {}
 	}
 
@@ -715,8 +775,7 @@ public class UserAgent implements SipListener {
 
 	static UserAgent ua;
 	public static void main(String[] args) {
-		ua = new UserAgent("renan", "192.168.130.207:5060", "renan",
-				"192.168.130.207", 50550, "TCP", new SipuadaListener() {
+		ua = new UserAgent(new SipuadaListener() {
 
 					@Override
 					public boolean onCallInvitationArrived(String callId) {
@@ -752,7 +811,8 @@ public class UserAgent implements SipListener {
 						System.out.println("Current call finished: " + callId);
 					}
 
-				}
+				},
+			"renan", "192.168.130.207:5060", "renan", "192.168.130.207:50550/TCP"
 		);
 		ua.sendRegisterRequest(new RegistrationCallback() {
 

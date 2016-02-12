@@ -4,10 +4,10 @@ public class Sipuada implements SipuadaApi {
 
 	private final UserAgent userAgent;
 
-	public Sipuada(String sipUsername, String sipDomain, String sipPassword,
-			String localIp, int localPort, String transport, SipuadaListener listener) {
-		userAgent = new UserAgent(sipUsername, sipDomain, sipPassword,
-				localIp, localPort, transport, listener);
+	public Sipuada(SipuadaListener listener, String sipUsername,
+			String sipPrimaryHost, String sipPassword, String... localAddresses) {
+		userAgent = new UserAgent(listener, sipUsername, sipPrimaryHost,
+				sipPassword, localAddresses);
 	}
 
 	@Override

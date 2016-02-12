@@ -2,6 +2,7 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -11,7 +12,7 @@ import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
-import org.github.sipuada.events.RequestCouldNotBeAddressed;
+import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,6 +20,7 @@ import com.google.common.eventbus.EventBus;
 
 import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
+import android.javax.sip.ListeningPoint;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipException;
@@ -51,21 +53,20 @@ public class UserAgentServer {
 	private final AddressFactory addressMaker;
 
 	private final String username;
-	private final String localIp;
-	private final int localPort;
+	private final List<ListeningPoint> localAddresses = new LinkedList<>();
 
 	public UserAgentServer(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
-			AddressFactory addressFactory, String... identity) {
+			AddressFactory addressFactory, List<ListeningPoint> addresses,
+			Comparator<ListeningPoint> addressComparator, String... identity) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
 		username = identity.length > 0 && identity[0] != null ? identity[0] : "";
-		localIp = identity.length > 1 && identity[1] != null ? identity[1] : "";
-		localPort = identity.length > 2 && identity[2] != null ?
-				Integer.parseInt(identity[2]) : 5060;
+		localAddresses.addAll(addresses);
+		Collections.sort(localAddresses, addressComparator);
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -172,7 +173,8 @@ public class UserAgentServer {
 			ServerTransaction serverTransaction) {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String identityUser = username.toLowerCase();
-		String identityHost = localIp;
+		ListeningPoint priorityLocalAddress = localAddresses.get(0);
+		String identityHost = priorityLocalAddress.getIPAddress();
 		if (toHeader != null) {
 			boolean shouldForbid = true;
 			Address toAddress = toHeader.getAddress();
@@ -302,6 +304,9 @@ public class UserAgentServer {
 
 	public boolean sendAcceptResponse(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
+		ListeningPoint priorityLocalAddress = localAddresses.get(0);
+		String localIp = priorityLocalAddress.getIPAddress();
+		int localPort = priorityLocalAddress.getPort();
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
@@ -358,6 +363,9 @@ public class UserAgentServer {
 			withinDialog = false;
 			try {
 				newServerTransaction = provider.getNewServerTransaction(request);
+				if (method == RequestMethod.INVITE) {
+					newServerTransaction.enableRetransmissionAlerts();
+				}
 			} catch (TransactionAlreadyExistsException requestIsRetransmit) {
 				//This may happen if UAS got a retransmit of already pending request.
 				logger.debug("{} response could not be sent to {} request: {}.",
@@ -370,6 +378,11 @@ public class UserAgentServer {
 				logger.debug("{} response could not be sent to {} request: {}.",
 						statusCode, request.getMethod(),
 						invalidTransaction.getMessage());
+				return null;
+			} catch (SipException couldNotEnableRetransmissionAlerts) {
+				logger.debug("* {} could not be sent to {} request: {}.",
+						statusCode, request.getMethod(),
+						couldNotEnableRetransmissionAlerts.getMessage());
 				return null;
 			}
 		}
