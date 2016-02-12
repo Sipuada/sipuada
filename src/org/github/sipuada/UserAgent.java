@@ -463,10 +463,13 @@ public class UserAgent implements SipListener {
 
 	private synchronized void inviteOperationFinished(String eventBusSubscriberId,
 			String callId) {
-		eventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
+		Object eventBusSubscriber = eventBusSubscribers.remove(eventBusSubscriberId);
+		if (eventBusSubscriber != null) {
+			eventBus.unregister(eventBusSubscriber);
+		}
 		operationsInProgress.put(RequestMethod.INVITE, false);
 	}
-	
+
 	private void scheduleNextInviteRequest() {
 		synchronized (postponedOperations) {
 			Iterator<Operation> iterator = postponedOperations.iterator();
@@ -695,11 +698,7 @@ public class UserAgent implements SipListener {
 					Dialog dialog = iterator.next();
 					if (dialog.getCallId().getCallId().equals(callId)) {
 						iterator.remove();
-						boolean byeSent = uac.sendByeRequest(dialog);
-						if (byeSent) {
-							listener.onCallFinished(callId);
-						}
-						return byeSent;
+						return uac.sendByeRequest(dialog);
 					}
 				}
 			} finally {
