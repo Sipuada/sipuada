@@ -1,4 +1,5 @@
 package org.github.sipuadaui;
+
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -13,7 +14,6 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.JButton;
 import javax.swing.JPasswordField;
 import javax.swing.JTextArea;
-callId
 import org.github.sipuada.Sipuada;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
@@ -34,6 +34,7 @@ public class SIPClientMain implements SipuadaListener {
 	private JButton btRejectCall;
 	private boolean isBusy = false;
 	private JButton btnCancel;
+	private JButton btnEndCall;
 
 	/**
 	 * Launch the application.
@@ -66,18 +67,17 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	private void setUPCallButton(JButton callButton) {
-		
+
 		callButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if(sipuada == null){
+				if (sipuada == null) {
 					textArea.setText(textArea.getText()
-							+ System.getProperty("line.separator")
-							+ " - "
+							+ System.getProperty("line.separator") + " - "
 							+ " Required to register!");
 					btnCancel.setEnabled(true);
 				}
-				
+
 				sipuada.inviteToCall(callerUserTextField.getText(),
 						callerDomainTextField.getText(),
 						new CallInvitationCallback() {
@@ -88,7 +88,8 @@ public class SIPClientMain implements SipuadaListener {
 										+ System.getProperty("line.separator")
 										+ " - "
 										+ " Waiting For Call InvitationAnswer ...");
-									currentCallID = callId;
+								currentCallID = callId;
+								btnCancel.setEnabled(true);
 							}
 
 							@Override
@@ -97,7 +98,8 @@ public class SIPClientMain implements SipuadaListener {
 										+ System.getProperty("line.separator")
 										+ " - " + " Ringing ...");
 								btnCancel.setEnabled(false);
-
+								currentCallID = callId;
+								btnCancel.setEnabled(true);
 							}
 
 							@Override
@@ -108,6 +110,18 @@ public class SIPClientMain implements SipuadaListener {
 								btnCancel.setEnabled(false);
 							}
 						});
+			}
+		});
+	}
+	
+	
+	
+	private void setEndCallButton(JButton endCall) {
+		endCall.addActionListener(new ActionListener() {
+			
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				sipuada.finishCall(currentCallID);
 			}
 		});
 	}
@@ -176,12 +190,11 @@ public class SIPClientMain implements SipuadaListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				sipuada.cancelCallInvitation(currentCallID);
-				//TODO
+				// TODO
 			}
 		});
 	}
 
-	
 	/**
 	 * Initialize the contents of the frame.
 	 */
@@ -190,7 +203,7 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.setTitle("SIP User Agent - Sipuada");
 		frmSipuada.setBounds(100, 100, 800, 600);
 		frmSipuada.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		
+
 		JLabel lblNewLabel = new JLabel("Domain");
 
 		registrarDomainTextField = new JTextField();
@@ -207,7 +220,8 @@ public class SIPClientMain implements SipuadaListener {
 						"[15px][19px][][][][grow][][]"));
 		frmSipuada.getContentPane().add(registrarUserNameTextField,
 				"cell 1 1,growx,aligny top");
-		frmSipuada.getContentPane().add(label_1, "cell 2 0,alignx left,aligny top");
+		frmSipuada.getContentPane().add(label_1,
+				"cell 2 0,alignx left,aligny top");
 		frmSipuada.getContentPane().add(registrarDomainTextField,
 				"cell 0 1,growx,aligny top");
 		frmSipuada.getContentPane().add(lblNewLabel,
@@ -215,7 +229,8 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(label, "cell 1 0");
 
 		passwordField = new JPasswordField();
-		frmSipuada.getContentPane().add(passwordField, "cell 2 1,growx,aligny top");
+		frmSipuada.getContentPane().add(passwordField,
+				"cell 2 1,growx,aligny top");
 
 		JButton btnRegister = new JButton("Register");
 		setUpRegisterButton(btnRegister);
@@ -228,7 +243,8 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(lblNewLabel_1, "cell 1 2");
 
 		callerDomainTextField = new JTextField();
-		frmSipuada.getContentPane().add(callerDomainTextField, "cell 0 3,growx");
+		frmSipuada.getContentPane()
+				.add(callerDomainTextField, "cell 0 3,growx");
 		callerDomainTextField.setColumns(10);
 
 		callerUserTextField = new JTextField();
@@ -255,14 +271,19 @@ public class SIPClientMain implements SipuadaListener {
 		btRejectCall.setEnabled(false);
 		setUpRejectCallButton(btRejectCall);
 		frmSipuada.getContentPane().add(btRejectCall, "cell 1 7");
-		
+		setUpCancelButton(btRejectCall);
+
+		btnEndCall = new JButton("End Call");
+		frmSipuada.getContentPane().add(btnEndCall, "cell 2 7");
+		btnEndCall.setEnabled(false);
+		setEndCallButton(btnEndCall);
+
+
 		btnCancel = new JButton("Cancel");
 		btnCancel.setEnabled(false);
-		setUpCancelButton(btRejectCall);
-		frmSipuada.getContentPane().add(btnCancel, "cell 2 7");
+		frmSipuada.getContentPane().add(btnCancel, "cell 4 7");
 	}
 
-	
 	@Override
 	public boolean onCallInvitationArrived(String callId) {
 		textArea.setText(textArea.getText()
@@ -271,6 +292,7 @@ public class SIPClientMain implements SipuadaListener {
 		currentCallID = callId;
 		btAcceptCall.setEnabled(true);
 		btRejectCall.setEnabled(true);
+
 		return isBusy;
 	}
 
@@ -288,7 +310,8 @@ public class SIPClientMain implements SipuadaListener {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Invitation Failed.");
-
+		btAcceptCall.setEnabled(false);
+		btRejectCall.setEnabled(false);
 	}
 
 	@Override
@@ -296,6 +319,10 @@ public class SIPClientMain implements SipuadaListener {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Established.");
+		btAcceptCall.setEnabled(false);
+		btRejectCall.setEnabled(false);
+		btnCancel.setEnabled(false);
+		btnEndCall.setEnabled(true);
 
 	}
 
@@ -306,6 +333,6 @@ public class SIPClientMain implements SipuadaListener {
 				+ " Call Finished.");
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
-
+		btnEndCall.setEnabled(false);
 	}
 }
