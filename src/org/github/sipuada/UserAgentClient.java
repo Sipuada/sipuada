@@ -17,6 +17,7 @@ import java.util.TimerTask;
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
 import org.github.sipuada.events.CallInvitationAccepted;
+import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
@@ -447,7 +448,12 @@ public class UserAgentClient {
 					case TransactionState._PROCEEDING:
 						try {
 							if (doSendRequest(cancelRequest, null, null)) {
+								CallIdHeader callIdHeader = (CallIdHeader) cancelRequest
+										.getHeader(CallIdHeader.NAME);
+								String callId = callIdHeader.getCallId();
 								logger.debug("{} request sent.", RequestMethod.CANCEL);
+								bus.post(new CallInvitationCanceled("Callee canceled " +
+										"outgoing INVITE.", callId));
 							}
 							else {
 								logger.error("Could not send this {} request.",
@@ -459,6 +465,8 @@ public class UserAgentClient {
 									requestCouldNotBeSent.getMessage(),
 									requestCouldNotBeSent.getCause().getMessage());
 						}
+						timer.cancel();
+						break;
 					case TransactionState._COMPLETED:
 					case TransactionState._TERMINATED:
 						timer.cancel();
@@ -487,9 +495,17 @@ public class UserAgentClient {
 	protected void processResponse(ResponseEvent responseEvent) {
 		ClientTransaction clientTransaction = responseEvent.getClientTransaction();
 		if (clientTransaction != null) {
+			RequestMethod method = RequestMethod.UNKNOWN;
+			Request request = clientTransaction.getRequest();
+			if (request != null) {
+				try {
+					method = RequestMethod.valueOf(request.getMethod());
+				} catch (IllegalArgumentException ignore) {}
+			}
 			Response response = responseEvent.getResponse();
 			int statusCode = response.getStatusCode();
-			logger.debug("Response arrived to UAC with code {}.", statusCode);
+			logger.debug("Response arrived to UAC for {} request with code {}.",
+					method, statusCode);
 			handleResponse(statusCode, response, clientTransaction);
 		}
 		else {
@@ -721,7 +737,11 @@ public class UserAgentClient {
 					bus.post(new CallInvitationFailed(codeAndReason, callId));
 				}
 				break;
+			case CANCEL:
+				bus.post(new CallInvitationFailed(codeAndReason, callId));
+			case BYE:
 			default:
+				bus.post(new EstablishedCallFinished(callId));
 				break;
 		}
 	}
