@@ -669,8 +669,7 @@ public class UserAgentClient {
 				handleByTerminatingIfWithinDialog(clientTransaction);
 				return false;
 			case Response.REQUEST_TERMINATED:
-				handleThisRequestTerminated(clientTransaction);
-				return false;
+				return handleThisRequestTerminated(clientTransaction);
 		}
 		switch (Constants.getResponseClass(statusCode)) {
 			case PROVISIONAL:
