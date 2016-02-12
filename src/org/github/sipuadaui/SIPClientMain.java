@@ -132,10 +132,12 @@ public class SIPClientMain implements SipuadaListener {
 			public void actionPerformed(ActionEvent e) {
 				if (sipuada == null) {
 					sipuada = new Sipuada(SIPClientMain.this,
-							registrarUserNameTextField.getText(), registrarDomainTextField.getText()
-							, passwordField.getText(), Util.getIPAddress(true) + ":55000/TCP");
+							registrarUserNameTextField.getText(),
+							registrarDomainTextField.getText(), passwordField
+									.getText(), Util.getIPAddress(true)
+									+ ":55000/TCP");
 				}
-			sipuada.register(new RegistrationCallback() {
+				sipuada.register(new RegistrationCallback() {
 					@Override
 					public void onRegistrationSuccess(
 							List<String> registeredContacts) {
@@ -298,6 +300,7 @@ public class SIPClientMain implements SipuadaListener {
 				+ " Call Invitation Canceled.");
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
+		btnCancel.setEnabled(false);
 	}
 
 	@Override
@@ -307,6 +310,7 @@ public class SIPClientMain implements SipuadaListener {
 				+ " Call Invitation Failed: " + reason);
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
+		btnCancel.setEnabled(false);
 	}
 
 	@Override
