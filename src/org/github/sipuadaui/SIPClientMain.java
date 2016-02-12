@@ -190,7 +190,6 @@ public class SIPClientMain implements SipuadaListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				sipuada.cancelCallInvitation(currentCallID);
-				// TODO
 			}
 		});
 	}
@@ -271,7 +270,6 @@ public class SIPClientMain implements SipuadaListener {
 		btRejectCall.setEnabled(false);
 		setUpRejectCallButton(btRejectCall);
 		frmSipuada.getContentPane().add(btRejectCall, "cell 1 7");
-		setUpCancelButton(btRejectCall);
 
 		btnEndCall = new JButton("End Call");
 		frmSipuada.getContentPane().add(btnEndCall, "cell 2 7");
@@ -280,6 +278,7 @@ public class SIPClientMain implements SipuadaListener {
 
 
 		btnCancel = new JButton("Cancel");
+		setUpCancelButton(btnCancel);
 		btnCancel.setEnabled(false);
 		frmSipuada.getContentPane().add(btnCancel, "cell 4 7");
 	}
