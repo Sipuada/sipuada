@@ -13,7 +13,7 @@ import net.miginfocom.swing.MigLayout;
 import javax.swing.JButton;
 import javax.swing.JPasswordField;
 import javax.swing.JTextArea;
-
+callId
 import org.github.sipuada.Sipuada;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
@@ -60,12 +60,13 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	private void setDefautValues() {
-		registrarDomainTextField.setText("192.168.130.126:5060");
-		registrarUserNameTextField.setText("6001");
-		passwordField.setText("6001");
+		registrarDomainTextField.setText("192.168.130.207:5060");
+		registrarUserNameTextField.setText("renan");
+		passwordField.setText("renan");
 	}
 
 	private void setUPCallButton(JButton callButton) {
+		
 		callButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -87,7 +88,7 @@ public class SIPClientMain implements SipuadaListener {
 										+ System.getProperty("line.separator")
 										+ " - "
 										+ " Waiting For Call InvitationAnswer ...");
-							
+									currentCallID = callId;
 							}
 
 							@Override
@@ -267,6 +268,7 @@ public class SIPClientMain implements SipuadaListener {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Invitation Arrived.");
+		currentCallID = callId;
 		btAcceptCall.setEnabled(true);
 		btRejectCall.setEnabled(true);
 		return isBusy;
