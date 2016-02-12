@@ -267,6 +267,7 @@ public class UserAgent implements SipListener {
 				String transactionCallId = callIdHeader.getCallId();
 				if (transactionCallId.equals(callId)) {
 					if (shouldTerminate) {
+						inviteOperationFinished(eventBusSubscriberId, callId);
 						uas.doTerminateCanceledInvite(request, serverTransaction);
 					}
 					iterator.remove();
