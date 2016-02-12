@@ -416,9 +416,10 @@ public class UserAgentClient {
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
-		if (!clientTransaction.getRequest().getMethod().equals(RequestMethod.INVITE)) {
+		if (!clientTransaction.getRequest().getMethod()
+				.equals(RequestMethod.INVITE.toString())) {
 			//This method is meant for canceling INVITE requests only.
-			logger.debug("[sendCancelRequest(clientTransaction)] method forbidden for" +
+			logger.debug("[sendCancelRequest(clientTransaction)] method forbidden for " +
 					"{} requests.", clientTransaction.getRequest().getMethod());
 			//No need for caller to wait for remote responses.
 			return false;
