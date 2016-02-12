@@ -1,4 +1,4 @@
-package org.github.sipuada.events;
+package org.github.sipuada.exceptions;
 
 public class RequestCouldNotBeAddressed extends Error {
 

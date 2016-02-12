@@ -2,6 +2,7 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -25,8 +26,8 @@ import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
-import org.github.sipuada.events.ResponseDiscarded;
-import org.github.sipuada.events.ResponsePostponed;
+import org.github.sipuada.exceptions.ResponseDiscarded;
+import org.github.sipuada.exceptions.ResponsePostponed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,7 @@ import android.javax.sip.Dialog;
 import android.javax.sip.DialogState;
 import android.javax.sip.IOExceptionEvent;
 import android.javax.sip.InvalidArgumentException;
+import android.javax.sip.ListeningPoint;
 import android.javax.sip.ResponseEvent;
 import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
@@ -87,9 +89,7 @@ public class UserAgentClient {
 	private final String username;
 	private final String primaryHost;
 	private final String password;
-	private final String localIp;
-	private final int localPort;
-	private final String transport;
+	private final List<ListeningPoint> localAddresses = new LinkedList<>();
 	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
@@ -100,19 +100,18 @@ public class UserAgentClient {
 
 	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
-			AddressFactory addressFactory, String... credentials) {
+			AddressFactory addressFactory, List<ListeningPoint> addresses,
+			Comparator<ListeningPoint> addressComparator, String... credentials) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
+		localAddresses.addAll(addresses);
+		Collections.sort(localAddresses, addressComparator);
 		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
 		primaryHost = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
 		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
-		localIp = credentials.length > 3 && credentials[3] != null ? credentials[3] : "";
-		localPort = credentials.length > 4 && credentials[4] != null ?
-				Integer.parseInt(credentials[4]) : 5060;
-		transport = credentials.length > 5 && credentials[5] != null ? credentials[5] : "";
 	}
 
 	public boolean sendRegisterRequest() {
@@ -133,26 +132,22 @@ public class UserAgentClient {
 		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
 		long cseq = registerCSeqs.get(requestUri);
 		registerCSeqs.put(requestUri, cseq + 1);
-
-		SipURI contactUri;
-		try {
-			contactUri = addressMaker.createSipURI(username, localIp);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create the contact URI for {} at {}." +
-					"[username] must be a valid id, [localIp] must be a valid " +
-					"IP address: {}", username, localIp, parseException.getMessage());
-			//No need for caller to wait for remote responses.
-			return false;
+		
+		List<ContactHeader> contactHeaders = new LinkedList<>();
+		for (ListeningPoint localAddress : localAddresses) {
+			SipURI contactUri;
+			try {
+				contactUri = addressMaker.createSipURI(username,
+						localAddress.getIPAddress());
+				contactUri.setPort(localAddress.getPort());
+				Address contactAddress = addressMaker.createAddress(contactUri);
+				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+				try {
+					contactHeader.setExpires(3600);
+				} catch (InvalidArgumentException ignore) {}
+				contactHeaders.add(contactHeader);
+			} catch (ParseException ignore) {}
 		}
-		contactUri.setPort(localPort);
-		Address contactAddress = addressMaker.createAddress(contactUri);
-		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-		try {
-			contactHeader.setExpires(3600);
-		} catch (InvalidArgumentException ignore) {}
-
-		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
-				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
 
 		//TODO *IF* request is a REGISTER, keep in mind that:
 		/*
@@ -166,7 +161,8 @@ public class UserAgentClient {
 		 */
 
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
-				requestUri, callIdHeader, cseq, additionalHeaders);
+				requestUri, callIdHeader, cseq, contactHeaders
+				.toArray(new ContactHeader[contactHeaders.size()]));
 	}
 
 	//TODO later implement the OPTIONS method.
@@ -202,6 +198,9 @@ public class UserAgentClient {
 		 * (later support also: the offer/answer model
 		 */
 
+		ListeningPoint priorityLocalAddress = localAddresses.get(0);
+		String localIp = priorityLocalAddress.getIPAddress();
+		int localPort = priorityLocalAddress.getPort();
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
@@ -344,10 +343,11 @@ public class UserAgentClient {
 		else {
 			requestUri = (URI) remoteTargetUri.clone();
 		}
+		ListeningPoint priorityLocalAddress = localAddresses.get(0);
 		ViaHeader viaHeader = null;
 		try {
-			viaHeader = headerMaker
-					.createViaHeader(localIp, localPort, transport, null);
+			viaHeader = headerMaker.createViaHeader(priorityLocalAddress.getIPAddress(),
+					priorityLocalAddress.getPort(), priorityLocalAddress.getTransport(), null);
 			viaHeader.setRPort();
 			final Request request = messenger.createRequest(requestUri, method.toString(),
 					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
