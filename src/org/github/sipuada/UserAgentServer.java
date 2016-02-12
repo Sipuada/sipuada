@@ -51,7 +51,6 @@ public class UserAgentServer {
 	private final AddressFactory addressMaker;
 
 	private final String username;
-	private final String localHost;
 	private final String localIp;
 	private final int localPort;
 
@@ -64,10 +63,9 @@ public class UserAgentServer {
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
 		username = identity.length > 0 && identity[0] != null ? identity[0] : "";
-		localHost = identity.length > 1 && identity[1] != null ? identity[1] : "";
-		localIp = identity.length > 3 && identity[2] != null ? identity[2] : "";
-		localPort = identity.length > 3 && identity[3] != null ?
-				Integer.parseInt(identity[3]) : 5060;
+		localIp = identity.length > 1 && identity[1] != null ? identity[1] : "";
+		localPort = identity.length > 2 && identity[2] != null ?
+				Integer.parseInt(identity[2]) : 5060;
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -175,7 +173,7 @@ public class UserAgentServer {
 		boolean shouldForbid = true;
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String identityUser = username.toLowerCase();
-		String identityHost = localHost.toLowerCase().split(":")[0];
+		String identityHost = localIp;
 		if (toHeader != null) {
 			Address toAddress = toHeader.getAddress();
 			URI toUri = toAddress.getURI();
