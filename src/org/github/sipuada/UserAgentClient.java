@@ -84,7 +84,7 @@ public class UserAgentClient {
 	private final AddressFactory addressMaker;
 
 	private final String username;
-	private final String localHost;
+	private final String primaryHost;
 	private final String password;
 	private final String localIp;
 	private final int localPort;
@@ -106,7 +106,7 @@ public class UserAgentClient {
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
 		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
-		localHost = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
+		primaryHost = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
 		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
 		localIp = credentials.length > 3 && credentials[3] != null ? credentials[3] : "";
 		localPort = credentials.length > 4 && credentials[4] != null ?
@@ -117,10 +117,10 @@ public class UserAgentClient {
 	public boolean sendRegisterRequest() {
 		URI requestUri;
 		try {
-			requestUri = addressMaker.createSipURI(null, localHost);
+			requestUri = addressMaker.createSipURI(null, primaryHost);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create URI for this REGISTER request to {}." +
-					"\nMust be a valid domain or IP address: {}.", localHost,
+					"\nMust be a valid domain or IP address: {}.", primaryHost,
 					parseException.getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
@@ -164,7 +164,7 @@ public class UserAgentClient {
 		 * Contact header so this doesn't apply to us yet.
 		 */
 
-		return sendRequest(RequestMethod.REGISTER, username, localHost,
+		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
 				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
@@ -230,7 +230,7 @@ public class UserAgentClient {
 			URI requestUri, CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
 		try {
-			URI addresserUri = addressMaker.createSipURI(username, localHost);
+			URI addresserUri = addressMaker.createSipURI(username, primaryHost);
 			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteHost);
 			return sendRequest(method, requestUri, addresserUri, addresseeUri, null,
 					callIdHeader, cseq, additionalHeaders);
@@ -239,7 +239,7 @@ public class UserAgentClient {
 					"this {} request from {} at {} to {} at {}." +
 					"\n[username] and [remoteUser] must be valid ids; " +
 					"[localHost] and [remoteHost], valid domains or IP addresses: {}.",
-					method, username, localHost, remoteUser, remoteHost,
+					method, username, primaryHost, remoteUser, remoteHost,
 					parseException.getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
@@ -733,10 +733,10 @@ public class UserAgentClient {
 
 		SipUri hostUri = new SipUri();
 		try {
-			hostUri.setHost(localHost);
+			hostUri.setHost(primaryHost);
 		} catch (ParseException parseException) {
 			logger.error("Could not create the host URI for {}: {}.",
-					localHost, parseException.getMessage());
+					primaryHost, parseException.getMessage());
 			return;
 		}
 
@@ -1288,11 +1288,11 @@ public class UserAgentClient {
 
 		SipUri hostUri = new SipUri();
 		try {
-			hostUri.setHost(localHost);
+			hostUri.setHost(primaryHost);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create the host URI for this {} request." +
 					"\nMust be a valid domain or IP address: {}.", request.getMethod(),
-					localHost, parseException.getMessage());
+					primaryHost, parseException.getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
 		}

@@ -131,8 +131,8 @@ public class UserAgent implements SipListener {
 								headerMaker, addressMaker, username, domain, password,
 								localIp, Integer.toString(localPort), transport);
 						uas = new UserAgentServer(eventBus, provider, messenger,
-								headerMaker, addressMaker, username, domain,
-								localIp, Integer.toString(localPort));
+								headerMaker, addressMaker, username, localIp,
+								Integer.toString(localPort));
 						try {
 							provider.addSipListener(this);
 						} catch (TooManyListenersException ignore) {}
