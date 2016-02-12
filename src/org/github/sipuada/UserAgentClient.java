@@ -725,7 +725,8 @@ public class UserAgentClient {
 				break;
 			case INVITE:
 				if (statusCode == Response.BUSY_HERE ||
-					statusCode == Response.BUSY_EVERYWHERE) {
+					statusCode == Response.BUSY_EVERYWHERE ||
+					statusCode == Response.TEMPORARILY_UNAVAILABLE) {
 					bus.post(new CallInvitationDeclined(codeAndReason, callId));
 				}
 				else {
