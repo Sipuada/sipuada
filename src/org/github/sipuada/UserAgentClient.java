@@ -263,28 +263,7 @@ public class UserAgentClient {
 	}
 
 	public boolean sendByeRequest(Dialog dialog) {
-		SipURI contactUri;
-		try {
-			contactUri = addressMaker.createSipURI(username, localIp);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create the contact URI for {} at {}." +
-					"[username] must be a valid id, [localIp] must be a valid " +
-					"IP address: {}", username, localIp, parseException.getMessage());
-			//No need for caller to wait for remote responses.
-			return false;
-		}
-		contactUri.setPort(localPort);
-		Address contactAddress = addressMaker.createAddress(contactUri);
-		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-		try {
-			contactHeader.setExpires(60);
-		} catch (InvalidArgumentException ignore) {}
-		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
-
-		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
-				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
-		
-		return sendRequest(RequestMethod.BYE, dialog, additionalHeaders);
+		return sendRequest(RequestMethod.BYE, dialog);
 	}
 
 	private boolean sendRequest(RequestMethod method, Dialog dialog,
@@ -320,7 +299,9 @@ public class UserAgentClient {
 		Address from, to;
 		String fromTag, toTag;
 		List<Address> canonRouteSet = new LinkedList<>();
+		final URI remoteTargetUri;
 		if (dialog != null) {
+			remoteTargetUri = dialog.getRemoteTarget().getURI();
 			from = addressMaker.createAddress(dialog.getLocalParty().getURI());
 			fromTag = dialog.getLocalTag();
 			to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
@@ -333,6 +314,7 @@ public class UserAgentClient {
 			}
 		}
 		else {
+			remoteTargetUri = (URI) requestUri.clone();
 			from = addressMaker.createAddress(addresserUri);
 			fromTag = Utils.getInstance().generateTag();
 			to = addressMaker.createAddress(addresseeUri);
@@ -341,9 +323,10 @@ public class UserAgentClient {
 			canonRouteSet.addAll(configuredRouteSet);
 		}
 		List<Address> normalizedRouteSet = new LinkedList<>();
-		URI remoteTargetUri = (URI) requestUri.clone();
+
 		if (!canonRouteSet.isEmpty()) {
 			if (((SipURI)canonRouteSet.get(0).getURI()).hasLrParam()) {
+				requestUri = remoteTargetUri;
 				for (Address address : canonRouteSet) {
 					normalizedRouteSet.add(address);
 				}
@@ -356,6 +339,9 @@ public class UserAgentClient {
 				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
 				normalizedRouteSet.add(remoteTargetAddress);
 			}
+		}
+		else {
+			requestUri = (URI) remoteTargetUri.clone();
 		}
 		ViaHeader viaHeader = null;
 		try {
