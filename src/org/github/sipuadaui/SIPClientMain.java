@@ -114,12 +114,10 @@ public class SIPClientMain implements SipuadaListener {
 			}
 		});
 	}
-	
-	
-	
+
 	private void setEndCallButton(JButton endCall) {
 		endCall.addActionListener(new ActionListener() {
-			
+
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				sipuada.finishCall(currentCallID);
@@ -133,13 +131,11 @@ public class SIPClientMain implements SipuadaListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (sipuada == null) {
-					sipuada = new Sipuada(registrarUserNameTextField.getText(),
-							registrarDomainTextField.getText(), passwordField
-									.getText(), Util.getIPAddress(true), 55000,
-							"TCP", SIPClientMain.this);
+					sipuada = new Sipuada(SIPClientMain.this,
+							registrarUserNameTextField.getText(), registrarDomainTextField.getText()
+							, passwordField.getText(), Util.getIPAddress(true) + ":55000/TCP");
 				}
-
-				sipuada.register(new RegistrationCallback() {
+			sipuada.register(new RegistrationCallback() {
 					@Override
 					public void onRegistrationSuccess(
 							List<String> registeredContacts) {
@@ -277,7 +273,6 @@ public class SIPClientMain implements SipuadaListener {
 		btnEndCall.setEnabled(false);
 		setEndCallButton(btnEndCall);
 
-
 		btnCancel = new JButton("Cancel");
 		setUpCancelButton(btnCancel);
 		btnCancel.setEnabled(false);
@@ -309,7 +304,7 @@ public class SIPClientMain implements SipuadaListener {
 	public void onCallInvitationFailed(String reason, String callId) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
-				+ " Call Invitation Failed: "+reason);
+				+ " Call Invitation Failed: " + reason);
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
 	}
