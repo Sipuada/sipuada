@@ -739,9 +739,11 @@ public class UserAgentClient {
 				break;
 			case CANCEL:
 				bus.post(new CallInvitationFailed(codeAndReason, callId));
+				break;
 			case BYE:
-			default:
 				bus.post(new EstablishedCallFinished(callId));
+				break;
+			default:
 				break;
 		}
 	}
