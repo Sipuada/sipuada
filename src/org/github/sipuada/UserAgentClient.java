@@ -448,12 +448,7 @@ public class UserAgentClient {
 					case TransactionState._PROCEEDING:
 						try {
 							if (doSendRequest(cancelRequest, null, null)) {
-								CallIdHeader callIdHeader = (CallIdHeader) cancelRequest
-										.getHeader(CallIdHeader.NAME);
-								String callId = callIdHeader.getCallId();
 								logger.debug("{} request sent.", RequestMethod.CANCEL);
-								bus.post(new CallInvitationCanceled("Callee canceled " +
-										"outgoing INVITE.", callId));
 							}
 							else {
 								logger.error("Could not send this {} request.",
@@ -1252,14 +1247,19 @@ public class UserAgentClient {
 	}
 
 	private boolean handleThisRequestTerminated(ClientTransaction clientTransaction) {
-		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
+		Request request = clientTransaction.getRequest();
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		switch (Constants.getRequestMethod(request.getMethod())) {
 			case INVITE:
-				logger.info("CANCEL succeded in canceling a call invitation.");
 				//This means a CANCEL succeeded in canceling the original INVITE request.
+				logger.info("CANCEL succeded in canceling a call invitation.");
+				bus.post(new CallInvitationCanceled("Callee canceled " +
+						"outgoing INVITE.", callId, false));
 				return true;
 			case BYE:
-				logger.info("BYE succeded in terminating a call.");
 				//This means a BYE succeeded in terminating a INVITE request within a Dialog.
+				logger.info("BYE succeded in terminating a call.");
 				return true;
 			default:
 				//This should never happen.

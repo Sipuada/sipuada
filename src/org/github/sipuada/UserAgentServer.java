@@ -236,10 +236,15 @@ public class UserAgentServer {
 				request, serverTransaction) != null) {
 			logger.info("{} response sent.", Response.OK);
 			bus.post(new CallInvitationCanceled("Call invitation canceled by the caller " +
-					"or callee took longer than roughly 30 seconds to answer.", callId));
+					"or callee took longer than roughly 30 seconds to answer.", callId, true));
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
+	}
+
+	protected void doTerminateCanceledInvite(Request request, ServerTransaction serverTransaction) {
+		doSendResponse(Response.REQUEST_TERMINATED, RequestMethod.INVITE,
+				request, serverTransaction);
 	}
 
 	private void handleInviteRequest(Request request, ServerTransaction serverTransaction) {
@@ -332,8 +337,8 @@ public class UserAgentServer {
 		if (doSendResponse(Response.BUSY_HERE,
 				method, request, serverTransaction) != null) {
 			logger.info("{} response sent.", Response.BUSY_HERE);
-			bus.post(new CallInvitationCanceled("Call invitation rejected by the callee " +
-					" or callee is currently busy and couldn't take another call.", callId));
+			bus.post(new CallInvitationCanceled("Call invitation rejected by the callee or callee" +
+					" is currently busy and couldn't take another call.", callId, false));
 			return true;
 		}
 		return false;
