@@ -209,8 +209,8 @@ public class UserAgent implements SipListener {
 					@Subscribe
 					public void onEvent(CallInvitationCanceled event) {
 						if (event.getCallId().equals(callId)) {
-							wipeAnswerableInviteOperation(callId,
-									eventBusSubscriberId);
+							wipeAnswerableInviteOperation(callId, eventBusSubscriberId,
+									event.shouldTerminateOriginalInvite());
 							eventBus.unregister(this);
 							listener.onCallInvitationCanceled(event.getReason(),
 									callId);
@@ -241,7 +241,7 @@ public class UserAgent implements SipListener {
 	}
 
 	private synchronized void wipeAnswerableInviteOperation(String callId,
-			String eventBusSubscriberId) {
+			String eventBusSubscriberId, boolean shouldTerminate) {
 		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
 		if (foundSubscriberId == null ||
 				!foundSubscriberId.equals(eventBusSubscriberId)) {
@@ -266,6 +266,9 @@ public class UserAgent implements SipListener {
 						.getHeader(CallIdHeader.NAME);
 				String transactionCallId = callIdHeader.getCallId();
 				if (transactionCallId.equals(callId)) {
+					if (shouldTerminate) {
+						uas.doTerminateCanceledInvite(request, serverTransaction);
+					}
 					iterator.remove();
 					break;
 				}
