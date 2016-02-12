@@ -363,9 +363,9 @@ public class UserAgentServer {
 			withinDialog = false;
 			try {
 				newServerTransaction = provider.getNewServerTransaction(request);
-				if (method == RequestMethod.INVITE) {
+				/*if (method == RequestMethod.INVITE) {
 					newServerTransaction.enableRetransmissionAlerts();
-				}
+				}*/
 			} catch (TransactionAlreadyExistsException requestIsRetransmit) {
 				//This may happen if UAS got a retransmit of already pending request.
 				logger.debug("{} response could not be sent to {} request: {}.",
@@ -379,12 +379,12 @@ public class UserAgentServer {
 						statusCode, request.getMethod(),
 						invalidTransaction.getMessage());
 				return null;
-			} catch (SipException couldNotEnableRetransmissionAlerts) {
+			}/* catch (SipException couldNotEnableRetransmissionAlerts) {
 				logger.debug("* {} could not be sent to {} request: {}.",
 						statusCode, request.getMethod(),
 						couldNotEnableRetransmissionAlerts.getMessage());
 				return null;
-			}
+			}*/
 		}
 		Dialog dialog = newServerTransaction.getDialog();
 		withinDialog &= dialog != null;
