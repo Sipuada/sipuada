@@ -74,6 +74,7 @@ public class SIPClientMain implements SipuadaListener {
 							+ System.getProperty("line.separator")
 							+ " - "
 							+ " Required to register!");
+					btnCancel.setEnabled(true);
 				}
 				
 				sipuada.inviteToCall(callerUserTextField.getText(),
@@ -86,6 +87,7 @@ public class SIPClientMain implements SipuadaListener {
 										+ System.getProperty("line.separator")
 										+ " - "
 										+ " Waiting For Call InvitationAnswer ...");
+							
 							}
 
 							@Override
@@ -93,6 +95,8 @@ public class SIPClientMain implements SipuadaListener {
 								textArea.setText(textArea.getText()
 										+ System.getProperty("line.separator")
 										+ " - " + " Ringing ...");
+								btnCancel.setEnabled(false);
+
 							}
 
 							@Override
@@ -100,6 +104,7 @@ public class SIPClientMain implements SipuadaListener {
 								textArea.setText(textArea.getText()
 										+ System.getProperty("line.separator")
 										+ " - " + "Invitation Declined.");
+								btnCancel.setEnabled(false);
 							}
 						});
 			}
@@ -169,6 +174,7 @@ public class SIPClientMain implements SipuadaListener {
 		btCancel.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
+				sipuada.cancelCallInvitation(currentCallID);
 				//TODO
 			}
 		});
@@ -250,6 +256,7 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(btRejectCall, "cell 1 7");
 		
 		btnCancel = new JButton("Cancel");
+		btnCancel.setEnabled(false);
 		setUpCancelButton(btRejectCall);
 		frmSipuada.getContentPane().add(btnCancel, "cell 2 7");
 	}
