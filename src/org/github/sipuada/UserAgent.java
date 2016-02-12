@@ -195,11 +195,6 @@ public class UserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(CallInvitationArrived event) {
-				//TODO remember, at UAS, to send (180 RINGING) BEFORE posting this event.
-				//That's better done this way since we have no control on how much time would
-				//the onCallInvitationArrived listener take to run, so UAS has to make
-				//sure at least the 180 response is sent back before figuring out
-				//if the application callee is in fact busy.
 				ServerTransaction serverTransaction = event.getServerTransaction();
 				final String callId = event.getCallId();
 				inviteOperationIsAnswerable(eventBusSubscriberId,
@@ -516,6 +511,7 @@ public class UserAgent implements SipListener {
 							@Subscribe
 							public void onEvent(CallInvitationCanceled event) {
 								if (event.getCallId().equals(callId)) {
+									inviteOperationFinished(eventBusSubscriberId, callId);
 									eventBus.unregister(this);
 									listener.onCallInvitationCanceled(event.getReason(),
 											callId);
