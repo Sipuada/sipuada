@@ -1349,7 +1349,9 @@ public class UserAgentClient {
 					}
 				}
 				for (String realm : probableRealms.keySet()) {
-					String thisCallId = dialog.getCallId().getCallId();
+					CallIdHeader callIdHeader = (CallIdHeader) request
+							.getHeader(CallIdHeader.NAME);
+					String thisCallId = callIdHeader.getCallId();
 					String savedCallId = proxyAuthCallIdCache.get(toHeaderValue).get(realm);
 					if (thisCallId.equals(savedCallId)) {
 						addProxyAuthorizationHeader(request, hostUri, toHeaderValue,
