@@ -84,7 +84,7 @@ public class UserAgentClient {
 	private final AddressFactory addressMaker;
 
 	private final String username;
-	private final String localDomain;
+	private final String localHost;
 	private final String password;
 	private final String localIp;
 	private final int localPort;
@@ -106,7 +106,7 @@ public class UserAgentClient {
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
 		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
-		localDomain = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
+		localHost = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
 		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
 		localIp = credentials.length > 3 && credentials[3] != null ? credentials[3] : "";
 		localPort = credentials.length > 4 && credentials[4] != null ?
@@ -117,10 +117,10 @@ public class UserAgentClient {
 	public boolean sendRegisterRequest() {
 		URI requestUri;
 		try {
-			requestUri = addressMaker.createSipURI(null, localDomain);
+			requestUri = addressMaker.createSipURI(null, localHost);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create URI for this REGISTER request to {}." +
-					"\nMust be a valid domain or IP address: {}.", localDomain,
+					"\nMust be a valid domain or IP address: {}.", localHost,
 					parseException.getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
@@ -164,27 +164,27 @@ public class UserAgentClient {
 		 * Contact header so this doesn't apply to us yet.
 		 */
 
-		return sendRequest(RequestMethod.REGISTER, username, localDomain,
+		return sendRequest(RequestMethod.REGISTER, username, localHost,
 				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
 	//TODO later implement the OPTIONS method.
-	//	public void sendOptionsRequest(String remoteUser, String remoteDomain) {
-	//		sendRequest(RequestMethod.OPTIONS, remoteUser, remoteDomain,
+	//	public void sendOptionsRequest(String remoteUser, String remoteHost) {
+	//		sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost,
 	//				...);
 	//	}
 	//TODO when we do it, make sure that no dialog and session state is
 	//messed up with by the flow of incoming responses to this OPTIONS request.
 
-	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
+	public boolean sendInviteRequest(String remoteUser, String remoteHost,
 			CallIdHeader callIdHeader) {
 		URI requestUri;
 		try {
-			requestUri = addressMaker.createSipURI(remoteUser, remoteDomain);
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create URI for this INVITE request " +
-					"to {} at {}.\n[remoteUser] must be a valid id, [remoteDomain] " +
-					"must be a valid IP address: {}.", remoteUser, remoteDomain,
+					"to {} at {}.\n[remoteUser] must be a valid id, [remoteHost] " +
+					"must be a valid IP address: {}.", remoteUser, remoteHost,
 					parseException.getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
@@ -222,24 +222,24 @@ public class UserAgentClient {
 		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
 				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
 
-		return sendRequest(RequestMethod.INVITE, remoteUser, remoteDomain,
+		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost,
 				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
-	private boolean sendRequest(RequestMethod method, String remoteUser, String remoteDomain,
+	private boolean sendRequest(RequestMethod method, String remoteUser, String remoteHost,
 			URI requestUri, CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
 		try {
-			URI addresserUri = addressMaker.createSipURI(username, localDomain);
-			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteDomain);
+			URI addresserUri = addressMaker.createSipURI(username, localHost);
+			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteHost);
 			return sendRequest(method, requestUri, addresserUri, addresseeUri, null,
 					callIdHeader, cseq, additionalHeaders);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create addresser and addressee URIs for " +
 					"this {} request from {} at {} to {} at {}." +
 					"\n[username] and [remoteUser] must be valid ids; " +
-					"[localDomain] and [remoteDomain], valid domains or IP addresses: {}.",
-					method, username, localDomain, remoteUser, remoteDomain,
+					"[localHost] and [remoteHost], valid domains or IP addresses: {}.",
+					method, username, localHost, remoteUser, remoteHost,
 					parseException.getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
@@ -730,12 +730,12 @@ public class UserAgentClient {
 		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
-		SipUri domainUri = new SipUri();
+		SipUri hostUri = new SipUri();
 		try {
-			domainUri.setHost(localDomain);
+			hostUri.setHost(localHost);
 		} catch (ParseException parseException) {
-			logger.error("Could not create the domain URI for {}: {}.",
-					localDomain, parseException.getMessage());
+			logger.error("Could not create the host URI for {}: {}.",
+					localHost, parseException.getMessage());
 			return;
 		}
 
@@ -785,7 +785,7 @@ public class UserAgentClient {
 					}
 				}
 			}
-			worthAuthenticating = addAuthorizationHeader(request, domainUri,
+			worthAuthenticating = addAuthorizationHeader(request, hostUri,
 					toHeaderValue, username, password, realm, nonce);
 			if (!authNoncesCache.containsKey(toHeaderValue)) {
 				authNoncesCache.put(toHeaderValue, new HashMap<String, String>());
@@ -810,7 +810,7 @@ public class UserAgentClient {
 					}
 				}
 			}
-			worthAuthenticating = addProxyAuthorizationHeader(request, domainUri,
+			worthAuthenticating = addProxyAuthorizationHeader(request, hostUri,
 					toHeaderValue, username, password, realm, nonce);
 			if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
 				proxyAuthNoncesCache.put(toHeaderValue, new HashMap<String, String>());
@@ -1285,13 +1285,13 @@ public class UserAgentClient {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String toHeaderValue = toHeader.getAddress().getURI().toString();
 
-		SipUri domainUri = new SipUri();
+		SipUri hostUri = new SipUri();
 		try {
-			domainUri.setHost(localDomain);
+			hostUri.setHost(localHost);
 		} catch (ParseException parseException) {
-			logger.error("Could not properly create the domain URI for this {} request." +
+			logger.error("Could not properly create the host URI for this {} request." +
 					"\nMust be a valid domain or IP address: {}.", request.getMethod(),
-					localDomain, parseException.getMessage());
+					localHost, parseException.getMessage());
 			//No need for caller to wait for remote responses.
 			return false;
 		}
@@ -1304,14 +1304,14 @@ public class UserAgentClient {
 				for (Entry<String, String> entry :
 					authNoncesCache.get(toHeaderValue).entrySet()) {
 					String realm = entry.getKey();
-					String remoteDomain = toHeaderValue.split("@")[1];
-					if (realm.contains(remoteDomain)) {
+					String remoteHost = toHeaderValue.split("@")[1];
+					if (realm.contains(remoteHost)) {
 						String nonce = entry.getValue();
 						probableRealms.put(realm, nonce);
 					}
 				}
 				for (String realm : probableRealms.keySet()) {
-					addAuthorizationHeader(request, domainUri, toHeaderValue,
+					addAuthorizationHeader(request, hostUri, toHeaderValue,
 							toHeaderValue, toHeaderValue, realm, probableRealms.get(realm));
 				}
 			}
@@ -1320,8 +1320,8 @@ public class UserAgentClient {
 				for (Entry<String, String> entry :
 					proxyAuthNoncesCache.get(toHeaderValue).entrySet()) {
 					String realm = entry.getKey();
-					String remoteDomain = toHeaderValue.split("@")[1];
-					if (realm.contains(remoteDomain)) {
+					String remoteHost = toHeaderValue.split("@")[1];
+					if (realm.contains(remoteHost)) {
 						String nonce = entry.getValue();
 						probableRealms.put(realm, nonce);
 					}
@@ -1330,7 +1330,7 @@ public class UserAgentClient {
 					String thisCallId = dialog.getCallId().getCallId();
 					String savedCallId = proxyAuthCallIdCache.get(toHeaderValue).get(realm);
 					if (thisCallId.equals(savedCallId)) {
-						addProxyAuthorizationHeader(request, domainUri, toHeaderValue,
+						addProxyAuthorizationHeader(request, hostUri, toHeaderValue,
 								toHeaderValue, toHeaderValue, realm,
 								probableRealms.get(realm));
 					}
@@ -1372,17 +1372,17 @@ public class UserAgentClient {
 		}
 	}
 
-	private boolean addAuthorizationHeader(Request request, URI domainUri,
+	private boolean addAuthorizationHeader(Request request, URI hostUri,
 			String toHeaderValue, String username, String password,
 			String realm, String nonce) {
 		String responseDigest = AuthorizationDigest.getDigest(username, realm,
-				password, request.getMethod(), domainUri.toString(), nonce);
+				password, request.getMethod(), hostUri.toString(), nonce);
 		AuthorizationHeader authorizationHeader;
 		try {
 			authorizationHeader = headerMaker
 					.createAuthorizationHeader("Digest");
 			authorizationHeader.setAlgorithm("MD5");
-			authorizationHeader.setURI(domainUri);
+			authorizationHeader.setURI(hostUri);
 			authorizationHeader.setUsername(username);
 			authorizationHeader.setRealm(realm);
 			authorizationHeader.setNonce(nonce);
@@ -1398,18 +1398,18 @@ public class UserAgentClient {
 		return true;
 	}
 
-	private boolean addProxyAuthorizationHeader(Request request, URI domainUri,
+	private boolean addProxyAuthorizationHeader(Request request, URI hostUri,
 			String toHeaderValue, String username, String password,
 			String realm, String nonce) {
 		String responseDigest = AuthorizationDigest.getDigest(username, realm,
-				password, request.getMethod(), domainUri.toString(), nonce);
+				password, request.getMethod(), hostUri.toString(), nonce);
 		ProxyAuthorizationHeader proxyAuthorizationHeader;
 		try {
 			proxyAuthorizationHeader = headerMaker
 					.createProxyAuthorizationHeader("Digest");
 			proxyAuthorizationHeader.setAlgorithm("MD5");
-			if (domainUri != null) {
-				proxyAuthorizationHeader.setURI(domainUri);
+			if (hostUri != null) {
+				proxyAuthorizationHeader.setURI(hostUri);
 			}
 			proxyAuthorizationHeader.setUsername(username);
 			proxyAuthorizationHeader.setRealm(realm);

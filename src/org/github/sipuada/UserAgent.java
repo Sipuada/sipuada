@@ -716,8 +716,8 @@ public class UserAgent implements SipListener {
 
 	static UserAgent ua;
 	public static void main(String[] args) {
-		ua = new UserAgent("larson", "192.168.25.217:5060", "larson",
-				"192.168.25.217", 50550, "TCP", new SipuadaListener() {
+		ua = new UserAgent("renan", "192.168.130.207:5060", "renan",
+				"192.168.130.207", 50550, "TCP", new SipuadaListener() {
 
 					@Override
 					public boolean onCallInvitationArrived(String callId) {
@@ -775,7 +775,7 @@ public class UserAgent implements SipListener {
 			Thread.sleep(4000);
 		} catch (InterruptedException ignore) {}
 		System.out.println("Registration 1 sent!");
-		ua.sendInviteRequest("xibaca", "192.168.25.217:5060", new CallInvitationCallback() {
+		ua.sendInviteRequest("xibaca", "192.168.130.207:5060", new CallInvitationCallback() {
 
 			@Override
 			public void onWaitingForCallInvitationAnswer(String callId) {

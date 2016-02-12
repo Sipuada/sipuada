@@ -51,7 +51,7 @@ public class UserAgentServer {
 	private final AddressFactory addressMaker;
 
 	private final String username;
-	private final String localDomain;
+	private final String localHost;
 	private final String localIp;
 	private final int localPort;
 
@@ -64,7 +64,7 @@ public class UserAgentServer {
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
 		username = identity.length > 0 && identity[0] != null ? identity[0] : "";
-		localDomain = identity.length > 1 && identity[1] != null ? identity[1] : "";
+		localHost = identity.length > 1 && identity[1] != null ? identity[1] : "";
 		localIp = identity.length > 3 && identity[2] != null ? identity[2] : "";
 		localPort = identity.length > 3 && identity[3] != null ?
 				Integer.parseInt(identity[3]) : 5060;
@@ -175,17 +175,22 @@ public class UserAgentServer {
 		boolean shouldForbid = true;
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String identityUser = username.toLowerCase();
-		String identityDomain = localDomain.toLowerCase().split(":")[0];
+		String identityHost = localHost.toLowerCase().split(":")[0];
 		if (toHeader != null) {
 			Address toAddress = toHeader.getAddress();
 			URI toUri = toAddress.getURI();
 			String[] toUriParts = toUri.toString().split("@");
 			if (toUriParts.length > 1) {
 				String toUriUser = toUriParts[0].split(":")[1].trim().toLowerCase();
-				String toUriDomain = toUriParts[1].split(":")[0].trim().toLowerCase();
+				String toUriHost = toUriParts[1].split(":")[0].trim().toLowerCase();
 				if (toUriUser.equals(identityUser) &&
-						toUriDomain.equals(identityDomain)) {
+						toUriHost.equals(identityHost)) {
 					shouldForbid = false;
+				}
+				else {
+					logger.info("Request destined to (To Header = {}) arrived but this UAC" +
+							" is bound to {}@{}, so about to respond with 403 Forbidden.",
+							toUri, identityUser, identityHost);
 				}
 			}
 		}
@@ -207,10 +212,15 @@ public class UserAgentServer {
 		String[] requestUriParts = requestUri.toString().split("@");
 		if (requestUriParts.length > 1) {
 			String requestUriUser = requestUriParts[0].split(":")[1].trim().toLowerCase();
-			String requestUriDomain = requestUriParts[1].split(":")[0].trim().toLowerCase();
+			String requestUriHost = requestUriParts[1].split(":")[0].trim().toLowerCase();
 			if (requestUriUser.equals(identityUser) &&
-					requestUriDomain.equals(identityDomain)) {
+					requestUriHost.equals(identityHost)) {
 				shouldNotFound = false;
+			}
+			else {
+				logger.info("Request destined to (Request URI = {}) arrived but this UAC" +
+						" is bound to {}@{}, so about to respond with 404 Not Found.",
+						requestUri, identityUser, identityHost);
 			}
 		}
 		if (shouldNotFound) {
