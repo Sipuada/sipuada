@@ -133,10 +133,10 @@ public class SIPClientMain implements SipuadaListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (sipuada == null) {
-					sipuada = new Sipuada(registrarUserNameTextField.getText(),
+					sipuada = new Sipuada(SIPClientMain.this,
+							registrarUserNameTextField.getText(),
 							registrarDomainTextField.getText(), passwordField
-									.getName(), Util.getIPAddress(true), 55000,
-							"TCP", SIPClientMain.this);
+									.getName(), Util.getIPAddress(true) + "55000/TCP");
 				}
 
 				sipuada.register(new RegistrationCallback() {
