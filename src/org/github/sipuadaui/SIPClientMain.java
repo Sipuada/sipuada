@@ -64,6 +64,7 @@ public class SIPClientMain implements SipuadaListener {
 		registrarDomainTextField.setText("192.168.130.207:5060");
 		registrarUserNameTextField.setText("renan");
 		passwordField.setText("renan");
+		callerDomainTextField.setText("192.168.130.207:5060");
 	}
 
 	private void setUPCallButton(JButton callButton) {
@@ -309,7 +310,7 @@ public class SIPClientMain implements SipuadaListener {
 	public void onCallInvitationFailed(String reason, String callId) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
-				+ " Call Invitation Failed.");
+				+ " Call Invitation Failed: "+reason);
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
 	}
