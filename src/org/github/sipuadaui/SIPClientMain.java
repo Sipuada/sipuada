@@ -26,7 +26,7 @@ public class SIPClientMain implements SipuadaListener {
 	private JTextField registrarUserNameTextField;
 	private JTextField callerDomainTextField;
 	private JTextField callerUserTextField;
-	private JPasswordField passwordField;
+	private JTextField passwordField;
 	private JTextArea textArea;
 	private Sipuada sipuada;
 	private String currentCallID;
@@ -135,12 +135,11 @@ public class SIPClientMain implements SipuadaListener {
 				if (sipuada == null) {
 					sipuada = new Sipuada(registrarUserNameTextField.getText(),
 							registrarDomainTextField.getText(), passwordField
-									.getName(), Util.getIPAddress(true), 55000,
+									.getText(), Util.getIPAddress(true), 55000,
 							"TCP", SIPClientMain.this);
 				}
 
 				sipuada.register(new RegistrationCallback() {
-
 					@Override
 					public void onRegistrationSuccess(
 							List<String> registeredContacts) {
@@ -229,7 +228,7 @@ public class SIPClientMain implements SipuadaListener {
 				"cell 0 0,alignx left,aligny top");
 		frmSipuada.getContentPane().add(label, "cell 1 0");
 
-		passwordField = new JPasswordField();
+		passwordField = new JTextField();
 		frmSipuada.getContentPane().add(passwordField,
 				"cell 2 1,growx,aligny top");
 
