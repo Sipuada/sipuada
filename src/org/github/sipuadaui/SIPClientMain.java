@@ -190,6 +190,7 @@ public class SIPClientMain implements SipuadaListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				sipuada.cancelCallInvitation(currentCallID);
+				btnCancel.setEnabled(false);
 			}
 		});
 	}
