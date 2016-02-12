@@ -623,6 +623,7 @@ public class UserAgentClient {
 			case Response.BUSY_HERE:
 			case Response.BUSY_EVERYWHERE:
 			case Response.DECLINE:
+			case Response.TEMPORARILY_UNAVAILABLE:
 				logger.debug("Callee is busy or not found at the moment." +
 						"\nWill attempt a retry if it is allowed at a later time.");
 				handleByReschedulingIfApplicable(response, clientTransaction, false);
