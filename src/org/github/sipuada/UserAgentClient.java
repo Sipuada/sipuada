@@ -2,7 +2,6 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -11,12 +10,14 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
+import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.events.CallInvitationAccepted;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.CallInvitationDeclined;
@@ -90,6 +91,7 @@ public class UserAgentClient {
 	private final String primaryHost;
 	private final String password;
 	private final List<ListeningPoint> localAddresses = new LinkedList<>();
+	private String preferredTransport = Transport.UNKNOWN.toString();
 	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
@@ -101,17 +103,20 @@ public class UserAgentClient {
 	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
 			AddressFactory addressFactory, List<ListeningPoint> addresses,
-			Comparator<ListeningPoint> addressComparator, String... credentials) {
+			String username, String primaryHost, String password, String... allLocalIps) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
 		localAddresses.addAll(addresses);
-		Collections.sort(localAddresses, addressComparator);
-		username = credentials.length > 0 && credentials[0] != null ? credentials[0] : "";
-		primaryHost = credentials.length > 1 && credentials[1] != null ? credentials[1] : "";
-		password = credentials.length > 2 && credentials[2] != null ? credentials[2] : "";
+		this.username = username;
+		this.primaryHost = primaryHost;
+		this.password = password;
+	}
+
+	public void setPreferredTransport(String transport) {
+		preferredTransport = transport;
 	}
 
 	public boolean sendRegisterRequest() {
@@ -198,7 +203,7 @@ public class UserAgentClient {
 		 * (later support also: the offer/answer model
 		 */
 
-		ListeningPoint priorityLocalAddress = localAddresses.get(0);
+		ListeningPoint priorityLocalAddress = fetchLocalAddressWithPriority(preferredTransport);
 		String localIp = priorityLocalAddress.getIPAddress();
 		int localPort = priorityLocalAddress.getPort();
 		SipURI contactUri;
@@ -226,8 +231,8 @@ public class UserAgentClient {
 				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
-	private boolean sendRequest(RequestMethod method, String remoteUser, String remoteHost,
-			URI requestUri, CallIdHeader callIdHeader, long cseq,
+	private boolean sendRequest(RequestMethod method, String remoteUser,
+			String remoteHost, URI requestUri, CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
 		try {
 			URI addresserUri = addressMaker.createSipURI(username, primaryHost);
@@ -283,9 +288,9 @@ public class UserAgentClient {
 				callIdHeader, cseq, additionalHeaders);
 	}
 
-	private boolean sendRequest(final RequestMethod method, URI requestUri, URI addresserUri,
-			URI addresseeUri, final Dialog dialog, final CallIdHeader callIdHeader, long cseq,
-			Header... additionalHeaders) {
+	private boolean sendRequest(final RequestMethod method, URI requestUri,
+			URI addresserUri, URI addresseeUri, final Dialog dialog,
+			final CallIdHeader callIdHeader, long cseq, Header... additionalHeaders) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
 				|| method == RequestMethod.UNKNOWN) {
 			//This method is meant for the INVITE request and
@@ -343,7 +348,7 @@ public class UserAgentClient {
 		else {
 			requestUri = (URI) remoteTargetUri.clone();
 		}
-		ListeningPoint priorityLocalAddress = localAddresses.get(0);
+		ListeningPoint priorityLocalAddress = fetchLocalAddressWithPriority(preferredTransport);
 		ViaHeader viaHeader = null;
 		try {
 			viaHeader = headerMaker.createViaHeader(priorityLocalAddress.getIPAddress(),
@@ -485,6 +490,15 @@ public class UserAgentClient {
 			default:
 				break;
 		}
+	}
+
+	private ListeningPoint fetchLocalAddressWithPriority(String rawTransport) {
+		for (ListeningPoint localAddress : localAddresses) {
+			if (localAddress.getTransport().toUpperCase().equals(rawTransport)) {
+				return localAddress;
+			}
+		}
+		return localAddresses.get((new Random()).nextInt(localAddresses.size()));
 	}
 
 	protected void processResponse(ResponseEvent responseEvent) {
@@ -1253,8 +1267,10 @@ public class UserAgentClient {
 		String callId = callIdHeader.getCallId();
 		switch (Constants.getRequestMethod(request.getMethod())) {
 			case INVITE:
-				//This means a CANCEL succeeded in canceling the original INVITE request.
-				logger.info("CANCEL succeded in canceling a call invitation.");
+				//This could mean that a CANCEL succeeded in canceling the
+				//original INVITE request.
+				logger.info("If a CANCEL was issued, it succeded in canceling " +
+						"a call invitation.");
 				bus.post(new CallInvitationCanceled("Callee canceled " +
 						"outgoing INVITE.", callId, false));
 				return true;
