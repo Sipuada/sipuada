@@ -354,6 +354,7 @@ public class TCPMessageChannel extends MessageChannel implements SIPMessageListe
             }
 
             mySock = sock;
+            mySock.setSoTimeout(30000);
             this.myClientInputStream = mySock.getInputStream();
             this.myClientOutputStream = mySock.getOutputStream();
             // start a new reader on this end of the pipe.

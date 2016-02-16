@@ -1,13 +1,11 @@
 package org.github.sipuada;
 
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.TooManyListenersException;
 
 import org.github.sipuada.Constants.RequestMethod;
@@ -26,7 +24,6 @@ import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
-import org.github.sipuada.exceptions.SipuadaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,9 +36,7 @@ import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
 import android.javax.sip.DialogTerminatedEvent;
 import android.javax.sip.IOExceptionEvent;
-import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.ListeningPoint;
-import android.javax.sip.ObjectInUseException;
 import android.javax.sip.PeerUnavailableException;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ResponseEvent;
@@ -49,12 +44,9 @@ import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipFactory;
 import android.javax.sip.SipListener;
 import android.javax.sip.SipProvider;
-import android.javax.sip.SipStack;
 import android.javax.sip.Timeout;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
-import android.javax.sip.TransportAlreadySupportedException;
-import android.javax.sip.TransportNotSupportedException;
 import android.javax.sip.address.AddressFactory;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.HeaderFactory;
@@ -98,114 +90,38 @@ public class UserAgent implements SipListener {
 	private final Map<String, List<Dialog>> establishedCalls =
 			Collections.synchronizedMap(new HashMap<String, List<Dialog>>());
 
+	private final SipProvider provider;
 	private final SipuadaListener listener;
-	private SipProvider provider;
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
-	public UserAgent(SipuadaListener sipuadaListener, String username, String primaryHost,
-			String password, String... localAddresses) throws SipuadaException {
+	public UserAgent(SipProvider sipProvider,
+			SipuadaListener sipuadaListener, List<ListeningPoint> addresses,
+			String username, String primaryHost, String password, String... allLocalIps) {
+		provider = sipProvider;
 		listener = sipuadaListener;
 		eventBus.register(this);
-		MessageFactory messenger;
-		HeaderFactory headerMaker;
-		AddressFactory addressMaker;
-		Properties properties = new Properties();
-		properties.setProperty("android.javax.sip.STACK_NAME", "SipuadaUserAgentv0");
-		SipStack stack;
 		try {
 			SipFactory factory = SipFactory.getInstance();
-			stack = factory.createSipStack(properties);
-			messenger = factory.createMessageFactory();
-			headerMaker = factory.createHeaderFactory();
-			addressMaker = factory.createAddressFactory();
+			MessageFactory messenger = factory.createMessageFactory();
+			HeaderFactory headerMaker = factory.createHeaderFactory();
+			AddressFactory addressMaker = factory.createAddressFactory();
+			uac = new UserAgentClient(eventBus, provider, messenger,
+					headerMaker, addressMaker, addresses,
+					username, primaryHost, password, allLocalIps);
+			uas = new UserAgentServer(eventBus, provider, messenger,
+					headerMaker, addressMaker, addresses,
+					username, allLocalIps);
+		} catch (PeerUnavailableException ignore){}
+		try {
+			provider.addSipListener(this);
+		} catch (TooManyListenersException ignore) {}
+		initSipuadaListener();
+	}
 
-			List<ListeningPoint> listeningPoints = new LinkedList<>();
-			for (String localAddress : localAddresses) {
-				String localIp = null, localPort = null, transport = null;
-				try {
-					localIp = localAddress.split(":")[0];
-					localPort = localAddress.split(":")[1].split("/")[0];
-					transport = localAddress.split("/")[1];
-					ListeningPoint listeningPoint = stack.createListeningPoint(localIp,
-							Integer.parseInt(localPort), transport);
-					listeningPoints.add(listeningPoint);
-				} catch (IndexOutOfBoundsException malformedAddress) {
-					logger.error("Malformed address: {}.", localAddress);
-					throw new SipuadaException("Malformed address provided: " + localAddress,
-							malformedAddress);
-				} catch (NumberFormatException invalidPort) {
-					logger.error("Invalid port for address {}: {}.", localAddress, localPort);
-					throw new SipuadaException("Invalid port provided for address "
-							+ localAddress + ": " + localPort, invalidPort);
-				} catch (TransportNotSupportedException invalidTransport) {
-					logger.error("Invalid transport for address {}: {}.", localAddress, transport);
-					throw new SipuadaException("Invalid transport provided for address "
-							+ localAddress + ": " + transport, invalidTransport);
-				} catch (InvalidArgumentException invalidAddress) {
-					logger.error("Invalid address provided: {}.", localAddress);
-					throw new SipuadaException("Invalid address provided: " + localAddress,
-							invalidAddress);
-				}
-			}
-			if (listeningPoints.isEmpty()) {
-				logger.error("No local address provided.");
-				throw new SipuadaException("No local address provided.", null);
-			}
-
-			try {
-				provider = stack.createSipProvider(listeningPoints.get(0));
-				for (int i=1; i<listeningPoints.size(); i++) {
-					ListeningPoint listeningPoint = listeningPoints.get(i);					
-					try {
-						provider.addListeningPoint(listeningPoint);
-					} catch (TransportAlreadySupportedException invalidTransport) {
-						logger.error("Cannot use {} because another address provided " +
-								"already supports the {} transport protocol.",
-								listeningPoint.toString(), listeningPoint.getTransport());
-						throw new SipuadaException("Cannot use " + listeningPoint.toString() +
-							" because another address provided already supports the " +
-							listeningPoint.getTransport() + " transport protocol.",
-							invalidTransport);
-					}
-				}
-			} catch (ObjectInUseException ignore) {}
-
-			Comparator<ListeningPoint> addressComparator = new Comparator<ListeningPoint>() {
-				
-				private String[] priorityTransports = {"TLS", "TCP", "UDP"};
-
-				@Override
-				public int compare(ListeningPoint thisAddress, ListeningPoint thatAddress) {
-					String thisTransport = thisAddress.getTransport().toUpperCase(); 
-					String thatTransport = thatAddress.getTransport().toUpperCase();
-					if (thisTransport.equals(thatTransport)) {
-						return 0;
-					}
-					for (String transport : priorityTransports) {
-						if (thisTransport.equals(transport)) {
-							return -1;
-						}
-						else if (thatTransport.equals(transport)) {
-							return 1;
-						}
-					}
-					return 0;
-				}
-
-			};
-
-			uac = new UserAgentClient(eventBus, provider, messenger, headerMaker,
-					addressMaker, listeningPoints, addressComparator,
-					username, primaryHost, password);
-			uas = new UserAgentServer(eventBus, provider, messenger, headerMaker,
-					addressMaker, listeningPoints, addressComparator, username);
-			try {
-				provider.addSipListener(this);
-			} catch (TooManyListenersException ignore) {}
-			initSipuadaListener(listener);
-
-		} catch (PeerUnavailableException ignore) {}
+	public void setPreferredTransport(String transport) {
+		uac.setPreferredTransport(transport);
+		uas.setPreferredTransport(transport);
 	}
 
 	@Override
@@ -248,7 +164,7 @@ public class UserAgent implements SipListener {
 //				.getDialog());
 	}
 
-	public void initSipuadaListener(final SipuadaListener listener) {
+	private void initSipuadaListener() {
 		final String eventBusSubscriberId =
 				Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
@@ -453,8 +369,7 @@ public class UserAgent implements SipListener {
 		};
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain,
-				callIdHeader);
+		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain, callIdHeader);
 		if (expectRemoteAnswer) {
 			operationsInProgress.put(RequestMethod.INVITE, true);
 		}
@@ -657,12 +572,10 @@ public class UserAgent implements SipListener {
 							method = RequestMethod.valueOf(request.getMethod());
 						} catch (IllegalArgumentException ignore) {};
 						if (acceptCallInvitation) {
-							return uas.sendAcceptResponse(method,
-									request, serverTransaction);
+							return uas.sendAcceptResponse(method, request, serverTransaction);
 						}
 						else {
-							return uas.sendRejectResponse(method,
-									request, serverTransaction);
+							return uas.sendRejectResponse(method, request, serverTransaction);
 						}
 					}
 				}
@@ -771,107 +684,6 @@ public class UserAgent implements SipListener {
 	@Subscribe
 	public void onEvent(DeadEvent deadEvent) {
 		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
-	}
-
-	static UserAgent ua;
-	public static void main(String[] args) {
-		ua = new UserAgent(new SipuadaListener() {
-
-					@Override
-					public boolean onCallInvitationArrived(String callId) {
-						System.out.println("Incoming invite arrived: " + callId);
-//						try {
-//							Thread.sleep(10000);
-//						} catch (InterruptedException ignore) {}
-//						ua.answerInviteRequest(callId, true);
-						return false;
-					}
-
-					@Override
-					public void onCallInvitationCanceled(String reason, String callId) {
-						System.out.println("Incoming invite canceled (" + reason + "): " + callId);
-					}
-
-					@Override
-					public void onCallInvitationFailed(String reason, String callId) {
-						System.out.println("'Incoming invite'/'outgoing invite answer' failed (" + reason + "): " + callId);
-					}
-
-					@Override
-					public void onCallEstablished(String callId) {
-						System.out.println("New call established: " + callId);
-						try {
-							Thread.sleep(40000);
-						} catch (InterruptedException ignore) {}
-						ua.finishCall(callId);
-					}
-
-					@Override
-					public void onCallFinished(String callId) {
-						System.out.println("Current call finished: " + callId);
-					}
-
-				},
-			"renan", "192.168.130.207:5060", "renan", "192.168.130.207:50550/TCP"
-		);
-		ua.sendRegisterRequest(new RegistrationCallback() {
-
-			@Override
-			public void onRegistrationSuccess(List<String> registeredContacts) {
-				System.out.println("Registration 1 success: " + registeredContacts);
-			}
-
-			@Override
-			public void onRegistrationRenewed() {}
-
-			@Override
-			public void onRegistrationFailed(String reason) {
-				System.out.println("Registration 1 failed: " + reason);
-			}
-
-		});
-		try {
-			Thread.sleep(4000);
-		} catch (InterruptedException ignore) {}
-		System.out.println("Registration 1 sent!");
-		ua.sendInviteRequest("xibaca", "192.168.130.207:5060", new CallInvitationCallback() {
-
-			@Override
-			public void onWaitingForCallInvitationAnswer(String callId) {
-				System.out.println("Invite 1 waiting for answer: " + callId);
-			}
-
-			@Override
-			public void onCallInvitationRinging(String callId) {
-				System.out.println("Invite 1 ringing: " + callId);
-			}
-
-			@Override
-			public void onCallInvitationDeclined(String reason) {
-				System.out.println("Invite 1 declined: " + reason);
-			}
-
-		});
-		System.out.println("Invitation 1 sent!");
-//		ua.sendInviteRequest("and", "192.168.25.217:5060", new CallInvitationCallback() {
-//
-//			@Override
-//			public void onWaitingForCallInvitationAnswer(String callId) {
-//				System.out.println("Invite 2 waiting for answer: " + callId);
-//			}
-//
-//			@Override
-//			public void onCallInvitationRinging(String callId) {
-//				System.out.println("Invite 2 ringing: " + callId);
-//			}
-//
-//			@Override
-//			public void onCallInvitationDeclined(String reason) {
-//				System.out.println("Invite 2 declined: " + reason);
-//			}
-//
-//		});
-//		System.out.println("Invitation 2 sent!");
 	}
 
 }

@@ -2,12 +2,13 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
+import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
@@ -54,19 +55,23 @@ public class UserAgentServer {
 
 	private final String username;
 	private final List<ListeningPoint> localAddresses = new LinkedList<>();
+	private String preferredTransport = Transport.UNKNOWN.toString();
 
 	public UserAgentServer(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
 			AddressFactory addressFactory, List<ListeningPoint> addresses,
-			Comparator<ListeningPoint> addressComparator, String... identity) {
+			String username, String... allLocalIps) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
-		username = identity.length > 0 && identity[0] != null ? identity[0] : "";
 		localAddresses.addAll(addresses);
-		Collections.sort(localAddresses, addressComparator);
+		this.username = username;
+	}
+
+	public void setPreferredTransport(String transport) {
+		preferredTransport = transport;
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -173,7 +178,7 @@ public class UserAgentServer {
 			ServerTransaction serverTransaction) {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String identityUser = username.toLowerCase();
-		ListeningPoint priorityLocalAddress = localAddresses.get(0);
+		ListeningPoint priorityLocalAddress = fetchLocalAddressWithPriority(preferredTransport);
 		String identityHost = priorityLocalAddress.getIPAddress();
 		if (toHeader != null) {
 			boolean shouldForbid = true;
@@ -304,7 +309,7 @@ public class UserAgentServer {
 
 	public boolean sendAcceptResponse(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
-		ListeningPoint priorityLocalAddress = localAddresses.get(0);
+		ListeningPoint priorityLocalAddress = fetchLocalAddressWithPriority(preferredTransport);
 		String localIp = priorityLocalAddress.getIPAddress();
 		int localPort = priorityLocalAddress.getPort();
 		SipURI contactUri;
@@ -427,6 +432,15 @@ public class UserAgentServer {
 					"(" + responseCouldNotBeSent.getCause().getMessage() + ")");
 		}
 		return null;
+	}
+
+	private ListeningPoint fetchLocalAddressWithPriority(String rawTransport) {
+		for (ListeningPoint localAddress : localAddresses) {
+			if (localAddress.getTransport().toUpperCase().equals(rawTransport)) {
+				return localAddress;
+			}
+		}
+		return localAddresses.get((new Random()).nextInt(localAddresses.size()));
 	}
 
 }
