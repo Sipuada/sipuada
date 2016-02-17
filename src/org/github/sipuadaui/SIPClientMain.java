@@ -328,6 +328,7 @@ public class SIPClientMain implements SipuadaListener {
 		btRejectCall.setEnabled(false);
 		btnCancel.setEnabled(false);
 		btnEndCall.setEnabled(true);
+		isBusy = true;
 
 	}
 
