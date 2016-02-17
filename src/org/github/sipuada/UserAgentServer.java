@@ -4,9 +4,11 @@ import java.text.ParseException;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
+import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
@@ -424,6 +426,15 @@ public class UserAgentServer {
 					"(" + responseCouldNotBeSent.getCause().getMessage() + ")");
 		}
 		return null;
+	}
+
+	private ListeningPoint fetchLocalAddressWithPriority(String rawTransport) {
+		for (ListeningPoint localAddress : localAddresses) {
+			if (localAddress.getTransport().toUpperCase().equals(rawTransport)) {
+				return localAddress;
+			}
+		}
+		return localAddresses.get((new Random()).nextInt(localAddresses.size()));
 	}
 
 }
