@@ -134,12 +134,13 @@ public class SIPClientMain implements SipuadaListener {
 				sipuada = new Sipuada(SIPClientMain.this,
 						registrarUserNameTextField.getText(), registrarDomainTextField.getText()
 						, passwordField.getText(),
-						"192.168.130.49:55000/TCP"/*,
+						Util.getIPAddress(true) + ":55000/TCP");
+						/*"192.168.130.49:55000/TCP",
 						"192.168.130.207:55500/TCP",
 						"192.168.130.49:55001/TLS",
 						"192.168.130.207:55501/TLS",
 						"192.168.130.49:55002/UDP",
-						"192.168.130.207:55502/UDP"*/);
+						"192.168.130.207:55502/UDP");*/
 			}
 			sipuada.register(new RegistrationCallback() {
 					@Override
@@ -304,6 +305,7 @@ public class SIPClientMain implements SipuadaListener {
 				+ " Call Invitation Canceled.");
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
+		btnCancel.setEnabled(false);
 	}
 
 	@Override
@@ -313,6 +315,7 @@ public class SIPClientMain implements SipuadaListener {
 				+ " Call Invitation Failed: " + reason);
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
+		btnCancel.setEnabled(false);
 	}
 
 	@Override
