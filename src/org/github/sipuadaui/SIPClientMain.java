@@ -289,7 +289,6 @@ public class SIPClientMain implements SipuadaListener {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Invitation Arrived.");
-		currentCallID = callId;
 		btAcceptCall.setEnabled(true);
 		btRejectCall.setEnabled(true);
 		this.currentInviteCallID = callId;
@@ -341,5 +340,7 @@ public class SIPClientMain implements SipuadaListener {
 		btRejectCall.setEnabled(false);
 		btnEndCall.setEnabled(false);
 		btCall.setEnabled(true);
+		isBusy = false;
+
 	}
 }
