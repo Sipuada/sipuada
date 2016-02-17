@@ -1032,8 +1032,13 @@ public class UserAgentClient {
 		
 		UnsupportedHeader unsupportedHeader =
 				(UnsupportedHeader) response.getHeader(UnsupportedHeader.NAME);
+		if (unsupportedHeader == null) {
+			logger.info("No Unsupported header present in response, so UAC cannot " +
+					"satisfy this request.");
+			return;
+		}
 		String unsupportedOptionTags = unsupportedHeader.getOptionTag();
-		
+
 		RequireHeader requireHeader =
 				(RequireHeader) request.getHeader(RequireHeader.NAME);
 		ProxyRequireHeader proxyRequireHeader =
