@@ -674,6 +674,7 @@ public class UDPMessageChannel extends MessageChannel implements
 				sock = new DatagramSocket();
 				created = true;
 			}
+			sock.setSoTimeout(30000);
 			sock.send(reply);
 			if (created)
 				sock.close();
@@ -734,6 +735,7 @@ public class UDPMessageChannel extends MessageChannel implements
 							+ peerAddress.getHostAddress() + "/" + peerPort
 							+ "\n" + new String(msg));
 				}
+				sock.setSoTimeout(30000);
 				sock.send(reply);
 				if (!sipStack.udpFlag)
 					sock.close();
@@ -748,6 +750,7 @@ public class UDPMessageChannel extends MessageChannel implements
 			Socket outputSocket = sipStack.ioHandler.sendBytes(
 					this.messageProcessor.getIpAddress(), peerAddress,
 					peerPort, "tcp", msg, retry);
+			outputSocket.setSoTimeout(30000);
 			OutputStream myOutputStream = outputSocket.getOutputStream();
 			myOutputStream.write(msg, 0, msg.length);
 			myOutputStream.flush();

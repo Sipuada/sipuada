@@ -249,6 +249,7 @@ public final class TLSMessageChannel extends MessageChannel implements SIPMessag
             } catch (IOException ex) {
             }
             mySock = sock;
+            mySock.setSoTimeout(30000);
             this.myClientInputStream = mySock.getInputStream();
 
             Thread thread = new Thread(this);
@@ -302,6 +303,7 @@ public final class TLSMessageChannel extends MessageChannel implements SIPMessag
                 /* ignore */
             }
             mySock = sock;
+            mySock.setSoTimeout(30000);
             this.myClientInputStream = mySock.getInputStream();
 
             // start a new reader on this end of the pipe.
