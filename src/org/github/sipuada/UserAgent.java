@@ -36,7 +36,6 @@ import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
 import android.javax.sip.DialogTerminatedEvent;
 import android.javax.sip.IOExceptionEvent;
-import android.javax.sip.ListeningPoint;
 import android.javax.sip.PeerUnavailableException;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ResponseEvent;
@@ -95,9 +94,10 @@ public class UserAgent implements SipListener {
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
-	public UserAgent(SipProvider sipProvider,
-			SipuadaListener sipuadaListener, List<ListeningPoint> addresses,
-			String username, String primaryHost, String password, String... allLocalIps) {
+	private final String rawAddress;
+
+	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, String username,
+			String primaryHost, String password, String localIp, String localPort, String transport) {
 		provider = sipProvider;
 		listener = sipuadaListener;
 		eventBus.register(this);
@@ -107,21 +107,20 @@ public class UserAgent implements SipListener {
 			HeaderFactory headerMaker = factory.createHeaderFactory();
 			AddressFactory addressMaker = factory.createAddressFactory();
 			uac = new UserAgentClient(eventBus, provider, messenger,
-					headerMaker, addressMaker, addresses,
-					username, primaryHost, password, allLocalIps);
+					headerMaker, addressMaker, username, primaryHost, password,
+					localIp, localPort, transport);
 			uas = new UserAgentServer(eventBus, provider, messenger,
-					headerMaker, addressMaker, addresses,
-					username, allLocalIps);
+					headerMaker, addressMaker, username, localIp, localPort);
 		} catch (PeerUnavailableException ignore){}
 		try {
 			provider.addSipListener(this);
 		} catch (TooManyListenersException ignore) {}
 		initSipuadaListener();
+		rawAddress = String.format("%s:%s/%s", localIp, localPort, transport);
 	}
 
-	public void setPreferredTransport(String transport) {
-		uac.setPreferredTransport(transport);
-		uas.setPreferredTransport(transport);
+	public String getRawAddress() {
+		return rawAddress;
 	}
 
 	@Override

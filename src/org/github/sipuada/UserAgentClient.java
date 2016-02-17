@@ -41,7 +41,6 @@ import android.javax.sip.Dialog;
 import android.javax.sip.DialogState;
 import android.javax.sip.IOExceptionEvent;
 import android.javax.sip.InvalidArgumentException;
-import android.javax.sip.ListeningPoint;
 import android.javax.sip.ResponseEvent;
 import android.javax.sip.SipException;
 import android.javax.sip.SipProvider;
@@ -90,8 +89,9 @@ public class UserAgentClient {
 	private final String username;
 	private final String primaryHost;
 	private final String password;
-	private final List<ListeningPoint> localAddresses = new LinkedList<>();
-	private String preferredTransport = Transport.UNKNOWN.toString();
+	private final String localIp;
+	private final int localPort;
+	private final String transport;
 	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
@@ -102,21 +102,24 @@ public class UserAgentClient {
 
 	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
-			AddressFactory addressFactory, List<ListeningPoint> addresses,
-			String username, String primaryHost, String password, String... allLocalIps) {
+			AddressFactory addressFactory, String... credentialsAndAddress) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
-		localAddresses.addAll(addresses);
-		this.username = username;
-		this.primaryHost = primaryHost;
-		this.password = password;
-	}
-
-	public void setPreferredTransport(String transport) {
-		preferredTransport = transport;
+		username = credentialsAndAddress.length > 0 && credentialsAndAddress[0] != null ?
+				credentialsAndAddress[0] : "";
+		primaryHost = credentialsAndAddress.length > 1 && credentialsAndAddress[1] != null ?
+				credentialsAndAddress[1] : "";
+		password = credentialsAndAddress.length > 2 && credentialsAndAddress[2] != null ?
+				credentialsAndAddress[2] : "";
+		localIp = credentialsAndAddress.length > 3 && credentialsAndAddress[3] != null ?
+				credentialsAndAddress[3] : "127.0.0.1";
+		localPort = credentialsAndAddress.length > 4 && credentialsAndAddress[4] != null ?
+				Integer.parseInt(credentialsAndAddress[4]) : 5060;
+		transport = credentialsAndAddress.length > 5 && credentialsAndAddress[5] != null ?
+				credentialsAndAddress[5] : "TCP";
 	}
 
 	public boolean sendRegisterRequest() {
@@ -139,20 +142,17 @@ public class UserAgentClient {
 		registerCSeqs.put(requestUri, cseq + 1);
 		
 		List<ContactHeader> contactHeaders = new LinkedList<>();
-		for (ListeningPoint localAddress : localAddresses) {
-			SipURI contactUri;
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+			contactUri.setPort(localPort);
+			Address contactAddress = addressMaker.createAddress(contactUri);
+			ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 			try {
-				contactUri = addressMaker.createSipURI(username,
-						localAddress.getIPAddress());
-				contactUri.setPort(localAddress.getPort());
-				Address contactAddress = addressMaker.createAddress(contactUri);
-				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-				try {
-					contactHeader.setExpires(3600);
-				} catch (InvalidArgumentException ignore) {}
-				contactHeaders.add(contactHeader);
-			} catch (ParseException ignore) {}
-		}
+				contactHeader.setExpires(3600);
+			} catch (InvalidArgumentException ignore) {}
+			contactHeaders.add(contactHeader);
+		} catch (ParseException ignore) {}
 
 		//TODO *IF* request is a REGISTER, keep in mind that:
 		/*
@@ -203,9 +203,6 @@ public class UserAgentClient {
 		 * (later support also: the offer/answer model
 		 */
 
-		ListeningPoint priorityLocalAddress = fetchLocalAddressWithPriority(preferredTransport);
-		String localIp = priorityLocalAddress.getIPAddress();
-		int localPort = priorityLocalAddress.getPort();
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
@@ -348,11 +345,9 @@ public class UserAgentClient {
 		else {
 			requestUri = (URI) remoteTargetUri.clone();
 		}
-		ListeningPoint priorityLocalAddress = fetchLocalAddressWithPriority(preferredTransport);
 		ViaHeader viaHeader = null;
 		try {
-			viaHeader = headerMaker.createViaHeader(priorityLocalAddress.getIPAddress(),
-					priorityLocalAddress.getPort(), priorityLocalAddress.getTransport(), null);
+			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
 			viaHeader.setRPort();
 			final Request request = messenger.createRequest(requestUri, method.toString(),
 					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
