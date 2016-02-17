@@ -1,7 +1,5 @@
 package org.github.sipuada;
 
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -24,40 +22,16 @@ import android.javax.sip.PeerUnavailableException;
 import android.javax.sip.SipFactory;
 import android.javax.sip.SipProvider;
 import android.javax.sip.SipStack;
-import android.javax.sip.TransportAlreadySupportedException;
 import android.javax.sip.TransportNotSupportedException;
 
 public class Sipuada implements SipuadaApi {
 
 	private final Logger logger = LoggerFactory.getLogger(Sipuada.class);
 
-	private final Comparator<ListeningPoint> listeningPointsComparator =
-			new Comparator<ListeningPoint>() {
-		private Transport[] priorityTransports = {Transport.TLS, Transport.TCP, Transport.UDP};
-
-		@Override
-		public int compare(ListeningPoint thisAddress, ListeningPoint thatAddress) {
-			String thisTransport = thisAddress.getTransport().toUpperCase();
-			String thatTransport = thatAddress.getTransport().toUpperCase();
-			if (thisTransport.equals(thatTransport)) {
-				return 0;
-			}
-			for (Transport transport : priorityTransports) {
-				if (thisTransport.equals(transport.toString())) {
-					return -1;
-				}
-				else if (thatTransport.equals(transport.toString())) {
-					return 1;
-				}
-			}
-			return 0;
-		}
-	};
-
 	private final Map<Transport, Set<UserAgent>> transportToUserAgents = new HashMap<>();
 	private final String defaultTransport;
 
-	public Sipuada(SipuadaListener listener, String sipUsername, String sipPrimaryHost,
+	public Sipuada(SipuadaListener sipuadaListener, String sipUsername, String sipPrimaryHost,
 			String sipPassword, String... localAddresses) throws SipuadaException {
 
 		Properties properties = new Properties();
@@ -100,122 +74,76 @@ public class Sipuada implements SipuadaApi {
 			throw new SipuadaException("No local address provided.", null);
 		}
 
-		Map<String, SipProvider> ipToProvider = new HashMap<>();
-		Map<String, List<ListeningPoint>> ipToListeningPoints = new HashMap<>();
-		List<SipProvider> providers = new LinkedList<>();
-		boolean shouldGroupByIp = false;
-		try {
-			Collections.sort(listeningPoints, listeningPointsComparator);
-			ListeningPoint listeningPoint = listeningPoints.get(0);
-			SipProvider provider = stack.createSipProvider(listeningPoint);
-			providers.add(provider);
-			String ipAddressKey = listeningPoint.getIPAddress();
-			ipToProvider.put(ipAddressKey, provider);
-			ipToListeningPoints.put(ipAddressKey, Collections.singletonList(listeningPoint));
-			for (int i=1; i<listeningPoints.size(); i++) {
-				listeningPoint = listeningPoints.get(i);
-				ipAddressKey = listeningPoint.getIPAddress();
-				try {
-					provider.addListeningPoint(listeningPoint);
-					ipToProvider.put(ipAddressKey, provider);
-					if (ipToListeningPoints.containsKey(ipAddressKey)) {
-						ipToListeningPoints.get(ipAddressKey).add(listeningPoint);
-					}
-					else {
-						ipToListeningPoints.put(ipAddressKey,
-								Collections.singletonList(listeningPoint));
-					}
-				} catch (TransportAlreadySupportedException invalidTransport) {
-					shouldGroupByIp = true;
-					break;
-				}
-			}
-		} catch (ObjectInUseException ignore) {}
-		if (shouldGroupByIp) {
-			ipToProvider.clear();
-			ipToListeningPoints.clear();
-			Map<String, List<ListeningPoint>> groupByIp = new HashMap<>();
-			for (ListeningPoint listeningPoint : listeningPoints) {
-				if (!groupByIp.containsKey(listeningPoint.getIPAddress())) {
-					groupByIp.put(listeningPoint.getIPAddress(),
-							new LinkedList<ListeningPoint>());
-				}
-				groupByIp.get(listeningPoint.getIPAddress()).add(listeningPoint);
-			}
-			for (String ipAddressKey : groupByIp.keySet()) {
-				listeningPoints = groupByIp.get(ipAddressKey);
-				try {
-					Collections.sort(listeningPoints, listeningPointsComparator);
-					ListeningPoint listeningPoint = listeningPoints.get(0);
-					SipProvider provider = stack.createSipProvider(listeningPoint);
-					providers.add(provider);
-					ipToProvider.put(ipAddressKey, provider);
-					for (int i=1; i<listeningPoints.size(); i++) {
-						listeningPoint = listeningPoints.get(i);
-						try {
-							provider.addListeningPoint(listeningPoint);
-						} catch (TransportAlreadySupportedException ignore) {}
-					}
-					ipToListeningPoints.put(ipAddressKey, listeningPoints);
-				} catch (ObjectInUseException ignore) {}
-			}
-		}
-
 		String mostVotedTransport = Transport.UNKNOWN.toString();
 		int mostVotesToATransport = 0;
-		String[] allLocalIps = ipToProvider.keySet()
-				.toArray(new String[ipToProvider.keySet().size()]);
-		if (providers.size() == 1) {
-			listeningPoints = new LinkedList<>();
-			for (String localIp : allLocalIps) {
-				listeningPoints.addAll(ipToListeningPoints.get(localIp));
+		Map<Transport, Integer> transportVotes = new HashMap<>();
+		for (Transport transport : Transport.values()) {
+			transportVotes.put(transport, 0);
+		}
+		List<Transport> winners = new LinkedList<>();
+		for (ListeningPoint listeningPoint : listeningPoints) {
+			String rawTransport = listeningPoint.getTransport().toUpperCase();
+			Transport transport = Transport.UNKNOWN;
+			try {
+				transport = Transport.valueOf(rawTransport);
+			} catch (IllegalArgumentException ignore) {}
+			if (!transportToUserAgents.containsKey(transport)) {
+				transportToUserAgents.put(transport, new HashSet<UserAgent>());
 			}
-			UserAgent userAgent = new UserAgent(providers.get(0), listener, listeningPoints,
-					sipUsername, sipPrimaryHost, sipPassword, allLocalIps);
-			for (ListeningPoint listeningPoint : listeningPoints) {
-				String rawTransport = listeningPoint.getTransport().toUpperCase();
-				Transport transport = Transport.UNKNOWN;
-				try {
-					transport = Transport.valueOf(rawTransport);
-				} catch (IllegalArgumentException ignore) {}
-				if (!transportToUserAgents.containsKey(transport)) {
-					transportToUserAgents.put(transport, new HashSet<UserAgent>());
-				}
-				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-				userAgents.add(userAgent);
-				int votesToThisTransport = userAgents.size();
-				if (votesToThisTransport > mostVotesToATransport) {
-					mostVotesToATransport = votesToThisTransport;
-					mostVotedTransport = rawTransport;
-				}
+			Set<UserAgent> userAgents = transportToUserAgents.get(transport);
+			SipProvider sipProvider = null;
+			try {
+				sipProvider = stack.createSipProvider(listeningPoint);
+			} catch (ObjectInUseException ignore) {}
+			userAgents.add(new UserAgent(sipProvider, sipuadaListener,
+					sipUsername, sipPrimaryHost, sipPassword,
+					listeningPoint.getIPAddress(),
+					Integer.toString(listeningPoint.getPort()),
+					rawTransport));
+			transportVotes.put(transport, transportVotes.get(transport) + 1);
+			int votesToThisTransport = transportVotes.get(transport);
+			if (votesToThisTransport > mostVotesToATransport) {
+				mostVotesToATransport = votesToThisTransport;
+				mostVotedTransport = rawTransport;
 			}
+		}
+		for (Transport transport : transportVotes.keySet()) {
+			if (transportVotes.get(transport) == mostVotesToATransport) {
+				winners.add(transport);
+			}
+		}
+		if (winners.size() <= 1) {
+			defaultTransport = mostVotedTransport;
 		}
 		else {
-			for (String localIp : allLocalIps) {
-				SipProvider provider = ipToProvider.get(localIp);
-				listeningPoints = ipToListeningPoints.get(localIp);
-				UserAgent userAgent = new UserAgent(provider, listener, listeningPoints,
-						sipUsername, sipPrimaryHost, sipPassword, allLocalIps);
-				for (ListeningPoint listeningPoint : listeningPoints) {
-					String rawTransport = listeningPoint.getTransport().toUpperCase();
-					Transport transport = Transport.UNKNOWN;
-					try {
-						transport = Transport.valueOf(rawTransport);
-					} catch (IllegalArgumentException ignore) {}
-					if (!transportToUserAgents.containsKey(transport)) {
-						transportToUserAgents.put(transport, new HashSet<UserAgent>());
-					}
-					Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-					userAgents.add(userAgent);
-					int votesToThisTransport = userAgents.size();
-					if (votesToThisTransport > mostVotesToATransport) {
-						mostVotesToATransport = votesToThisTransport;
-						mostVotedTransport = rawTransport;
-					}
-				}
-			}
+			defaultTransport = winners.get((new Random())
+					.nextInt(winners.size())).toString();
 		}
-		defaultTransport = mostVotedTransport;
+
+		StringBuilder userAgentsDump = new StringBuilder();
+		userAgentsDump.append("{ ");
+		int transportGroupIndex = 0;
+		for (Transport transport : transportToUserAgents.keySet()) {
+			if (transportGroupIndex != 0) {
+				userAgentsDump.append(", ");
+			}
+			userAgentsDump.append(String.format("'%s' : { ", transport));
+			Iterator<UserAgent> iterator = transportToUserAgents.get(transport).iterator();
+			int userAgentIndex = 0;
+			while (iterator.hasNext()) {
+				if (userAgentIndex != 0) {
+					userAgentsDump.append(", ");
+				}
+				UserAgent userAgent = iterator.next();
+				userAgentsDump.append(String.format("'%s'", userAgent.getRawAddress()));
+				userAgentIndex++;
+			}
+			userAgentsDump.append(" } ");
+			transportGroupIndex++;
+		}
+		userAgentsDump.append(" }");
+		logger.info("Sipuada created. Default transport: {}. UAS: {}",
+				defaultTransport, userAgentsDump.toString());
 	}
 
 	@Override
@@ -263,7 +191,6 @@ public class Sipuada implements SipuadaApi {
 			bestUserAgent = iterator.next();
 			randomNumber--;
 		}
-		bestUserAgent.setPreferredTransport(rawTransport);
 		return bestUserAgent;
 	}
 
