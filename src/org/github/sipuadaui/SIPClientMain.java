@@ -62,8 +62,8 @@ public class SIPClientMain implements SipuadaListener {
 
 	private void setDefautValues() {
 		registrarDomainTextField.setText("192.168.130.207:5060");
-		registrarUserNameTextField.setText("renan");
-		passwordField.setText("renan");
+		registrarUserNameTextField.setText("xibaca");
+		passwordField.setText("xibaca");
 		callerDomainTextField.setText("192.168.130.207:5060");
 	}
 
@@ -130,11 +130,17 @@ public class SIPClientMain implements SipuadaListener {
 		registerButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if (sipuada == null) {
-					sipuada = new Sipuada(SIPClientMain.this,
-							registrarUserNameTextField.getText(), registrarDomainTextField.getText()
-							, passwordField.getText(), Util.getIPAddress(true) + ":55000/TCP");
-				}
+			if (sipuada == null) {
+				sipuada = new Sipuada(SIPClientMain.this,
+						registrarUserNameTextField.getText(), registrarDomainTextField.getText()
+						, passwordField.getText(),
+						"192.168.130.49:55000/TCP"/*,
+						"192.168.130.207:55500/TCP",
+						"192.168.130.49:55001/TLS",
+						"192.168.130.207:55501/TLS",
+						"192.168.130.49:55002/UDP",
+						"192.168.130.207:55502/UDP"*/);
+			}
 			sipuada.register(new RegistrationCallback() {
 					@Override
 					public void onRegistrationSuccess(
@@ -318,7 +324,7 @@ public class SIPClientMain implements SipuadaListener {
 		btRejectCall.setEnabled(false);
 		btnCancel.setEnabled(false);
 		btnEndCall.setEnabled(true);
-
+		isBusy = true;
 	}
 
 	@Override
@@ -329,5 +335,6 @@ public class SIPClientMain implements SipuadaListener {
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
 		btnEndCall.setEnabled(false);
+		isBusy = false;
 	}
 }
