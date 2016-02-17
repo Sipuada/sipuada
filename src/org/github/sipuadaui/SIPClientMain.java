@@ -30,11 +30,13 @@ public class SIPClientMain implements SipuadaListener {
 	private JTextArea textArea;
 	private Sipuada sipuada;
 	private String currentCallID;
+	private String currentInviteCallID;
 	private JButton btAcceptCall;
 	private JButton btRejectCall;
 	private boolean isBusy = false;
 	private JButton btnCancel;
 	private JButton btnEndCall;
+	private JButton btCall;
 
 	/**
 	 * Launch the application.
@@ -62,12 +64,12 @@ public class SIPClientMain implements SipuadaListener {
 
 	private void setDefautValues() {
 		registrarDomainTextField.setText("192.168.130.207:5060");
-		registrarUserNameTextField.setText("xibaca");
-		passwordField.setText("xibaca");
+		registrarUserNameTextField.setText("renan");
+		passwordField.setText("renan");
 		callerDomainTextField.setText("192.168.130.207:5060");
 	}
 
-	private void setUPCallButton(JButton callButton) {
+	private void setUPCallButton(final JButton callButton) {
 
 		callButton.addActionListener(new ActionListener() {
 			@Override
@@ -76,9 +78,10 @@ public class SIPClientMain implements SipuadaListener {
 					textArea.setText(textArea.getText()
 							+ System.getProperty("line.separator") + " - "
 							+ " Required to register!");
-					btnCancel.setEnabled(true);
+					btnCancel.setEnabled(false);
+					callButton.setEnabled(true);
 				}
-
+				callButton.setEnabled(false);
 				sipuada.inviteToCall(callerUserTextField.getText(),
 						callerDomainTextField.getText(),
 						new CallInvitationCallback() {
@@ -109,6 +112,7 @@ public class SIPClientMain implements SipuadaListener {
 										+ System.getProperty("line.separator")
 										+ " - " + "Invitation Declined.");
 								btnCancel.setEnabled(false);
+								callButton.setEnabled(true);
 							}
 						});
 			}
@@ -130,19 +134,14 @@ public class SIPClientMain implements SipuadaListener {
 		registerButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-			if (sipuada == null) {
-				sipuada = new Sipuada(SIPClientMain.this,
-						registrarUserNameTextField.getText(), registrarDomainTextField.getText()
-						, passwordField.getText(),
-						Util.getIPAddress(true) + ":55000/TCP");
-						/*"192.168.130.49:55000/TCP",
-						"192.168.130.207:55500/TCP",
-						"192.168.130.49:55001/TLS",
-						"192.168.130.207:55501/TLS",
-						"192.168.130.49:55002/UDP",
-						"192.168.130.207:55502/UDP");*/
-			}
-			sipuada.register(new RegistrationCallback() {
+				if (sipuada == null) {
+					sipuada = new Sipuada(SIPClientMain.this,
+							registrarUserNameTextField.getText(),
+							registrarDomainTextField.getText(), passwordField
+									.getText(), Util.getIPAddress(true)
+									+ ":55000/TCP");
+				}
+				sipuada.register(new RegistrationCallback() {
 					@Override
 					public void onRegistrationSuccess(
 							List<String> registeredContacts) {
@@ -174,7 +173,7 @@ public class SIPClientMain implements SipuadaListener {
 		btAcceptCall.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				sipuada.acceptCallInvitation(currentCallID);
+				sipuada.acceptCallInvitation(currentInviteCallID);
 			}
 		});
 	}
@@ -183,7 +182,7 @@ public class SIPClientMain implements SipuadaListener {
 		btRejectCall.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				sipuada.declineCallInvitation(currentCallID);
+				sipuada.declineCallInvitation(currentInviteCallID);
 			}
 		});
 	}
@@ -254,10 +253,9 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(callerUserTextField, "cell 1 3,growx");
 		callerUserTextField.setColumns(10);
 
-		JButton btnCall = new JButton("Call");
-		setUPCallButton(btnCall);
-
-		frmSipuada.getContentPane().add(btnCall, "cell 4 3");
+		 btCall = new JButton("Call");
+		setUPCallButton(btCall);
+		frmSipuada.getContentPane().add(btCall, "cell 4 3");
 
 		JLabel lblLog = new JLabel("Log");
 		frmSipuada.getContentPane().add(lblLog, "cell 0 4");
@@ -294,7 +292,7 @@ public class SIPClientMain implements SipuadaListener {
 		currentCallID = callId;
 		btAcceptCall.setEnabled(true);
 		btRejectCall.setEnabled(true);
-
+		this.currentInviteCallID = callId;
 		return isBusy;
 	}
 
@@ -306,6 +304,7 @@ public class SIPClientMain implements SipuadaListener {
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
 		btnCancel.setEnabled(false);
+		btCall.setEnabled(true);
 	}
 
 	@Override
@@ -316,6 +315,8 @@ public class SIPClientMain implements SipuadaListener {
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
 		btnCancel.setEnabled(false);
+		btCall.setEnabled(true);
+
 	}
 
 	@Override
@@ -327,7 +328,7 @@ public class SIPClientMain implements SipuadaListener {
 		btRejectCall.setEnabled(false);
 		btnCancel.setEnabled(false);
 		btnEndCall.setEnabled(true);
-		isBusy = true;
+
 	}
 
 	@Override
@@ -338,6 +339,6 @@ public class SIPClientMain implements SipuadaListener {
 		btAcceptCall.setEnabled(false);
 		btRejectCall.setEnabled(false);
 		btnEndCall.setEnabled(false);
-		isBusy = false;
+		btCall.setEnabled(true);
 	}
 }
