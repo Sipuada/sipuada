@@ -10,14 +10,12 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Random;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
-import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.events.CallInvitationAccepted;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.CallInvitationDeclined;
@@ -485,15 +483,6 @@ public class UserAgentClient {
 			default:
 				break;
 		}
-	}
-
-	private ListeningPoint fetchLocalAddressWithPriority(String rawTransport) {
-		for (ListeningPoint localAddress : localAddresses) {
-			if (localAddress.getTransport().toUpperCase().equals(rawTransport)) {
-				return localAddress;
-			}
-		}
-		return localAddresses.get((new Random()).nextInt(localAddresses.size()));
 	}
 
 	protected void processResponse(ResponseEvent responseEvent) {
