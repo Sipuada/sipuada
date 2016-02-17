@@ -2,6 +2,10 @@ package org.github.sipuada;
 
 public class Constants {
 
+	public enum Transport {
+		UDP, TCP, TLS, UNKNOWN
+	}
+
 	public enum RequestMethod {
 		REGISTER, OPTIONS, INVITE, CANCEL, BYE, ACK, UNKNOWN
 	}

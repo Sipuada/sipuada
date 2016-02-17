@@ -2,7 +2,6 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -20,7 +19,6 @@ import com.google.common.eventbus.EventBus;
 
 import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
-import android.javax.sip.ListeningPoint;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
 import android.javax.sip.SipException;
@@ -53,20 +51,23 @@ public class UserAgentServer {
 	private final AddressFactory addressMaker;
 
 	private final String username;
-	private final List<ListeningPoint> localAddresses = new LinkedList<>();
+	private final String localIp;
+	private final int localPort;
 
 	public UserAgentServer(EventBus eventBus, SipProvider sipProvider,
 			MessageFactory messageFactory, HeaderFactory headerFactory,
-			AddressFactory addressFactory, List<ListeningPoint> addresses,
-			Comparator<ListeningPoint> addressComparator, String... identity) {
+			AddressFactory addressFactory, String... credentialsAndAddress) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
-		username = identity.length > 0 && identity[0] != null ? identity[0] : "";
-		localAddresses.addAll(addresses);
-		Collections.sort(localAddresses, addressComparator);
+		username = credentialsAndAddress.length > 0 && credentialsAndAddress[0] != null ?
+				credentialsAndAddress[0] : "";
+		localIp = credentialsAndAddress.length > 1 && credentialsAndAddress[1] != null ?
+				credentialsAndAddress[1] : "127.0.0.1";
+		localPort = credentialsAndAddress.length > 2 && credentialsAndAddress[2] != null ?
+				Integer.parseInt(credentialsAndAddress[2]) : 5060;
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -173,8 +174,7 @@ public class UserAgentServer {
 			ServerTransaction serverTransaction) {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String identityUser = username.toLowerCase();
-		ListeningPoint priorityLocalAddress = localAddresses.get(0);
-		String identityHost = priorityLocalAddress.getIPAddress();
+		String identityHost = localIp;
 		if (toHeader != null) {
 			boolean shouldForbid = true;
 			Address toAddress = toHeader.getAddress();
@@ -304,9 +304,6 @@ public class UserAgentServer {
 
 	public boolean sendAcceptResponse(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
-		ListeningPoint priorityLocalAddress = localAddresses.get(0);
-		String localIp = priorityLocalAddress.getIPAddress();
-		int localPort = priorityLocalAddress.getPort();
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
