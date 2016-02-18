@@ -60,3 +60,7 @@ local.properties
 
 # STS (Spring Tool Suite)
 .springBeans
+
+#J2OBJC gen
+j2objc_sources
+j2objc_gen
