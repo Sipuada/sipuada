@@ -1456,5 +1456,5 @@ public class UserAgentClient {
 		//ProxyAuthorization header could be added.
 		return true;
 	}
-	
+
 }
