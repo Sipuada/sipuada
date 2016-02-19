@@ -119,7 +119,7 @@ public class UserAgent implements SipListener {
 		rawAddress = String.format("%s:%s/%s", localIp, localPort, transport);
 	}
 
-	public String getRawAddress() {
+	protected String getRawAddress() {
 		return rawAddress;
 	}
 
