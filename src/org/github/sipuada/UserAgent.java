@@ -24,6 +24,7 @@ import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,10 +95,13 @@ public class UserAgent implements SipListener {
 	private UserAgentClient uac;
 	private UserAgentServer uas;
 
+	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins;
+	private final Map<String, SipuadaPlugin> activePlugins = new HashMap<>();
+
 	private final String rawAddress;
 
-	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, String username,
-			String primaryHost, String password, String localIp, String localPort, String transport) {
+	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, Map<RequestMethod, SipuadaPlugin> plugins,
+			String username, String primaryHost, String password, String localIp, String localPort, String transport) {
 		provider = sipProvider;
 		listener = sipuadaListener;
 		eventBus.register(this);
@@ -106,15 +110,15 @@ public class UserAgent implements SipListener {
 			MessageFactory messenger = factory.createMessageFactory();
 			HeaderFactory headerMaker = factory.createHeaderFactory();
 			AddressFactory addressMaker = factory.createAddressFactory();
-			uac = new UserAgentClient(eventBus, provider, messenger,
-					headerMaker, addressMaker, username, primaryHost, password,
-					localIp, localPort, transport);
-			uas = new UserAgentServer(eventBus, provider, messenger,
-					headerMaker, addressMaker, username, localIp, localPort);
+			uac = new UserAgentClient(eventBus, provider, plugins, messenger, headerMaker, addressMaker,
+					username, primaryHost, password, localIp, localPort, transport);
+			uas = new UserAgentServer(eventBus, provider, plugins, messenger, headerMaker, addressMaker,
+					username, localIp, localPort);
 		} catch (PeerUnavailableException ignore){}
 		try {
 			provider.addSipListener(this);
 		} catch (TooManyListenersException ignore) {}
+		registeredPlugins = plugins;
 		initSipuadaListener();
 		rawAddress = String.format("%s:%s/%s", localIp, localPort, transport);
 	}
@@ -597,6 +601,7 @@ public class UserAgent implements SipListener {
 					.synchronizedList(new LinkedList<Dialog>()));
 		}
 		establishedCalls.get(eventBusSubscriberId).add(dialog);
+		final SipuadaPlugin sessionPlugin = registeredPlugins.get(RequestMethod.INVITE);
 		Object eventBusSubscriber = new Object() {
 			
 			@Subscribe
@@ -604,12 +609,16 @@ public class UserAgent implements SipListener {
 				if (event.getCallId().equals(callId)) {
 					wipeEstablishedCall(callId, eventBusSubscriberId);
 					eventBus.unregister(this);
+					activePlugins.remove(callId);
+					sessionPlugin.performSessionTermination(callId);
 					listener.onCallFinished(callId);
 				}
 			}
 
 		};
 		eventBus.register(eventBusSubscriber);
+		activePlugins.put(callId, sessionPlugin);
+		sessionPlugin.performSessionSetup(callId, this);
 	}
 
 	public synchronized void wipeEstablishedCall(String callId,

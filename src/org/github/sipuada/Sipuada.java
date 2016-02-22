@@ -10,8 +10,10 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
+import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.exceptions.SipuadaException;
+import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +32,8 @@ public class Sipuada implements SipuadaApi {
 
 	private final Map<Transport, Set<UserAgent>> transportToUserAgents = new HashMap<>();
 	private final String defaultTransport;
+
+	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins = new HashMap<>();
 
 	public Sipuada(SipuadaListener sipuadaListener, String sipUsername, String sipPrimaryHost,
 			String sipPassword, String... localAddresses) throws SipuadaException {
@@ -96,7 +100,7 @@ public class Sipuada implements SipuadaApi {
 				sipProvider = stack.createSipProvider(listeningPoint);
 			} catch (ObjectInUseException ignore) {}
 			userAgents.add(new UserAgent(sipProvider, sipuadaListener,
-					sipUsername, sipPrimaryHost, sipPassword,
+					registeredPlugins, sipUsername, sipPrimaryHost, sipPassword,
 					listeningPoint.getIPAddress(),
 					Integer.toString(listeningPoint.getPort()),
 					rawTransport));
@@ -147,7 +151,7 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean register(RegistrationCallback callback) {
+	public boolean registerCaller(RegistrationCallback callback) {
 		return fetchBestAgent(defaultTransport).sendRegisterRequest(callback);
 	}
 
@@ -192,6 +196,15 @@ public class Sipuada implements SipuadaApi {
 			randomNumber--;
 		}
 		return bestUserAgent;
+	}
+
+	@Override
+	public boolean registerPlugin(SipuadaPlugin plugin) {
+		if (registeredPlugins.containsKey(RequestMethod.INVITE)) {
+			return false;
+		}
+		registeredPlugins.put(RequestMethod.INVITE, plugin);
+		return true;
 	}
 
 }

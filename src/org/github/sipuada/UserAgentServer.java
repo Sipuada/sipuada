@@ -4,6 +4,7 @@ import java.text.ParseException;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
@@ -12,11 +13,15 @@ import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
+import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.eventbus.EventBus;
 
+import android.javax.sdp.SdpFactory;
+import android.javax.sdp.SdpParseException;
+import android.javax.sdp.SessionDescription;
 import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.RequestEvent;
@@ -49,19 +54,21 @@ public class UserAgentServer {
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
 	private final AddressFactory addressMaker;
+	private final Map<RequestMethod, SipuadaPlugin> sessionPlugins;
 
 	private final String username;
 	private final String localIp;
 	private final int localPort;
 
-	public UserAgentServer(EventBus eventBus, SipProvider sipProvider,
-			MessageFactory messageFactory, HeaderFactory headerFactory,
-			AddressFactory addressFactory, String... credentialsAndAddress) {
+	public UserAgentServer(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
+			MessageFactory messageFactory, HeaderFactory headerFactory, AddressFactory addressFactory,
+			String... credentialsAndAddress) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
+		sessionPlugins = plugins;
 		username = credentialsAndAddress.length > 0 && credentialsAndAddress[0] != null ?
 				credentialsAndAddress[0] : "";
 		localIp = credentialsAndAddress.length > 1 && credentialsAndAddress[1] != null ?
@@ -255,7 +262,6 @@ public class UserAgentServer {
 			handleReinviteRequest(request, serverTransaction);
 			return;
 		}
-		//TODO take into consideration session offer/answer negotiation procedures.
 		//TODO also consider supporting multicast conferences, by sending silent 2xx responses
 		//when appropriate, by using identifiers within the SDP session description.
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
@@ -376,21 +382,30 @@ public class UserAgentServer {
 						statusCode, request.getMethod(),
 						invalidTransaction.getMessage());
 				return null;
-			}/* catch (SipException couldNotEnableRetransmissionAlerts) {
-				logger.debug("* {} could not be sent to {} request: {}.",
-						statusCode, request.getMethod(),
-						couldNotEnableRetransmissionAlerts.getMessage());
-				return null;
-			}*/
+			}
 		}
 		Dialog dialog = newServerTransaction.getDialog();
 		withinDialog &= dialog != null;
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
 		if (Constants.getResponseClass(statusCode) == ResponseClass.PROVISIONAL &&
 				method == RequestMethod.INVITE && withinDialog) {
 			try {
 				Response response = dialog.createReliableProvisionalResponse(statusCode);
 				for (Header header : additionalHeaders) {
 					response.addHeader(header);
+				}
+				if (isDialogCreatingRequest(method)) {
+					if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
+							request, response)) {
+						int newStatusCode = Response.UNSUPPORTED_MEDIA_TYPE;
+						if (doSendResponse(newStatusCode, method, request,
+								newServerTransaction, additionalHeaders) != null) {
+							logger.info("{} response sent.", newStatusCode);
+							return newServerTransaction;
+						}
+						return null;
+					}
 				}
 				logger.info("Sending {} response to {} request...", statusCode, method);
 				dialog.sendReliableProvisionalResponse(response);
@@ -412,6 +427,18 @@ public class UserAgentServer {
 			for (Header header : additionalHeaders) {
 				response.addHeader(header);
 			}
+			if (isDialogCreatingRequest(method)) {
+				if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
+						request, response)) {
+					int newStatusCode = Response.UNSUPPORTED_MEDIA_TYPE;
+					if (doSendResponse(newStatusCode, method, request,
+							newServerTransaction, additionalHeaders) != null) {
+						logger.info("{} response sent.", newStatusCode);
+						return newServerTransaction;
+					}
+					return null;
+				}
+			}
 			logger.info("Sending {} response to {} request...", statusCode, method);
 			newServerTransaction.sendResponse(response);
 			return newServerTransaction;
@@ -424,6 +451,76 @@ public class UserAgentServer {
 					"(" + responseCouldNotBeSent.getCause().getMessage() + ")");
 		}
 		return null;
+	}
+
+	private boolean isDialogCreatingRequest(RequestMethod method) {
+		switch (method) {
+			case INVITE:
+			case OPTIONS:
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
+			Request request, Response response) {
+		if (request.getContent() == null) {
+			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
+			if (sessionPlugin == null) {
+				return true;
+			}
+			SessionDescription offer = sessionPlugin.generateOffer(callId, method);
+			if (offer == null) {
+				return true;
+			}
+			try {
+				request.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
+			} catch (ParseException parseException) {
+				logger.error("Plug-in-generated offer {} by {} could not be inserted into {} response to " +
+						"{} request.", offer.toString(), sessionPlugin.getClass().getName(),
+						response.getStatusCode(), method, parseException);
+				return true;
+			}
+			logger.info("Plug-in-generated offer {} by {} inserted into {} response to {} request.",
+					offer.toString(), sessionPlugin.getClass().getName(), response.getStatusCode(), method);
+			return true;
+		}
+		else {
+			SessionDescription offer;
+			try {
+				offer = SdpFactory.getInstance()
+						.createSessionDescription(new String(request.getRawContent()));
+			} catch (SdpParseException parseException) {
+				logger.error("Offer arrived in {} request, but could not be properly parsed, " +
+						"so it was discarded.", method, parseException);
+				return false;
+			}
+			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
+			if (sessionPlugin == null) {
+				logger.error("No plug-in available to generate valid answer to offer {} in {} request.",
+						offer.toString(), method);
+				return false;
+			}
+			SessionDescription answer = sessionPlugin.generateAnswer(callId, method, offer);
+			if (answer == null) {
+				logger.error("Plug-in {} could not generate valid answer to offer {} in {} request.",
+						sessionPlugin.getClass().getName(), offer.toString(), method);
+				return false;
+			}
+			try {
+				response.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
+			} catch (ParseException parseException) {
+				logger.error("Plug-in-generated answer {} to offer {} by {} could not be inserted into " +
+						"{} response to {} request.", answer.toString(), offer.toString(),
+						sessionPlugin.getClass().getName(), response.getStatusCode(), method, parseException);
+				return false;
+			}
+			logger.info("Plug-in-generated answer {} to offer {} by {} inserted into {} response" +
+					" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
+					response.getStatusCode(), method);
+			return true;
+		}
 	}
 
 }
