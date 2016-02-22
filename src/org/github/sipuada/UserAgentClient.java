@@ -1074,6 +1074,9 @@ public class UserAgentClient {
 		if (unsupportedHeader == null) {
 			logger.info("No Unsupported header present in response, so UAC cannot " +
 					"satisfy this request.");
+			logger.error("{} request failed due to requiring some extensions unsupported" +
+					" by the UAS.\nUAC could not send new request amending this situation" +
+					" since response contained no Unsupported header.", request.getMethod());
 			return;
 		}
 		String unsupportedOptionTags = unsupportedHeader.getOptionTag();
@@ -1285,7 +1288,9 @@ public class UserAgentClient {
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
 			Request request, Response response, Request ackRequest) {
 		if (request.getContent() != null) {
-			return true;
+			logger.error("{} request was sent with an offer but {} response arrived with no answer" +
+					" so this UAC will terminate the dialog right away.", method, response.getStatusCode());
+			return !(response.getContent() == null);
 		}
 		if (response.getContent() == null) {
 			return true;
