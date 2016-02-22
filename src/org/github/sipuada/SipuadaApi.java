@@ -2,6 +2,8 @@ package org.github.sipuada;
 
 import java.util.List;
 
+import org.github.sipuada.plugins.SipuadaPlugin;
+
 public interface SipuadaApi {
 
 	public interface SipuadaListener {
@@ -30,7 +32,7 @@ public interface SipuadaApi {
 
 	}
 
-	boolean register(RegistrationCallback callback);
+	boolean registerCaller(RegistrationCallback callback);
 
 	public interface CallInvitationCallback extends SipuadaCallback {
 
@@ -51,5 +53,7 @@ public interface SipuadaApi {
 	boolean declineCallInvitation(String callId);
 
 	boolean finishCall(String callId);
+
+	boolean registerPlugin(SipuadaPlugin plugin);
 
 }
