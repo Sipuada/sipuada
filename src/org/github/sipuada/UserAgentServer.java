@@ -158,8 +158,6 @@ public class UserAgentServer {
 		}
 		//TODO examine Require header field and check whether a
 		//(420 BAD EXTENSION) response is appropriate.
-		//TODO perform content processing, responding with
-		//(415 UNSUPPORTED MEDIA TYPE) when appropriate.
 		return true;
 	}
 
