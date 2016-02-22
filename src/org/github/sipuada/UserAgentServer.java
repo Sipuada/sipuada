@@ -472,8 +472,10 @@ public class UserAgentServer {
 			if (offer == null) {
 				return true;
 			}
+			logger.info("Received {} request with no offer, so sending own offer along {} response.",
+					method, response.getStatusCode());
 			try {
-				request.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
+				response.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
 			} catch (ParseException parseException) {
 				logger.error("Plug-in-generated offer {} by {} could not be inserted into {} response to " +
 						"{} request.", offer.toString(), sessionPlugin.getClass().getName(),
@@ -494,6 +496,8 @@ public class UserAgentServer {
 						"so it was discarded.", method, parseException);
 				return false;
 			}
+			logger.info("Received {} request with a offer, so will try sending an answer along {} response.",
+					method, response.getStatusCode());
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
 				logger.error("No plug-in available to generate valid answer to offer {} in {} request.",
