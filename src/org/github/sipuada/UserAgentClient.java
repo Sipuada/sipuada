@@ -27,6 +27,7 @@ import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.exceptions.ResponseDiscarded;
 import org.github.sipuada.exceptions.ResponsePostponed;
+import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +35,9 @@ import com.google.common.eventbus.EventBus;
 
 import android.gov.nist.gnjvx.sip.Utils;
 import android.gov.nist.gnjvx.sip.address.SipUri;
+import android.javax.sdp.SdpFactory;
+import android.javax.sdp.SdpParseException;
+import android.javax.sdp.SessionDescription;
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
 import android.javax.sip.DialogState;
@@ -83,6 +87,7 @@ public class UserAgentClient {
 	private final MessageFactory messenger;
 	private final HeaderFactory headerMaker;
 	private final AddressFactory addressMaker;
+	private final Map<RequestMethod, SipuadaPlugin> sessionPlugins;
 
 	private final String username;
 	private final String primaryHost;
@@ -98,14 +103,15 @@ public class UserAgentClient {
 	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
 	private Map<URI, Long> registerCSeqs = new HashMap<>();
 
-	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
-			MessageFactory messageFactory, HeaderFactory headerFactory,
-			AddressFactory addressFactory, String... credentialsAndAddress) {
+	public UserAgentClient(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
+			MessageFactory messageFactory, HeaderFactory headerFactory, AddressFactory addressFactory,
+			String... credentialsAndAddress) {
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
+		sessionPlugins = plugins;
 		username = credentialsAndAddress.length > 0 && credentialsAndAddress[0] != null ?
 				credentialsAndAddress[0] : "";
 		primaryHost = credentialsAndAddress.length > 1 && credentialsAndAddress[1] != null ?
@@ -197,8 +203,7 @@ public class UserAgentClient {
 		 *
 		 * Allow
 		 * Supported
-		 * (later support also: Accept, Expires, adding body and body-related headers)
-		 * (later support also: the offer/answer model
+		 * (later support also: Accept, Expires)
 		 */
 
 		SipURI contactUri;
@@ -368,6 +373,10 @@ public class UserAgentClient {
 			final ClientTransaction clientTransaction = provider
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
+			final String callId = callIdHeader.getCallId();
+			if (isDialogCreatingRequest(method)) {
+				putOfferIntoRequestIfApplicable(method, callId, request);
+			}
 			new Thread(new Runnable() {
 
 				@Override
@@ -378,14 +387,14 @@ public class UserAgentClient {
 						}
 						else {
 							logger.error("Could not send this {} request.", method);
-							reportRequestError(callIdHeader.getCallId(), clientTransaction,
+							reportRequestError(callId, clientTransaction,
 									"Request could not be parsed or contained invalid state.");
 						}
 					} catch (SipException requestCouldNotBeSent) {
 						logger.error("Could not send this {} request: {} ({}).",
 								method, requestCouldNotBeSent.getMessage(),
 								requestCouldNotBeSent.getCause().getMessage());
-						reportRequestError(callIdHeader.getCallId(), clientTransaction,
+						reportRequestError(callId, clientTransaction,
 								"Request could not be sent: " + String.format("%s (%s).",
 										requestCouldNotBeSent.getMessage(),
 										requestCouldNotBeSent.getCause().getMessage()));
@@ -412,6 +421,36 @@ public class UserAgentClient {
 		}
 		//No need for caller to wait for remote responses.
 		return false;
+	}
+
+	private boolean isDialogCreatingRequest(RequestMethod method) {
+		switch (method) {
+			case INVITE:
+			case OPTIONS:
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	private void putOfferIntoRequestIfApplicable(RequestMethod method, String callId, Request request) {
+		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
+		if (sessionPlugin == null) {
+			return;
+		}
+		SessionDescription offer = sessionPlugin.generateOffer(callId, method);
+		if (offer == null) {
+			return;
+		}
+		try {
+			request.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
+		} catch (ParseException parseException) {
+			logger.error("Plug-in-generated offer {} by {} could not be inserted into {} request.",
+					offer.toString(), sessionPlugin.getClass().getName(), method, parseException);
+			return;
+		}
+		logger.info("Plug-in-generated offer {} by {} inserted into {} request.",
+				offer.toString(), sessionPlugin.getClass().getName(), method);
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
@@ -554,7 +593,7 @@ public class UserAgentClient {
 						handleRegisterResponse(statusCode, response);
 						break;
 					case INVITE:
-						handleInviteResponse(statusCode, clientTransaction);
+						handleInviteResponse(statusCode, response, clientTransaction);
 						break;
 					case BYE:
 						handleByeResponse(statusCode, clientTransaction);
@@ -1204,7 +1243,8 @@ public class UserAgentClient {
 		}
 	}
 
-	private void handleInviteResponse(int statusCode, ClientTransaction clientTransaction) {
+	private void handleInviteResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
 		Request request = clientTransaction.getRequest();
 		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		Dialog dialog = clientTransaction.getDialog();
@@ -1213,14 +1253,18 @@ public class UserAgentClient {
 				try {
 					CSeqHeader cseqHeader = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
-					//TODO *IF* the INVITE request contained a offer, this ACK
-					//MUST carry an answer to that offer, given that the offer is acceptable!
-					//TODO *HOWEVER* if the offer is not acceptable, after sending the ACK,
-					//a BYE request MUST be sent immediately.
+					boolean sendByeRightAway = false;
+					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
+							callId, request, response, ackRequest)) {
+						sendByeRightAway = true;
+					}
 					dialog.sendAck(ackRequest);
 					logger.info("{} response to INVITE arrived, so {} sent.", statusCode,
 							RequestMethod.ACK);
 					logger.info("New call established: {}.", callId);
+					if (sendByeRightAway) {
+						sendByeRequest(dialog);
+					}
 					bus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
@@ -1236,6 +1280,51 @@ public class UserAgentClient {
 			}
 			logger.info("{} response arrived.", statusCode);
 		}
+	}
+
+	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
+			Request request, Response response, Request ackRequest) {
+		if (request.getContent() != null) {
+			return true;
+		}
+		if (response.getContent() == null) {
+			return true;
+		}
+		SessionDescription offer;
+		try {
+			offer = SdpFactory.getInstance()
+					.createSessionDescription(new String(response.getRawContent()));
+		} catch (SdpParseException parseException) {
+			logger.error("Offer arrived in {} response to {} request, but could not be properly parsed, " +
+					"so it was discarded.", response.getStatusCode(), method, parseException);
+			return false;
+		}
+		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
+		if (sessionPlugin == null) {
+			logger.error("No plug-in available to generate valid answer to offer {} in {} response " +
+					"to {} request.", offer.toString(), response.getStatusCode(), method);
+			return false;
+		}
+		SessionDescription answer = sessionPlugin.generateAnswer(callId, method, offer);
+		if (answer == null) {
+			logger.error("Plug-in {} could not generate valid answer to offer {} in {} response " +
+					"to {} request.", sessionPlugin.getClass().getName(), offer.toString(),
+					response.getStatusCode(), method);
+			return false;
+		}
+		try {
+			ackRequest.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
+		} catch (ParseException parseException) {
+			logger.error("Plug-in-generated answer {} to offer {} by {} could not be inserted into {} " +
+					"for {} response to {} request.", answer.toString(), offer.toString(),
+					sessionPlugin.getClass().getName(), RequestMethod.ACK, response.getStatusCode(),
+					method, parseException);
+			return false;
+		}
+		logger.info("Plug-in-generated answer {} to offer {} by {} inserted into {} for {} response" +
+				" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
+				RequestMethod.ACK, response.getStatusCode(), method);
+		return true;
 	}
 
 	private void handleByeResponse(int statusCode, ClientTransaction clientTransaction) {
