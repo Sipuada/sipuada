@@ -101,3 +101,7 @@ com_crashlytics_export_strings.xml
 crashlytics.properties
 crashlytics-build.properties
 fabric.properties
+
+#J2OBJC gen
+j2objc_sources
+j2objc_gen
