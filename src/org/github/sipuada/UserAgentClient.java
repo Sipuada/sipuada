@@ -144,7 +144,7 @@ public class UserAgentClient {
 		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
 		long cseq = registerCSeqs.get(requestUri);
 		registerCSeqs.put(requestUri, cseq + 1);
-		
+
 		List<ContactHeader> contactHeaders = new LinkedList<>();
 		SipURI contactUri;
 		try {
@@ -158,7 +158,7 @@ public class UserAgentClient {
 			contactHeaders.add(contactHeader);
 		} catch (ParseException ignore) {}
 
-		//TODO *IF* request is a REGISTER, keep in mind that:
+		//TODO Keep in mind that:
 		/*
 		 * UAs MUST NOT send a new registration (that is, containing new Contact
 		 * header field values, as opposed to a retransmission) until they have
@@ -173,14 +173,6 @@ public class UserAgentClient {
 				requestUri, callIdHeader, cseq, contactHeaders
 				.toArray(new ContactHeader[contactHeaders.size()]));
 	}
-
-	//TODO later implement the OPTIONS method.
-	//	public void sendOptionsRequest(String remoteUser, String remoteHost) {
-	//		sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost,
-	//				...);
-	//	}
-	//TODO when we do it, make sure that no dialog and session state is
-	//messed up with by the flow of incoming responses to this OPTIONS request.
 
 	public boolean sendInviteRequest(String remoteUser, String remoteHost,
 			CallIdHeader callIdHeader) {
@@ -229,6 +221,70 @@ public class UserAgentClient {
 
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost,
 				requestUri, callIdHeader, cseq, additionalHeaders);
+	}
+
+	public boolean sendOptionsRequest(String remoteUser, String remoteHost,
+			CallIdHeader callIdHeader, boolean embedContactHeader) {
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this OPTIONS request to {} at {}." +
+					"\n[remoteUser] must be a valid id, [remoteHost] must be a valid IP address: {}.",
+					remoteUser, remoteHost, parseException.getMessage());
+			// No need for caller to wait for remote responses.
+			return false;
+		}
+		long cseq = ++localCSeq;
+
+		// TODO *IF* request is a OPTIONS, make sure to add the following
+		// headers:
+		/*
+		 * (according to section 13.2.1)
+		 *
+		 * Allow Supported (later support also: Accept, Expires)
+		 */
+
+		/*
+		 * A Contact header field MAY be present in an OPTIONS. An Accept header
+		 * field SHOULD be included to indicate the type of message body the UAC
+		 * wishes to receive in the response. Typically, this is set to a format
+		 * that is used to describe the media capabilities of a UA, such as SDP
+		 * (application/sdp).
+		 * 
+		 * Example OPTIONS request: OPTIONS sip:carol@chicago.com SIP/2.0 Via:
+		 * SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKhjhs8ass877 Max-Forwards:
+		 * 70 To: <sip:carol@chicago.com> From: Alice
+		 * <sip:alice@atlanta.com>;tag=1928301774 Call-ID: a84b4c76e66710 CSeq:
+		 * 63104 OPTIONS Contact: <sip:alice@pc33.atlanta.com> Accept:
+		 * application/sdp Content-Length: 0
+		 */
+		SipURI contactUri;
+		Header[] additionalHeaders = null;
+		if (embedContactHeader) {
+			try {
+				contactUri = addressMaker.createSipURI(username, localIp);
+			} catch (ParseException parseException) {
+				logger.error("Could not properly create the contact URI for {} at {}." +
+						"\n[username] must be a valid id, [localIp] must be a valid IP address: {}",
+						username, localIp, parseException.getMessage());
+				// No need for caller to wait for remote responses.
+				return false;
+			}
+			contactUri.setPort(localPort);
+			Address contactAddress = addressMaker.createAddress(contactUri);
+			ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+			try {
+				contactHeader.setExpires(60);
+			} catch (InvalidArgumentException ignore) {
+			}
+			// TODO later, allow for multiple contact headers here too (the ones
+			// REGISTERed).
+			additionalHeaders = ((List<ContactHeader>) (Collections.singletonList(contactHeader)))
+					.toArray(new ContactHeader[1]);
+		}
+		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
+				callIdHeader, cseq, additionalHeaders);
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser,
@@ -324,7 +380,7 @@ public class UserAgentClient {
 			fromTag = Utils.getInstance().generateTag();
 			to = addressMaker.createAddress(addresseeUri);
 			toTag = null;
-			
+
 			canonRouteSet.addAll(configuredRouteSet);
 		}
 		List<Address> normalizedRouteSet = new LinkedList<>();
@@ -572,7 +628,7 @@ public class UserAgentClient {
 		}
 		handleResponse(Response.SERVICE_UNAVAILABLE, null, null, callIdInAdvance);
 	}
-	
+
 	private void handleResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		handleResponse(statusCode, response, clientTransaction, null);
@@ -691,7 +747,7 @@ public class UserAgentClient {
 				//No method-specific handling is required.
 				//return false;
 			/*
-			 * case Response.UNSUPPORTED_URI_SCHEME: 
+			 * case Response.UNSUPPORTED_URI_SCHEME:
 			 */
 				//TODO handle this by retrying, this time using a SIP(S) URI.
 				//No method-specific handling is required.
@@ -743,7 +799,7 @@ public class UserAgentClient {
 		String codeAndReason = String.format("Following response arrived: %d (%s).",
 				statusCode, reasonPhrase);
 		if (clientTransaction == null) {
-			logger.error("A Fatal error occurred.{}", statusCode,
+			logger.error("A Fatal {} error occurred.{}", statusCode,
 					callIdInAdvance != null ? "" : " If it was NOT during processing of" +
 							" a REGISTER request, no end-user callback might get fired.");
 			//Just in case this error is associated with a REGISTER or INVITE request,
@@ -914,115 +970,123 @@ public class UserAgentClient {
 		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
+		List<String> acceptedEncodings = new LinkedList<>();
 		ListIterator<?> acceptEncodingHeaders =
 				response.getHeaders(AcceptEncodingHeader.NAME);
-		List<String> acceptedEncodings = new LinkedList<>();
-		while (acceptEncodingHeaders.hasNext()) {
-			AcceptEncodingHeader acceptEncodingHeader =
-					(AcceptEncodingHeader) acceptEncodingHeaders.next();
-			StringBuilder encoding =
-					new StringBuilder(acceptEncodingHeader.getEncoding());
-			float qValue = acceptEncodingHeader.getQValue();
-			if (qValue != -1) {
-				encoding.insert(0, String.format("q=%.2f, ", qValue));
+		if (acceptEncodingHeaders != null) {
+			while (acceptEncodingHeaders.hasNext()) {
+				AcceptEncodingHeader acceptEncodingHeader =
+						(AcceptEncodingHeader) acceptEncodingHeaders.next();
+				StringBuilder encoding =
+						new StringBuilder(acceptEncodingHeader.getEncoding());
+				float qValue = acceptEncodingHeader.getQValue();
+				if (qValue != -1) {
+					encoding.insert(0, String.format("q=%.2f, ", qValue));
+				}
+				acceptedEncodings.add(encoding.toString());
 			}
-			acceptedEncodings.add(encoding.toString());
 		}
+		StringBuilder overlappingEncodings = new StringBuilder();
 		ContentEncodingHeader contentEncodingHeader =
 				request.getContentEncoding();
-		String definedEncoding = contentEncodingHeader.getEncoding();
-		StringBuilder overlappingEncodings = new StringBuilder();
-		for (String acceptedEncoding : acceptedEncodings) {
-			String encodingWithoutQValue = acceptedEncoding;
-			if (encodingWithoutQValue.contains(",")) {
-				encodingWithoutQValue = acceptedEncoding
-						.split(",")[1].trim();
-			}
-			if (definedEncoding.contains(encodingWithoutQValue)) {
-				if (overlappingEncodings.length() != 0) {
-					overlappingEncodings.append("; ");
+		if (contentEncodingHeader != null) {
+			String definedEncoding = contentEncodingHeader.getEncoding();
+			for (String acceptedEncoding : acceptedEncodings) {
+				String encodingWithoutQValue = acceptedEncoding;
+				if (encodingWithoutQValue.contains(",")) {
+					encodingWithoutQValue = acceptedEncoding
+							.split(",")[1].trim();
 				}
-				overlappingEncodings.append(acceptedEncoding);
+				if (definedEncoding.contains(encodingWithoutQValue)) {
+					if (overlappingEncodings.length() != 0) {
+						overlappingEncodings.append("; ");
+					}
+					overlappingEncodings.append(acceptedEncoding);
+				}
 			}
 		}
 		boolean overlappingEncodingsFound = false;
 		if (overlappingEncodings.length() > 0) {
 			try {
-				contentEncodingHeader
-					.setEncoding(overlappingEncodings.toString());
-				request.setContentEncoding(contentEncodingHeader);
+				ContentEncodingHeader newContentEncodingHeader = headerMaker
+						.createContentEncodingHeader(overlappingEncodings.toString());
+				request.setContentEncoding(newContentEncodingHeader);
 				overlappingEncodingsFound = true;
 			} catch (ParseException ignore) {}
 		}
-		
+
 		boolean shouldBypassContentTypesCheck = false;
-		ListIterator<?> acceptHeaders = response.getHeaders(AcceptHeader.NAME);
 		Map<String, String> typeSubtypeToQValue = new HashMap<>();
 		Map<String, Set<String>> typeToSubTypes = new HashMap<>();
-		while (acceptHeaders.hasNext()) {
-			AcceptHeader acceptHeader =
-					(AcceptHeader) acceptHeaders.next();
-			String contentType = acceptHeader.getContentType();
-			String contentSubType = acceptHeader.getContentSubType();
-			if (acceptHeader.allowsAllContentTypes()) {
-				shouldBypassContentTypesCheck = true;
-				break;
-			}
-			else if (acceptHeader.allowsAllContentSubTypes()) {
-				typeToSubTypes.put(contentType, new HashSet<String>());
-			}
-			else {
-				if (!typeToSubTypes.containsKey(contentType)) {
+		ListIterator<?> acceptHeaders = response.getHeaders(AcceptHeader.NAME);
+		if (acceptHeaders != null) {
+			while (acceptHeaders.hasNext()) {
+				AcceptHeader acceptHeader =
+						(AcceptHeader) acceptHeaders.next();
+				String contentType = acceptHeader.getContentType();
+				String contentSubType = acceptHeader.getContentSubType();
+				if (acceptHeader.allowsAllContentTypes()) {
+					shouldBypassContentTypesCheck = true;
+					break;
+				}
+				else if (acceptHeader.allowsAllContentSubTypes()) {
 					typeToSubTypes.put(contentType, new HashSet<String>());
 				}
-				typeToSubTypes.get(contentType).add(contentSubType);
-			}
-			float qValue = acceptHeader.getQValue();
-			if (qValue != -1) {
-				typeSubtypeToQValue.put(String.format("%s/%s", contentType,
-						contentSubType), Float.toString(qValue));
+				else {
+					if (!typeToSubTypes.containsKey(contentType)) {
+						typeToSubTypes.put(contentType, new HashSet<String>());
+					}
+					typeToSubTypes.get(contentType).add(contentSubType);
+				}
+				float qValue = acceptHeader.getQValue();
+				if (qValue != -1) {
+					typeSubtypeToQValue.put(String.format("%s/%s", contentType,
+							contentSubType), Float.toString(qValue));
+				}
 			}
 		}
 		boolean overlappingContentTypesFound = false;
 		if (!shouldBypassContentTypesCheck) {
-			ListIterator<?> definedContentTypeHeaders =
-					request.getHeaders(ContentTypeHeader.NAME);
 			List<ContentTypeHeader> overlappingContentTypes
 					= new LinkedList<>();
-			while (definedContentTypeHeaders.hasNext()) {
-				ContentTypeHeader contentTypeHeader = (ContentTypeHeader)
-						definedContentTypeHeaders.next();
-				boolean addThisContentType = false;
-				String contentType = contentTypeHeader
-						.getContentType();
-				String contentSubType = contentTypeHeader
-						.getContentSubType();
-				if (typeToSubTypes.containsKey(contentType)) {
-					Set<String> acceptedSubTypes =
-							typeToSubTypes.get(contentType);
-					if (acceptedSubTypes.isEmpty()) {
-						addThisContentType = true;
-					}
-					else {
-						for (String acceptedSubType : acceptedSubTypes) {
-							if (acceptedSubType.equals(contentSubType)) {
-								addThisContentType = true;
-								break;
+			ListIterator<?> definedContentTypeHeaders =
+					request.getHeaders(ContentTypeHeader.NAME);
+			if (definedContentTypeHeaders != null) {
+				while (definedContentTypeHeaders.hasNext()) {
+					ContentTypeHeader contentTypeHeader = (ContentTypeHeader)
+							definedContentTypeHeaders.next();
+					boolean addThisContentType = false;
+					String contentType = contentTypeHeader
+							.getContentType();
+					String contentSubType = contentTypeHeader
+							.getContentSubType();
+					if (typeToSubTypes.containsKey(contentType)) {
+						Set<String> acceptedSubTypes =
+								typeToSubTypes.get(contentType);
+						if (acceptedSubTypes.isEmpty()) {
+							addThisContentType = true;
+						}
+						else {
+							for (String acceptedSubType : acceptedSubTypes) {
+								if (acceptedSubType.equals(contentSubType)) {
+									addThisContentType = true;
+									break;
+								}
 							}
 						}
 					}
-				}
-				if (addThisContentType) {
-					String typeSubtype = String.format("%s/%s",
-							contentType, contentSubType);
-					if (typeSubtypeToQValue.containsKey(typeSubtype)) {
-						String qValue = typeSubtypeToQValue
-								.get(typeSubtype);
-						try {
-							contentTypeHeader.setParameter("q", qValue);
-						} catch (ParseException ignore) {}
+					if (addThisContentType) {
+						String typeSubtype = String.format("%s/%s",
+								contentType, contentSubType);
+						if (typeSubtypeToQValue.containsKey(typeSubtype)) {
+							String qValue = typeSubtypeToQValue
+									.get(typeSubtype);
+							try {
+								contentTypeHeader.setParameter("q", qValue);
+							} catch (ParseException ignore) {}
+						}
+						overlappingContentTypes.add(contentTypeHeader);
 					}
-					overlappingContentTypes.add(contentTypeHeader);
 				}
 			}
 			if (overlappingContentTypes.size() > 0) {
@@ -1068,7 +1132,7 @@ public class UserAgentClient {
 			ClientTransaction clientTransaction) {
 		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
-		
+
 		UnsupportedHeader unsupportedHeader =
 				(UnsupportedHeader) response.getHeader(UnsupportedHeader.NAME);
 		if (unsupportedHeader == null) {

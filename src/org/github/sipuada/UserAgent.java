@@ -610,15 +610,19 @@ public class UserAgent implements SipListener {
 					wipeEstablishedCall(callId, eventBusSubscriberId);
 					eventBus.unregister(this);
 					activePlugins.remove(callId);
-					sessionPlugin.performSessionTermination(callId);
+					if (sessionPlugin != null) {
+						sessionPlugin.performSessionTermination(callId);
+					}
 					listener.onCallFinished(callId);
 				}
 			}
 
 		};
 		eventBus.register(eventBusSubscriber);
-		activePlugins.put(callId, sessionPlugin);
-		sessionPlugin.performSessionSetup(callId, this);
+		if (sessionPlugin != null) {
+			activePlugins.put(callId, sessionPlugin);
+			sessionPlugin.performSessionSetup(callId, this);
+		}
 	}
 
 	public synchronized void wipeEstablishedCall(String callId,
