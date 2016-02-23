@@ -743,7 +743,7 @@ public class UserAgentClient {
 		String codeAndReason = String.format("Following response arrived: %d (%s).",
 				statusCode, reasonPhrase);
 		if (clientTransaction == null) {
-			logger.error("A Fatal error occurred.{}", statusCode,
+			logger.error("A Fatal {} error occurred.{}", statusCode,
 					callIdInAdvance != null ? "" : " If it was NOT during processing of" +
 							" a REGISTER request, no end-user callback might get fired.");
 			//Just in case this error is associated with a REGISTER or INVITE request,
@@ -914,115 +914,123 @@ public class UserAgentClient {
 		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
 
+		List<String> acceptedEncodings = new LinkedList<>();
 		ListIterator<?> acceptEncodingHeaders =
 				response.getHeaders(AcceptEncodingHeader.NAME);
-		List<String> acceptedEncodings = new LinkedList<>();
-		while (acceptEncodingHeaders.hasNext()) {
-			AcceptEncodingHeader acceptEncodingHeader =
-					(AcceptEncodingHeader) acceptEncodingHeaders.next();
-			StringBuilder encoding =
-					new StringBuilder(acceptEncodingHeader.getEncoding());
-			float qValue = acceptEncodingHeader.getQValue();
-			if (qValue != -1) {
-				encoding.insert(0, String.format("q=%.2f, ", qValue));
+		if (acceptEncodingHeaders != null) {
+			while (acceptEncodingHeaders.hasNext()) {
+				AcceptEncodingHeader acceptEncodingHeader =
+						(AcceptEncodingHeader) acceptEncodingHeaders.next();
+				StringBuilder encoding =
+						new StringBuilder(acceptEncodingHeader.getEncoding());
+				float qValue = acceptEncodingHeader.getQValue();
+				if (qValue != -1) {
+					encoding.insert(0, String.format("q=%.2f, ", qValue));
+				}
+				acceptedEncodings.add(encoding.toString());
 			}
-			acceptedEncodings.add(encoding.toString());
 		}
+		StringBuilder overlappingEncodings = new StringBuilder();
 		ContentEncodingHeader contentEncodingHeader =
 				request.getContentEncoding();
-		String definedEncoding = contentEncodingHeader.getEncoding();
-		StringBuilder overlappingEncodings = new StringBuilder();
-		for (String acceptedEncoding : acceptedEncodings) {
-			String encodingWithoutQValue = acceptedEncoding;
-			if (encodingWithoutQValue.contains(",")) {
-				encodingWithoutQValue = acceptedEncoding
-						.split(",")[1].trim();
-			}
-			if (definedEncoding.contains(encodingWithoutQValue)) {
-				if (overlappingEncodings.length() != 0) {
-					overlappingEncodings.append("; ");
+		if (contentEncodingHeader != null) {
+			String definedEncoding = contentEncodingHeader.getEncoding();
+			for (String acceptedEncoding : acceptedEncodings) {
+				String encodingWithoutQValue = acceptedEncoding;
+				if (encodingWithoutQValue.contains(",")) {
+					encodingWithoutQValue = acceptedEncoding
+							.split(",")[1].trim();
 				}
-				overlappingEncodings.append(acceptedEncoding);
+				if (definedEncoding.contains(encodingWithoutQValue)) {
+					if (overlappingEncodings.length() != 0) {
+						overlappingEncodings.append("; ");
+					}
+					overlappingEncodings.append(acceptedEncoding);
+				}
 			}
 		}
 		boolean overlappingEncodingsFound = false;
 		if (overlappingEncodings.length() > 0) {
 			try {
-				contentEncodingHeader
-					.setEncoding(overlappingEncodings.toString());
-				request.setContentEncoding(contentEncodingHeader);
+				ContentEncodingHeader newContentEncodingHeader = headerMaker
+						.createContentEncodingHeader(overlappingEncodings.toString());
+				request.setContentEncoding(newContentEncodingHeader);
 				overlappingEncodingsFound = true;
 			} catch (ParseException ignore) {}
 		}
 		
 		boolean shouldBypassContentTypesCheck = false;
-		ListIterator<?> acceptHeaders = response.getHeaders(AcceptHeader.NAME);
 		Map<String, String> typeSubtypeToQValue = new HashMap<>();
 		Map<String, Set<String>> typeToSubTypes = new HashMap<>();
-		while (acceptHeaders.hasNext()) {
-			AcceptHeader acceptHeader =
-					(AcceptHeader) acceptHeaders.next();
-			String contentType = acceptHeader.getContentType();
-			String contentSubType = acceptHeader.getContentSubType();
-			if (acceptHeader.allowsAllContentTypes()) {
-				shouldBypassContentTypesCheck = true;
-				break;
-			}
-			else if (acceptHeader.allowsAllContentSubTypes()) {
-				typeToSubTypes.put(contentType, new HashSet<String>());
-			}
-			else {
-				if (!typeToSubTypes.containsKey(contentType)) {
+		ListIterator<?> acceptHeaders = response.getHeaders(AcceptHeader.NAME);
+		if (acceptHeaders != null) {
+			while (acceptHeaders.hasNext()) {
+				AcceptHeader acceptHeader =
+						(AcceptHeader) acceptHeaders.next();
+				String contentType = acceptHeader.getContentType();
+				String contentSubType = acceptHeader.getContentSubType();
+				if (acceptHeader.allowsAllContentTypes()) {
+					shouldBypassContentTypesCheck = true;
+					break;
+				}
+				else if (acceptHeader.allowsAllContentSubTypes()) {
 					typeToSubTypes.put(contentType, new HashSet<String>());
 				}
-				typeToSubTypes.get(contentType).add(contentSubType);
-			}
-			float qValue = acceptHeader.getQValue();
-			if (qValue != -1) {
-				typeSubtypeToQValue.put(String.format("%s/%s", contentType,
-						contentSubType), Float.toString(qValue));
+				else {
+					if (!typeToSubTypes.containsKey(contentType)) {
+						typeToSubTypes.put(contentType, new HashSet<String>());
+					}
+					typeToSubTypes.get(contentType).add(contentSubType);
+				}
+				float qValue = acceptHeader.getQValue();
+				if (qValue != -1) {
+					typeSubtypeToQValue.put(String.format("%s/%s", contentType,
+							contentSubType), Float.toString(qValue));
+				}
 			}
 		}
 		boolean overlappingContentTypesFound = false;
 		if (!shouldBypassContentTypesCheck) {
-			ListIterator<?> definedContentTypeHeaders =
-					request.getHeaders(ContentTypeHeader.NAME);
 			List<ContentTypeHeader> overlappingContentTypes
 					= new LinkedList<>();
-			while (definedContentTypeHeaders.hasNext()) {
-				ContentTypeHeader contentTypeHeader = (ContentTypeHeader)
-						definedContentTypeHeaders.next();
-				boolean addThisContentType = false;
-				String contentType = contentTypeHeader
-						.getContentType();
-				String contentSubType = contentTypeHeader
-						.getContentSubType();
-				if (typeToSubTypes.containsKey(contentType)) {
-					Set<String> acceptedSubTypes =
-							typeToSubTypes.get(contentType);
-					if (acceptedSubTypes.isEmpty()) {
-						addThisContentType = true;
-					}
-					else {
-						for (String acceptedSubType : acceptedSubTypes) {
-							if (acceptedSubType.equals(contentSubType)) {
-								addThisContentType = true;
-								break;
+			ListIterator<?> definedContentTypeHeaders =
+					request.getHeaders(ContentTypeHeader.NAME);
+			if (definedContentTypeHeaders != null) {
+				while (definedContentTypeHeaders.hasNext()) {
+					ContentTypeHeader contentTypeHeader = (ContentTypeHeader)
+							definedContentTypeHeaders.next();
+					boolean addThisContentType = false;
+					String contentType = contentTypeHeader
+							.getContentType();
+					String contentSubType = contentTypeHeader
+							.getContentSubType();
+					if (typeToSubTypes.containsKey(contentType)) {
+						Set<String> acceptedSubTypes =
+								typeToSubTypes.get(contentType);
+						if (acceptedSubTypes.isEmpty()) {
+							addThisContentType = true;
+						}
+						else {
+							for (String acceptedSubType : acceptedSubTypes) {
+								if (acceptedSubType.equals(contentSubType)) {
+									addThisContentType = true;
+									break;
+								}
 							}
 						}
 					}
-				}
-				if (addThisContentType) {
-					String typeSubtype = String.format("%s/%s",
-							contentType, contentSubType);
-					if (typeSubtypeToQValue.containsKey(typeSubtype)) {
-						String qValue = typeSubtypeToQValue
-								.get(typeSubtype);
-						try {
-							contentTypeHeader.setParameter("q", qValue);
-						} catch (ParseException ignore) {}
+					if (addThisContentType) {
+						String typeSubtype = String.format("%s/%s",
+								contentType, contentSubType);
+						if (typeSubtypeToQValue.containsKey(typeSubtype)) {
+							String qValue = typeSubtypeToQValue
+									.get(typeSubtype);
+							try {
+								contentTypeHeader.setParameter("q", qValue);
+							} catch (ParseException ignore) {}
+						}
+						overlappingContentTypes.add(contentTypeHeader);
 					}
-					overlappingContentTypes.add(contentTypeHeader);
 				}
 			}
 			if (overlappingContentTypes.size() > 0) {

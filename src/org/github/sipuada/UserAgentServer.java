@@ -144,8 +144,6 @@ public class UserAgentServer {
 			if (doSendResponse(Response.METHOD_NOT_ALLOWED, method,
 					request, serverTransaction, allowedMethods
 					.toArray(new Header[allowedMethods.size()])) != null) {
-				logger.info("{} response sent.",
-						Response.METHOD_NOT_ALLOWED);
 				return false;
 			}
 			throw new RequestCouldNotBeAddressed();
@@ -199,7 +197,6 @@ public class UserAgentServer {
 			if (shouldForbid) {
 				if (doSendResponse(Response.FORBIDDEN, method,
 						request, serverTransaction) != null) {
-					logger.info("{} response sent.", Response.FORBIDDEN);
 					return false;
 				}
 				else {
@@ -226,7 +223,6 @@ public class UserAgentServer {
 		if (shouldNotFound) {
 			if (doSendResponse(Response.NOT_FOUND, method,
 					request, serverTransaction) != null) {
-				logger.info("{} response sent.", Response.NOT_FOUND);
 				return false;
 			}
 			else {
@@ -241,7 +237,6 @@ public class UserAgentServer {
 		String callId = callIdHeader.getCallId();
 		if (doSendResponse(Response.OK, RequestMethod.CANCEL,
 				request, serverTransaction) != null) {
-			logger.info("{} response sent.", Response.OK);
 			bus.post(new CallInvitationCanceled("Call invitation canceled by the caller " +
 					"or callee took longer than roughly 30 seconds to answer.", callId, true));
 			return;
@@ -267,7 +262,6 @@ public class UserAgentServer {
 		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING,
 				RequestMethod.INVITE, request, serverTransaction);
 		if (newServerTransaction != null) {
-			logger.info("{} response sent.", Response.RINGING);
 			bus.post(new CallInvitationArrived(callId, newServerTransaction));
 			return;
 		}
@@ -291,7 +285,6 @@ public class UserAgentServer {
 		String callId = callIdHeader.getCallId();
 		if (doSendResponse(Response.OK, RequestMethod.BYE,
 				request, serverTransaction) != null) {
-			logger.info("{} response sent.", Response.OK);
 			bus.post(new EstablishedCallFinished(callId));
 			return;
 		}
@@ -330,7 +323,6 @@ public class UserAgentServer {
 				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
 		if (doSendResponse(Response.OK, method, request,
 				serverTransaction, additionalHeaders) != null) {
-			logger.info("{} response sent.", Response.OK);
 			return true;
 		}
 		return false;
@@ -342,7 +334,6 @@ public class UserAgentServer {
 		String callId = callIdHeader.getCallId();
 		if (doSendResponse(Response.BUSY_HERE,
 				method, request, serverTransaction) != null) {
-			logger.info("{} response sent.", Response.BUSY_HERE);
 			bus.post(new CallInvitationCanceled("Call invitation rejected by the callee or callee" +
 					" is currently busy and couldn't take another call.", callId, false));
 			return true;
@@ -352,6 +343,11 @@ public class UserAgentServer {
 
 	private ServerTransaction doSendResponse(int statusCode, RequestMethod method,
 			Request request, ServerTransaction serverTransaction, Header... additionalHeaders) {
+		return doSendResponse(statusCode, method, request, serverTransaction, true, additionalHeaders);
+	}
+
+	private ServerTransaction doSendResponse(int statusCode, RequestMethod method, Request request,
+			ServerTransaction serverTransaction, boolean addSessionPayload, Header... additionalHeaders) {
 		if (method == RequestMethod.UNKNOWN) {
 			logger.debug("[doSendResponse(int, RequestMethod, Request, " +
 					"ServerTransaction, Header...)] method forbidden for " +
@@ -393,20 +389,9 @@ public class UserAgentServer {
 				for (Header header : additionalHeaders) {
 					response.addHeader(header);
 				}
-				if (isDialogCreatingRequest(method)) {
-					if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
-							request, response)) {
-						int newStatusCode = Response.UNSUPPORTED_MEDIA_TYPE;
-						if (doSendResponse(newStatusCode, method, request,
-								newServerTransaction, additionalHeaders) != null) {
-							logger.info("{} response sent.", newStatusCode);
-							return newServerTransaction;
-						}
-						return null;
-					}
-				}
 				logger.info("Sending {} response to {} request...", statusCode, method);
 				dialog.sendReliableProvisionalResponse(response);
+				logger.info("{} response sent.", statusCode);
 				return newServerTransaction;
 			} catch (InvalidArgumentException ignore) {
 			} catch (SipException invalidResponse) {
@@ -425,13 +410,13 @@ public class UserAgentServer {
 			for (Header header : additionalHeaders) {
 				response.addHeader(header);
 			}
-			if (isDialogCreatingRequest(method)) {
+			if (addSessionPayload && isDialogCreatingRequest(method)
+					&& (Constants.getResponseClass(response.getStatusCode()) == ResponseClass.SUCCESS)) {
 				if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
 						request, response)) {
 					int newStatusCode = Response.UNSUPPORTED_MEDIA_TYPE;
 					if (doSendResponse(newStatusCode, method, request,
-							newServerTransaction, additionalHeaders) != null) {
-						logger.info("{} response sent.", newStatusCode);
+							newServerTransaction, false, additionalHeaders) != null) {
 						return newServerTransaction;
 					}
 					return null;
@@ -439,6 +424,7 @@ public class UserAgentServer {
 			}
 			logger.info("Sending {} response to {} request...", statusCode, method);
 			newServerTransaction.sendResponse(response);
+			logger.info("{} response sent.", statusCode);
 			return newServerTransaction;
 		} catch (ParseException ignore) {
 		} catch (InvalidArgumentException ignore) {
