@@ -463,12 +463,12 @@ public class UserAgentServer {
 			try {
 				response.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
 			} catch (ParseException parseException) {
-				logger.error("Plug-in-generated offer {} by {} could not be inserted into {} response to " +
+				logger.error("Plug-in-generated offer {{}} by {} could not be inserted into {} response to " +
 						"{} request.", offer.toString(), sessionPlugin.getClass().getName(),
 						response.getStatusCode(), method, parseException);
 				return true;
 			}
-			logger.info("Plug-in-generated offer {} by {} inserted into {} response to {} request.",
+			logger.info("Plug-in-generated offer {{}} by {} inserted into {} response to {} request.",
 					offer.toString(), sessionPlugin.getClass().getName(), response.getStatusCode(), method);
 			return true;
 		}
@@ -486,25 +486,25 @@ public class UserAgentServer {
 					method, response.getStatusCode());
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
-				logger.error("No plug-in available to generate valid answer to offer {} in {} request.",
+				logger.error("No plug-in available to generate valid answer to offer {{}} in {} request.",
 						offer.toString(), method);
 				return false;
 			}
 			SessionDescription answer = sessionPlugin.generateAnswer(callId, method, offer);
 			if (answer == null) {
-				logger.error("Plug-in {} could not generate valid answer to offer {} in {} request.",
+				logger.error("Plug-in {} could not generate valid answer to offer {{}} in {} request.",
 						sessionPlugin.getClass().getName(), offer.toString(), method);
 				return false;
 			}
 			try {
 				response.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
 			} catch (ParseException parseException) {
-				logger.error("Plug-in-generated answer {} to offer {} by {} could not be inserted into " +
+				logger.error("Plug-in-generated answer {{}} to offer {{}} by {} could not be inserted into " +
 						"{} response to {} request.", answer.toString(), offer.toString(),
 						sessionPlugin.getClass().getName(), response.getStatusCode(), method, parseException);
 				return false;
 			}
-			logger.info("Plug-in-generated answer {} to offer {} by {} inserted into {} response" +
+			logger.info("Plug-in-generated answer {{}} to offer {{}} by {} inserted into {} response" +
 					" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
 					response.getStatusCode(), method);
 			return true;
