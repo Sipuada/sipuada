@@ -1298,7 +1298,7 @@ public class UserAgentClient {
 		SessionDescription offer;
 		try {
 			offer = SdpFactory.getInstance()
-					.createSessionDescription(new String(response.getRawContent()));
+					.createSessionDescriptionFromString(new String(response.getRawContent()));
 		} catch (SdpParseException parseException) {
 			logger.error("Offer arrived in {} response to {} request, but could not be properly parsed, " +
 					"so it was discarded.", response.getStatusCode(), method, parseException);

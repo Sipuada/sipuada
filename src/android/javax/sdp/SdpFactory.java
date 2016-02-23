@@ -16,13 +16,13 @@ import java.text.*;
  * reported by Brian J. Collins <bjcollins@rockwellcollins.com>. and by Majdi
  * Abuelbassal <majdi.abuelbassal@bbumail.com>. Please refer to IETF RFC 2327
  * for a description of SDP.
- * 
+ *
  * @author Olivier Deruelle <olivier.deruelle@nist.gov>
  * @author M. Ranganathan
- * 
- * 
+ *
+ *
  * @version 1.0
- * 
+ *
  */
 public class SdpFactory extends Object {
 	private static final SdpFactory singletonInstance = new SdpFactory();
@@ -33,13 +33,13 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Obtain an instance of an SdpFactory.
-	 * 
+	 *
 	 * This static method returns a factory instance.
-	 * 
+	 *
 	 * Once an application has obtained a reference to an SdpFactory it can use
 	 * the factory to configure and obtain parser instances and to create SDP
 	 * objects.
-	 * 
+	 *
 	 * @return a factory instance
 	 */
 	public static SdpFactory getInstance() {
@@ -48,15 +48,15 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Creates a new, empty SessionDescription. The session is set as follows:
-	 * 
+	 *
 	 * v=0
-	 * 
+	 *
 	 * o=this.createOrigin ("user", InetAddress.getLocalHost().toString());
-	 * 
+	 *
 	 * s=-
-	 * 
+	 *
 	 * t=0 0
-	 * 
+	 *
 	 * @throws SdpException
 	 *             SdpException, - if there is a problem constructing the
 	 *             SessionDescription.
@@ -93,10 +93,36 @@ public class SdpFactory extends Object {
 		return sessionDescriptionImpl;
 	}
 
+	public SessionDescription createSessionDescription(String localHost) throws SdpException {
+		SessionDescriptionImpl sessionDescriptionImpl = new SessionDescriptionImpl();
+
+		ProtoVersionField ProtoVersionField = new ProtoVersionField();
+		ProtoVersionField.setVersion(0);
+		sessionDescriptionImpl.setVersion(ProtoVersionField);
+
+		OriginField originImpl;
+		originImpl = (OriginField) this.createOrigin("user", localHost);
+		sessionDescriptionImpl.setOrigin(originImpl);
+
+		SessionNameField sessionNameImpl = new SessionNameField();
+		sessionNameImpl.setValue("-");
+		sessionDescriptionImpl.setSessionName(sessionNameImpl);
+
+		TimeDescriptionImpl timeDescriptionImpl = new TimeDescriptionImpl();
+		TimeField timeImpl = new TimeField();
+		timeImpl.setZero();
+		timeDescriptionImpl.setTime(timeImpl);
+		Vector times = new Vector();
+		times.addElement(timeDescriptionImpl);
+		sessionDescriptionImpl.setTimeDescriptions(times);
+
+		return sessionDescriptionImpl;
+	}
+
 	/**
 	 * Creates a new SessionDescription, deep copy of another
 	 * SessionDescription.
-	 * 
+	 *
 	 * @param otherSessionDescription -
 	 *            the SessionDescription to copy from.
 	 * @return a new SessionDescription, exact and deep copy of the
@@ -112,16 +138,16 @@ public class SdpFactory extends Object {
 	/**
 	 * Creates a SessionDescription populated with the information contained
 	 * within the string parameter.
-	 * 
+	 *
 	 * Note: unknown field types should not cause exceptions.
-	 * 
+	 *
 	 * @param s
 	 *            s - the sdp message that is to be parsed.
 	 * @throws SdpParseException
 	 *             SdpParseException - if there is a problem parsing the String.
 	 * @return a populated SessionDescription object.
 	 */
-	public SessionDescription createSessionDescription(String s)
+	public SessionDescription createSessionDescriptionFromString(String s)
 			throws SdpParseException {
 		try {
 
@@ -135,7 +161,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Bandwidth object with the specified values.
-	 * 
+	 *
 	 * @param modifier
 	 *            modifier - the bandwidth type
 	 * @param value
@@ -157,7 +183,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Attribute object with the specified values.
-	 * 
+	 *
 	 * @param name
 	 *            the namee of the attribute
 	 * @param value
@@ -179,7 +205,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Info object with the specified value.
-	 * 
+	 *
 	 * @param value
 	 *            the string containing the description.
 	 * @return Info
@@ -198,7 +224,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Phone object with the specified value.
-	 * 
+	 *
 	 * @param value
 	 *            the string containing the description.
 	 * @return Phone
@@ -217,7 +243,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns EMail object with the specified value.
-	 * 
+	 *
 	 * @param value
 	 *            the string containing the description.
 	 * @return EMail
@@ -236,7 +262,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns URI object with the specified value.
-	 * 
+	 *
 	 * @param value
 	 *            the URL containing the description.
 	 * @throws SdpException
@@ -252,7 +278,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns SessionName object with the specified name.
-	 * 
+	 *
 	 * @param name
 	 *            the string containing the name of the session.
 	 * @return SessionName
@@ -271,7 +297,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Key object with the specified value.
-	 * 
+	 *
 	 * @param method
 	 *            the string containing the method type.
 	 * @param key
@@ -294,7 +320,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Version object with the specified values.
-	 * 
+	 *
 	 * @param value
 	 *            the version number.
 	 * @return Version
@@ -314,7 +340,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Media object with the specified properties.
-	 * 
+	 *
 	 * @param media
 	 *            the media type, eg "audio"
 	 * @param port
@@ -329,7 +355,7 @@ public class SdpFactory extends Object {
 	 * @return Media
 	 */
 	public Media createMedia(String media, int port, int numPorts,
-			String transport, Vector staticRtpAvpTypes) throws SdpException {
+							 String transport, Vector staticRtpAvpTypes) throws SdpException {
 		MediaField mediaImpl = new MediaField();
 		mediaImpl.setMediaType(media);
 		mediaImpl.setMediaPort(port);
@@ -341,7 +367,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Origin object with the specified properties.
-	 * 
+	 *
 	 * @param userName
 	 *            the user name.
 	 * @param address
@@ -362,7 +388,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns Origin object with the specified properties.
-	 * 
+	 *
 	 * @param userName
 	 *            String containing the user that created the string.
 	 * @param sessionId
@@ -380,8 +406,8 @@ public class SdpFactory extends Object {
 	 * @return Origin object with the specified properties.
 	 */
 	public Origin createOrigin(String userName, long sessionId,
-			long sessionVersion, String networkType, String addrType,
-			String address) throws SdpException {
+							   long sessionVersion, String networkType, String addrType,
+							   String address) throws SdpException {
 		OriginField originImpl = new OriginField();
 		originImpl.setUsername(userName);
 		originImpl.setAddress(address);
@@ -396,7 +422,7 @@ public class SdpFactory extends Object {
 	 * Returns MediaDescription object with the specified properties. The
 	 * returned object will respond to Media.getMediaFormats(boolean) with a
 	 * Vector of media formats.
-	 * 
+	 *
 	 * @param media
 	 *            media -
 	 * @param port
@@ -415,7 +441,7 @@ public class SdpFactory extends Object {
 	 * @return MediaDescription
 	 */
 	public MediaDescription createMediaDescription(String media, int port,
-			int numPorts, String transport, int[] staticRtpAvpTypes)
+												   int numPorts, String transport, int[] staticRtpAvpTypes)
 			throws IllegalArgumentException, SdpException {
 		MediaDescriptionImpl mediaDescriptionImpl = new MediaDescriptionImpl();
 		MediaField mediaImpl = new MediaField();
@@ -436,7 +462,7 @@ public class SdpFactory extends Object {
 	 * Returns MediaDescription object with the specified properties. The
 	 * returned object will respond to Media.getMediaFormats(boolean) with a
 	 * Vector of String objects specified by the 'formats argument.
-	 * 
+	 *
 	 * @param media
 	 *            the media type, eg "audio"
 	 * @param port
@@ -451,7 +477,7 @@ public class SdpFactory extends Object {
 	 * @return MediaDescription
 	 */
 	public MediaDescription createMediaDescription(String media, int port,
-			int numPorts, String transport, String[] formats) {
+												   int numPorts, String transport, String[] formats) {
 		MediaDescriptionImpl mediaDescriptionImpl = new MediaDescriptionImpl();
 		try {
 
@@ -474,7 +500,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns TimeDescription object with the specified properties.
-	 * 
+	 *
 	 * @param t
 	 *            the Time that the time description applies to. Returns
 	 *            TimeDescription object with the specified properties.
@@ -489,7 +515,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns TimeDescription unbounded (i.e. "t=0 0");
-	 * 
+	 *
 	 * @throws SdpException
 	 * @return TimeDescription unbounded (i.e. "t=0 0");
 	 */
@@ -503,7 +529,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns TimeDescription object with the specified properties.
-	 * 
+	 *
 	 * @param start
 	 *            start time.
 	 * @param stop
@@ -536,7 +562,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns a Connection object with the specified properties a
-	 * 
+	 *
 	 * @param netType
 	 *            network type, eg "IN" for "Internet"
 	 * @param addrType
@@ -550,7 +576,7 @@ public class SdpFactory extends Object {
 	 * @return Connection
 	 */
 	public Connection createConnection(String netType, String addrType,
-			String addr, int ttl, int numAddrs) throws SdpException {
+									   String addr, int ttl, int numAddrs) throws SdpException {
 		ConnectionField connectionImpl = new ConnectionField();
 
 		connectionImpl.setNetworkType(netType);
@@ -563,7 +589,7 @@ public class SdpFactory extends Object {
 	/**
 	 * Returns a Connection object with the specified properties and no TTL and
 	 * a default number of addresses (1).
-	 * 
+	 *
 	 * @param netType
 	 *            network type, eg "IN" for "Internet"
 	 * @param addrType
@@ -575,7 +601,7 @@ public class SdpFactory extends Object {
 	 * @return Connection
 	 */
 	public Connection createConnection(String netType, String addrType,
-			String addr) throws SdpException {
+									   String addr) throws SdpException {
 		ConnectionField connectionImpl = new ConnectionField();
 
 		connectionImpl.setNetworkType(netType);
@@ -588,7 +614,7 @@ public class SdpFactory extends Object {
 	/**
 	 * Returns a Connection object with the specified properties and a network
 	 * and address type of "IN" and "IP4" respectively.
-	 * 
+	 *
 	 * @param addr
 	 *            connection address
 	 * @param ttl
@@ -609,9 +635,9 @@ public class SdpFactory extends Object {
 	/**
 	 * Returns a Connection object with the specified address. This is
 	 * equivalent to
-	 * 
+	 *
 	 * createConnection("IN", "IP4", addr);
-	 * 
+	 *
 	 * @param addr
 	 *            connection address
 	 * @throws SdpException
@@ -626,7 +652,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns a Time specification with the specified start and stop times.
-	 * 
+	 *
 	 * @param start
 	 *            start time
 	 * @param stop
@@ -644,7 +670,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns an unbounded Time specification (i.e., "t=0 0").
-	 * 
+	 *
 	 * @throws SdpException
 	 * @return an unbounded Time specification (i.e., "t=0 0").
 	 */
@@ -657,7 +683,7 @@ public class SdpFactory extends Object {
 	/**
 	 * Returns a RepeatTime object with the specified interval, duration, and
 	 * time offsets.
-	 * 
+	 *
 	 * @param repeatInterval
 	 *            the "repeat interval" in seconds
 	 * @param activeDuration
@@ -668,7 +694,7 @@ public class SdpFactory extends Object {
 	 * @return RepeatTime
 	 */
 	public RepeatTime createRepeatTime(int repeatInterval, int activeDuration,
-			int[] offsets) {
+									   int[] offsets) {
 		RepeatField repeatTimeField = new RepeatField();
 		try {
 
@@ -684,7 +710,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Constructs a timezone adjustment record.
-	 * 
+	 *
 	 * @param d
 	 *            the Date at which the adjustment is going to take place.
 	 * @param offset
@@ -708,7 +734,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Test main.
-	 * 
+	 *
 	 * @param args
 	 * @throws SdpException
 	 *             public static void main(String[] args) throws SdpException {
@@ -726,7 +752,7 @@ public class SdpFactory extends Object {
 
 	/**
 	 * Returns a long containing the NTP value for a given Java Date.
-	 * 
+	 *
 	 * @param d
 	 *            Date to set
 	 * @return long
@@ -760,11 +786,11 @@ public class SdpFactory extends Object {
 		System.out.println("sessionDescription = " + sessionDescription);
 		Vector mediaDescriptions = sessionDescription
 				.getMediaDescriptions(true);
-		
+
 		for (int i = 0; i < mediaDescriptions.size(); i++) {
 			MediaDescription m = (MediaDescription) mediaDescriptions
 					.elementAt(i);
-		    ((MediaDescriptionImpl) m).setDuplexity("sendrecv");
+			((MediaDescriptionImpl) m).setDuplexity("sendrecv");
 			System.out.println("m = " + m.toString());
 			Media media = m.getMedia();
 			Vector formats = media.getMediaFormats(false);
