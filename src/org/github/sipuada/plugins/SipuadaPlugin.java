@@ -16,6 +16,20 @@ public interface SipuadaPlugin {
 	SessionDescription generateOffer(String callId, RequestMethod method);
 
 	/**
+	 * Feeds the accepted answer to a given offer back to the plug-in that generated
+	 * that offer. The plug-in should know which offer this answer corresponds to
+	 * by comparing the given callId with the one that was passed to generateOffer().
+	 * This method is important because the plug-in may need to use both
+	 * the original offer and the accepted answer to perform the session setup stage.
+	 * If this instance receives a generateOffer(), it MUST expect an upcoming
+	 * receiveAcceptedAnswer() in the future (and then, a performSessionSetup()).
+	 * If this instance receives a generateAnswer(), it MUST NOT expect an upcoming
+	 * receiveAcceptedAnswer() because obviously this was the plug-in that accepted
+	 * someone else's offer, and thus it must only expect a performSessionSetup() later.
+	 */
+	void receiveAcceptedAnswer(String callId, SessionDescription answer);
+
+	/**
 	 * Generates an answer to an offer to go along a response
 	 * to a session-creating request of given method.
 	 * @return a SessionDescription representing the answer to an offer
