@@ -1297,9 +1297,13 @@ public class UserAgentClient {
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
 			Request request, Response response, Request ackRequest) {
 		if (request.getContent() != null) {
-			logger.error("{} request was sent with an offer but {} response arrived with no answer" +
-					" so this UAC will terminate the dialog right away.", method, response.getStatusCode());
-			return !(response.getContent() == null);
+			boolean responseArrivedWithNoAnswer = response.getContent() == null;
+			if (responseArrivedWithNoAnswer) {
+				logger.error("{} request was sent with an offer but {} response " +
+						"arrived with no answer so this UAC will terminate the dialog right away.",
+						method, response.getStatusCode());
+			}
+			return !responseArrivedWithNoAnswer;
 		}
 		if (response.getContent() == null) {
 			return true;
