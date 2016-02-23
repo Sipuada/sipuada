@@ -141,7 +141,7 @@ public class SIPClientMain implements SipuadaListener {
 									.getText(), Util.getIPAddress(true)
 									+ ":55000/TCP");
 				}
-				sipuada.register(new RegistrationCallback() {
+				sipuada.registerCaller(new RegistrationCallback() {
 					@Override
 					public void onRegistrationSuccess(
 							List<String> registeredContacts) {
