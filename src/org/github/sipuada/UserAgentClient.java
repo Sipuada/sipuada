@@ -1309,7 +1309,7 @@ public class UserAgentClient {
 					if (sessionPlugin != null) {
 						SessionDescription answer = SdpFactory.getInstance()
 								.createSessionDescriptionFromString(new String(response.getRawContent()));
-						sessionPlugin.receiveAcceptedAnswer(callId, answer);
+						sessionPlugin.receiveAnswerToAcceptedOffer(callId, answer);
 					}
 				} catch (SdpParseException parseException) {
 					logger.error("Answer arrived in {} response to {} request, but could not be properly" +

@@ -27,7 +27,7 @@ public interface SipuadaPlugin {
 	 * receiveAcceptedAnswer() because obviously this was the plug-in that accepted
 	 * someone else's offer, and thus it must only expect a performSessionSetup() later.
 	 */
-	void receiveAcceptedAnswer(String callId, SessionDescription answer);
+	void receiveAnswerToAcceptedOffer(String callId, SessionDescription answer);
 
 	/**
 	 * Generates an answer to an offer to go along a response
