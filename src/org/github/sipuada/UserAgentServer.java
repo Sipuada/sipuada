@@ -22,7 +22,6 @@ import com.google.common.eventbus.EventBus;
 import android.javax.sdp.SdpFactory;
 import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
-import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
@@ -263,6 +262,14 @@ public class UserAgentServer {
 				RequestMethod.INVITE, request, serverTransaction);
 		if (newServerTransaction != null) {
 			bus.post(new CallInvitationArrived(callId, newServerTransaction));
+			RequestMethod method = RequestMethod.INVITE;
+			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
+					Response.UNSUPPORTED_MEDIA_TYPE)) {
+				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
+						request, newServerTransaction, false);
+				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
+						+ "negotiation between callee and caller failed.", callId, false));
+			}
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
@@ -354,10 +361,10 @@ public class UserAgentServer {
 					"{} requests.", method);
 			return null;
 		}
-		boolean withinDialog = true;
+//		boolean withinDialog = true;
 		ServerTransaction newServerTransaction = serverTransaction;
 		if (newServerTransaction == null) {
-			withinDialog = false;
+//			withinDialog = false;
 			try {
 				newServerTransaction = provider.getNewServerTransaction(request);
 			} catch (TransactionAlreadyExistsException requestIsRetransmit) {
@@ -375,41 +382,41 @@ public class UserAgentServer {
 				return null;
 			}
 		}
-		Dialog dialog = newServerTransaction.getDialog();
-		withinDialog &= dialog != null;
+//		Dialog dialog = newServerTransaction.getDialog();
+//		withinDialog &= dialog != null;
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
-		if (Constants.getResponseClass(statusCode) == ResponseClass.PROVISIONAL &&
-				method == RequestMethod.INVITE && withinDialog) {
-			try {
-				Response response = dialog.createReliableProvisionalResponse(statusCode);
-				for (Header header : additionalHeaders) {
-					response.addHeader(header);
-				}
-				logger.info("Sending {} response to {} request...", statusCode, method);
-				dialog.sendReliableProvisionalResponse(response);
-				logger.info("{} response sent.", statusCode);
-				return newServerTransaction;
-			} catch (InvalidArgumentException ignore) {
-			} catch (SipException invalidResponse) {
-				//A final response to this request was already sent, so this
-				//provisional response shall not be sent, or another reliable
-				//provisional response is still pending.
-				//In either case, we won't send this new response.
-				logger.debug("{} response could not be sent to {} request: {} ({}).",
-						statusCode, method, invalidResponse.getMessage(),
-						invalidResponse.getCause().getMessage());
-				return null;
-			}
-		}
+//		if (Constants.getResponseClass(statusCode) == ResponseClass.PROVISIONAL &&
+//				method == RequestMethod.INVITE && withinDialog) {
+//			try {
+//				Response response = dialog.createReliableProvisionalResponse(statusCode);
+//				for (Header header : additionalHeaders) {
+//					response.addHeader(header);
+//				}
+//				logger.info("Sending {} response to {} request...", statusCode, method);
+//				dialog.sendReliableProvisionalResponse(response);
+//				logger.info("{} response sent.", statusCode);
+//				return newServerTransaction;
+//			} catch (InvalidArgumentException ignore) {
+//			} catch (SipException invalidResponse) {
+//				//A final response to this request was already sent, so this
+//				//provisional response shall not be sent, or another reliable
+//				//provisional response is still pending.
+//				//In either case, we won't send this new response.
+//				logger.debug("{} response could not be sent to {} request: {} ({}).",
+//						statusCode, method, invalidResponse.getMessage(),
+//						invalidResponse.getCause().getMessage());
+//				return null;
+//			}
+//		}
 		try {
 			Response response = messenger.createResponse(statusCode, request);
 			for (Header header : additionalHeaders) {
 				response.addHeader(header);
 			}
-			if (addSessionPayload && isDialogCreatingRequest(method)
-					&& (Constants.getResponseClass(response
-							.getStatusCode()) == ResponseClass.SUCCESS)) {
+			boolean isSuccessResponse = Constants.getResponseClass(response
+					.getStatusCode()) == ResponseClass.SUCCESS;
+			if (addSessionPayload && isDialogCreatingRequest(method) && isSuccessResponse) {
 				if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
 						request, response)) {
 					doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
@@ -445,7 +452,18 @@ public class UserAgentServer {
 	}
 
 	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
+			Request request, int statusCode) {
+		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, request, statusCode, null);
+	}
+
+	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
 			Request request, Response response) {
+		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
+				response.getStatusCode(), response);
+	}
+
+	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
+			Request request, int statusCode, Response response) {
 		if (request.getContent() == null) {
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
@@ -456,17 +474,19 @@ public class UserAgentServer {
 				return true;
 			}
 			logger.info("Received {} request with no offer, so sending own offer along {} response.",
-					method, response.getStatusCode());
+					method, statusCode);
 			try {
-				response.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
+				if (response != null) {
+					response.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
+					logger.info("Plug-in-generated offer {{}} by {} inserted into {} response to {} request.",
+							offer.toString(), sessionPlugin.getClass().getName(), statusCode, method);
+				}
 			} catch (ParseException parseException) {
 				logger.error("Plug-in-generated offer {{}} by {} could not be inserted into {} response to " +
 						"{} request.", offer.toString(), sessionPlugin.getClass().getName(),
-						response.getStatusCode(), method, parseException);
+						statusCode, method, parseException);
 				return true;
 			}
-			logger.info("Plug-in-generated offer {{}} by {} inserted into {} response to {} request.",
-					offer.toString(), sessionPlugin.getClass().getName(), response.getStatusCode(), method);
 			return true;
 		}
 		else {
@@ -480,7 +500,7 @@ public class UserAgentServer {
 				return false;
 			}
 			logger.info("Received {} request with a offer, so will try sending an answer along {} response.",
-					method, response.getStatusCode());
+					method, statusCode);
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
 				logger.error("No plug-in available to generate valid answer to offer {{}} in {} request.",
@@ -494,16 +514,18 @@ public class UserAgentServer {
 				return false;
 			}
 			try {
-				response.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
+				if (response != null) {
+					response.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
+					logger.info("Plug-in-generated answer {{}} to offer {{}} by {} inserted into {} response" +
+							" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
+							statusCode, method);
+				}
 			} catch (ParseException parseException) {
 				logger.error("Plug-in-generated answer {{}} to offer {{}} by {} could not be inserted into " +
 						"{} response to {} request.", answer.toString(), offer.toString(),
-						sessionPlugin.getClass().getName(), response.getStatusCode(), method, parseException);
+						sessionPlugin.getClass().getName(), statusCode, method, parseException);
 				return false;
 			}
-			logger.info("Plug-in-generated answer {{}} to offer {{}} by {} inserted into {} response" +
-					" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
-					response.getStatusCode(), method);
 			return true;
 		}
 	}
