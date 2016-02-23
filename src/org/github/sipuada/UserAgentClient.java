@@ -445,11 +445,11 @@ public class UserAgentClient {
 		try {
 			request.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
 		} catch (ParseException parseException) {
-			logger.error("Plug-in-generated offer {} by {} could not be inserted into {} request.",
+			logger.error("Plug-in-generated offer {{}} by {} could not be inserted into {} request.",
 					offer.toString(), sessionPlugin.getClass().getName(), method, parseException);
 			return;
 		}
-		logger.info("Plug-in-generated offer {} by {} inserted into {} request.",
+		logger.info("Plug-in-generated offer {{}} by {} inserted into {} request.",
 				offer.toString(), sessionPlugin.getClass().getName(), method);
 	}
 
@@ -755,7 +755,8 @@ public class UserAgentClient {
 			return;
 		}
 		Request request = clientTransaction.getRequest();
-		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
 		switch (Constants.getRequestMethod(request.getMethod())) {
 			case REGISTER:
 				bus.post(new RegistrationFailed(codeAndReason));
@@ -1328,13 +1329,13 @@ public class UserAgentClient {
 		try {
 			ackRequest.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
 		} catch (ParseException parseException) {
-			logger.error("Plug-in-generated answer {} to offer {} by {} could not be inserted into {} " +
+			logger.error("Plug-in-generated answer {{}} to offer {{}} by {} could not be inserted into {} " +
 					"for {} response to {} request.", answer.toString(), offer.toString(),
 					sessionPlugin.getClass().getName(), RequestMethod.ACK, response.getStatusCode(),
 					method, parseException);
 			return false;
 		}
-		logger.info("Plug-in-generated answer {} to offer {} by {} inserted into {} for {} response" +
+		logger.info("Plug-in-generated answer {{}} to offer {{}} by {} inserted into {} for {} response" +
 				" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
 				RequestMethod.ACK, response.getStatusCode(), method);
 		return true;
