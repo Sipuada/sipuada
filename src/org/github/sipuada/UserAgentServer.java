@@ -360,9 +360,6 @@ public class UserAgentServer {
 			withinDialog = false;
 			try {
 				newServerTransaction = provider.getNewServerTransaction(request);
-				/*if (method == RequestMethod.INVITE) {
-					newServerTransaction.enableRetransmissionAlerts();
-				}*/
 			} catch (TransactionAlreadyExistsException requestIsRetransmit) {
 				//This may happen if UAS got a retransmit of already pending request.
 				logger.debug("{} response could not be sent to {} request: {}.",
@@ -411,14 +408,14 @@ public class UserAgentServer {
 				response.addHeader(header);
 			}
 			if (addSessionPayload && isDialogCreatingRequest(method)
-					&& (Constants.getResponseClass(response.getStatusCode()) == ResponseClass.SUCCESS)) {
+					&& (Constants.getResponseClass(response
+							.getStatusCode()) == ResponseClass.SUCCESS)) {
 				if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
 						request, response)) {
-					int newStatusCode = Response.UNSUPPORTED_MEDIA_TYPE;
-					if (doSendResponse(newStatusCode, method, request,
-							newServerTransaction, false, additionalHeaders) != null) {
-						return newServerTransaction;
-					}
+					doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
+							request, newServerTransaction, false, additionalHeaders);
+					bus.post(new CallInvitationCanceled("Call invitation failed because media types "
+							+ "negotiation between callee and caller failed.", callId, false));
 					return null;
 				}
 			}
