@@ -1303,6 +1303,21 @@ public class UserAgentClient {
 						"arrived with no answer so this UAC will terminate the dialog right away.",
 						method, response.getStatusCode());
 			}
+			else {
+				try {
+					SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
+					if (sessionPlugin != null) {
+						SessionDescription answer = SdpFactory.getInstance()
+								.createSessionDescriptionFromString(new String(response.getRawContent()));
+						sessionPlugin.receiveAcceptedAnswer(callId, answer);
+					}
+				} catch (SdpParseException parseException) {
+					logger.error("Answer arrived in {} response to {} request, but could not be properly" +
+							" parsed, so it was discarded. The UAC will terminate the dialog right away.",
+							response.getStatusCode(), method, parseException);
+					return false;
+				}
+			}
 			return !responseArrivedWithNoAnswer;
 		}
 		if (response.getContent() == null) {
