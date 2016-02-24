@@ -1,6 +1,7 @@
 package org.github.sipuada;
 
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,6 +24,10 @@ import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
+import org.github.sipuada.events.QueryingOptionsFailed;
+import org.github.sipuada.events.QueryingOptionsRinging;
+import org.github.sipuada.events.QueryingOptionsSucceed;
+import org.github.sipuada.events.QueryingOptionsWaiting;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.exceptions.ResponseDiscarded;
@@ -252,15 +257,29 @@ public class UserAgentClient {
 		 * that is used to describe the media capabilities of a UA, such as SDP
 		 * (application/sdp).
 		 * 
-		 * Example OPTIONS request: OPTIONS sip:carol@chicago.com SIP/2.0 Via:
-		 * SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKhjhs8ass877 Max-Forwards:
-		 * 70 To: <sip:carol@chicago.com> From: Alice
-		 * <sip:alice@atlanta.com>;tag=1928301774 Call-ID: a84b4c76e66710 CSeq:
-		 * 63104 OPTIONS Contact: <sip:alice@pc33.atlanta.com> Accept:
-		 * application/sdp Content-Length: 0
+		 * Example OPTIONS request: 
+		 * OPTIONS sip:carol@chicago.com SIP/2.0
+         * Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKhjhs8ass877
+         * Max-Forwards: 70
+         * To: <sip:carol@chicago.com>
+         * From: Alice <sip:alice@atlanta.com>;tag=1928301774
+         * Call-ID: a84b4c76e66710
+         * CSeq: 63104 OPTIONS
+         * Contact: <sip:alice@pc33.atlanta.com>
+         * Accept: application/sdp
+         * Content-Length: 0
+         * 
 		 */
 		SipURI contactUri;
-		Header[] additionalHeaders = null;
+		List<Header> additionalHeaders = new ArrayList<>();
+		try {
+			AcceptHeader acceptHeader = headerMaker.createAcceptHeader("application", "sdp");
+			additionalHeaders.add(acceptHeader);
+		} catch (ParseException e) {
+			logger.error("Request must have a Accept Header");
+			return false;
+		}
+		
 		if (embedContactHeader) {
 			try {
 				contactUri = addressMaker.createSipURI(username, localIp);
@@ -280,11 +299,10 @@ public class UserAgentClient {
 			}
 			// TODO later, allow for multiple contact headers here too (the ones
 			// REGISTERed).
-			additionalHeaders = ((List<ContactHeader>) (Collections.singletonList(contactHeader)))
-					.toArray(new ContactHeader[1]);
+			additionalHeaders.add(contactHeader);
 		}
 		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
-				callIdHeader, cseq, additionalHeaders);
+				callIdHeader, cseq, (Header[]) additionalHeaders.toArray());
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser,
@@ -650,6 +668,9 @@ public class UserAgentClient {
 						break;
 					case INVITE:
 						handleInviteResponse(statusCode, response, clientTransaction);
+						break;
+					case OPTIONS:
+						handleOptionsResponse(statusCode, response, clientTransaction);
 						break;
 					case BYE:
 						handleByeResponse(statusCode, clientTransaction);
@@ -1349,12 +1370,96 @@ public class UserAgentClient {
 			logger.info("{} response arrived.", statusCode);
 		}
 	}
+	
+	private void handleOptionsResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
+		Request request = clientTransaction.getRequest();
+		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
+		Dialog dialog = clientTransaction.getDialog();
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			if (dialog != null) {
+				try {
+					CSeqHeader cseqHeader = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
+					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
+					boolean sendByeRightAway = false;
+					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.OPTIONS,
+							callId, request, response, ackRequest)) {
+						sendByeRightAway = true;
+					}
+					dialog.sendAck(ackRequest);
+					logger.info("{} response to OPTIONS arrived, so {} sent.", statusCode,
+							RequestMethod.ACK);
+					logger.info("New call established: {}.", callId);
+					if (sendByeRightAway) {
+						sendByeRequest(dialog);
+					}
+					
+					dispatchQueryingOptionsEvent(callId, dialog, request, response, ackRequest);
+				} catch (InvalidArgumentException ignore) {
+				} catch (SipException ignore) {}
+			}
+		} else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
+			if (statusCode == Response.RINGING) {
+				logger.info("Ringing!");
+				bus.post(new QueryingOptionsRinging(callId, clientTransaction));
+			}
+			else {
+				bus.post(new QueryingOptionsWaiting(callId, clientTransaction));
+			}
+			logger.info("{} response arrived.", statusCode);
+		}
+	}
+	
+	private void dispatchQueryingOptionsEvent(String callId, Dialog dialog, Request request, Response response, Request ackRequest) {
+		if(null != request.getContent() && null != response.getContent()) {
+			// request has offer and response has answer
+			bus.post(new QueryingOptionsSucceed(callId, dialog, parseRequestContentToSessionDescription(request), parseResponseContentToSessionDescription(response)));
+		} else if (null == request.getContent() && null != response.getContent()) {
+			// response has offer and ackrequest has answer
+			bus.post(new QueryingOptionsSucceed(callId, dialog, parseResponseContentToSessionDescription(response), parseRequestContentToSessionDescription(ackRequest)));
+		} else if (null == request.getContent() && null == response.getContent()) {
+			// request has nothing and response has nothing and ackrequest too
+			bus.post(new QueryingOptionsSucceed(callId, dialog, null, null));
+		} else if (null != request.getContent() && null == response.getContent()) {
+			// request has offer and response has null and ackrequest has null
+			bus.post(new QueryingOptionsFailed("SDP answer cannot be found", callId));
+		} else if (null == request.getContent() && null != response.getContent()) {
+			// request has null and response has offer and ackrequest has null
+			bus.post(new QueryingOptionsFailed("SDP answer cannot be found", callId));
+			
+		}
+	}
+	
+	private SessionDescription parseRequestContentToSessionDescription(Request request) {
+		try {
+			return SdpFactory.getInstance()
+					.createSessionDescriptionFromString((String) request.getContent());
+		} catch (SdpParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+	
+	private SessionDescription parseResponseContentToSessionDescription(Response response) {
+		try {
+			return SdpFactory.getInstance()
+					.createSessionDescriptionFromString(new String(response.getRawContent()));
+		} catch (SdpParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
 
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
 			Request request, Response response, Request ackRequest) {
+		
+		// Request with OFFER
 		if (request.getContent() != null) {
 			boolean responseArrivedWithNoAnswer = response.getContent() == null;
 			if (responseArrivedWithNoAnswer) {
+				// Response with OFFER expected BUT has no OFFER
 				logger.error("{} request was sent with an offer but {} response " +
 						"arrived with no answer so this UAC will terminate the dialog right away.",
 						method, response.getStatusCode());
@@ -1633,11 +1738,6 @@ public class UserAgentClient {
 		request.addHeader(proxyAuthorizationHeader);
 		//ProxyAuthorization header could be added.
 		return true;
-	}
-
-	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, CallIdHeader callIdHeader) {
-		// TODO Auto-generated method stub
-		return false;
 	}
 
 }

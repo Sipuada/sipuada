@@ -1,5 +1,6 @@
 package org.github.sipuada;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -23,7 +24,10 @@ import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.QueryingOptionsFailed;
+import org.github.sipuada.events.QueryingOptionsRinging;
 import org.github.sipuada.events.QueryingOptionsSucceed;
+import org.github.sipuada.events.QueryingOptionsWaiting;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.plugins.SipuadaPlugin;
@@ -627,9 +631,6 @@ public class UserAgent implements SipListener {
 		}
 	}
 	
-	private synchronized void queryingOptionsEstablished(String eventBusSubscriberId, String callId, Dialog dialog) {
-		// TODO Auto-generated method stub
-	}
 
 	public synchronized void wipeEstablishedCall(String callId,
 			String eventBusSubscriberId) {
@@ -704,12 +705,8 @@ public class UserAgent implements SipListener {
 		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
 	}
 
-	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, OptionsQueryingCallback callback) {
-		if (operationsInProgress.get(RequestMethod.OPTIONS)) {
-			postponedOperations.add(new Operation(callback, remoteUser, remoteDomain));
-			logger.info("OPTIONS request postponed because another is in progress.");
-			return true;
-		}
+	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, final OptionsQueryingCallback callback) {
+	
 		CallIdHeader callIdHeader = provider.getNewCallId();
 		final String callId = callIdHeader.getCallId();
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
@@ -719,22 +716,30 @@ public class UserAgent implements SipListener {
 			public void onEvent(QueryingOptionsSucceed event) {
 				Dialog dialog = event.getDialog();
 				if (event.getCallId().equals(callId)) {
-					inviteOperationFinished(eventBusSubscriberId, callId);
-//					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-					queryingOptionsEstablished(eventBusSubscriberId, callId, dialog);
-					listener.onCallEstablished(callId);
-//					scheduleNextInviteRequest();
+					List<String> capabilities = new ArrayList<>();
+					callback.onOptionsQueryingSuccess(capabilities);
 				}
 			}
 
 
 			@Subscribe
-			public void onEvent(CallInvitationFailed event) {
+			public void onEvent(QueryingOptionsFailed event) {
 				if (event.getCallId().equals(callId)) {
-//					inviteOperationFinished(eventBusSubscriberId, callId);
-//					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-					listener.onCallInvitationFailed(event.getReason(), callId);
-//					scheduleNextInviteRequest();
+					callback.onOptionsQueryingFailed(event.getReason());
+				}
+			}
+			
+			@Subscribe
+			public void onEvent(QueryingOptionsRinging event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onOptionsQueryingRinging(event.getCallId());
+				}
+			}
+			
+			@Subscribe
+			public void onEvent(QueryingOptionsWaiting event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onOptionsQueryingWaiting(event.getCallId());
 				}
 			}
 			
@@ -742,15 +747,12 @@ public class UserAgent implements SipListener {
 		};
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendOptionsRequest(remoteUser, remoteDomain, callIdHeader);
-		if (expectRemoteAnswer) {
-			operationsInProgress.put(RequestMethod.OPTIONS, true);
-		}
-		else {
+		boolean expectRemoteAnswer = uac.sendOptionsRequest(remoteUser, remoteDomain, callIdHeader, true);
+		if (!expectRemoteAnswer) {
 			logger.error("OPTIONS request not sent.");
 			eventBus.unregister(eventBusSubscriber);
 		}
-		return expectRemoteAnswer;
+		return true;
 	}
 
 }

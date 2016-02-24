@@ -49,6 +49,10 @@ public interface SipuadaApi {
 		void onOptionsQueryingSuccess(List<String> capabilities);
 
 		void onOptionsQueryingFailed(String reason);
+		
+		void onOptionsQueryingRinging(String callId);
+		
+		void onOptionsQueryingWaiting(String callId);
 
 	}
 
