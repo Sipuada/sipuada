@@ -147,6 +147,7 @@ public class SIPClientMain implements SipuadaListener {
 										+ " - "
 										+ " Waiting For Options Querying ...");
 								currentCallID = callId;
+								optionsButton.setEnabled(true);
 							}
 							
 							@Override
@@ -155,6 +156,7 @@ public class SIPClientMain implements SipuadaListener {
 										+ System.getProperty("line.separator")
 										+ " - " + " Querying Success ...");
 								currentCallID = callId;
+								optionsButton.setEnabled(true);
 							}
 							
 							@Override
@@ -163,6 +165,7 @@ public class SIPClientMain implements SipuadaListener {
 										+ System.getProperty("line.separator")
 										+ " - " + " Ringing ...");
 								currentCallID = callId;
+								optionsButton.setEnabled(true);
 							}
 							
 							@Override
@@ -170,6 +173,7 @@ public class SIPClientMain implements SipuadaListener {
 								textArea.setText(textArea.getText()
 										+ System.getProperty("line.separator")
 										+ " - " + " Querying Failed ...");
+								optionsButton.setEnabled(true);
 							}
 						});
 			}
