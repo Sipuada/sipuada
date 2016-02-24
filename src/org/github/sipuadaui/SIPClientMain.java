@@ -16,8 +16,11 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextArea;
 import org.github.sipuada.Sipuada;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
+import org.github.sipuada.SipuadaApi.OptionsQueryingCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
+
+import android.javax.sdp.SessionDescription;
 
 public class SIPClientMain implements SipuadaListener {
 
@@ -37,6 +40,7 @@ public class SIPClientMain implements SipuadaListener {
 	private JButton btnCancel;
 	private JButton btnEndCall;
 	private JButton btCall;
+	private JButton btOptions;
 
 	/**
 	 * Launch the application.
@@ -118,6 +122,59 @@ public class SIPClientMain implements SipuadaListener {
 			}
 		});
 	}
+	
+	private void setUPOptionsButton(final JButton optionsButton) {
+		optionsButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (sipuada == null) {
+					textArea.setText(textArea.getText()
+							+ System.getProperty("line.separator") + " - "
+							+ " Required to register!");
+					btnCancel.setEnabled(false);
+					optionsButton.setEnabled(true);
+				}
+				optionsButton.setEnabled(false);
+				sipuada.queryOptions(callerUserTextField.getText(),
+						callerDomainTextField.getText(),
+						new OptionsQueryingCallback() {
+							
+							@Override
+							public void onOptionsQueryingWaiting(String callId) {
+								textArea.setText(textArea.getText()
+										+ System.getProperty("line.separator")
+										+ " - "
+										+ " Waiting For Options Querying ...");
+								currentCallID = callId;
+							}
+							
+							@Override
+							public void onOptionsQueryingSuccess(String callId, SessionDescription offerSDP, SessionDescription answerSDP) {
+								textArea.setText(textArea.getText()
+										+ System.getProperty("line.separator")
+										+ " - " + " Querying Success ...");
+								currentCallID = callId;
+							}
+							
+							@Override
+							public void onOptionsQueryingRinging(String callId) {
+								textArea.setText(textArea.getText()
+										+ System.getProperty("line.separator")
+										+ " - " + " Ringing ...");
+								currentCallID = callId;
+							}
+							
+							@Override
+							public void onOptionsQueryingFailed(String reason) {
+								textArea.setText(textArea.getText()
+										+ System.getProperty("line.separator")
+										+ " - " + " Querying Failed ...");
+							}
+						});
+			}
+		});
+	}
+	
 
 	private void setEndCallButton(JButton endCall) {
 		endCall.addActionListener(new ActionListener() {
@@ -253,9 +310,13 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(callerUserTextField, "cell 1 3,growx");
 		callerUserTextField.setColumns(10);
 
-		 btCall = new JButton("Call");
+		btCall = new JButton("Call");
 		setUPCallButton(btCall);
 		frmSipuada.getContentPane().add(btCall, "cell 4 3");
+		
+		btOptions = new JButton("Options");
+		setUPCallButton(btCall);
+		frmSipuada.getContentPane().add(btOptions, "cell 4 3");
 
 		JLabel lblLog = new JLabel("Log");
 		frmSipuada.getContentPane().add(lblLog, "cell 0 4");
