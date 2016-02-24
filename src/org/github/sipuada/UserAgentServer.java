@@ -97,7 +97,8 @@ public class UserAgentServer {
 						break;
 					case OPTIONS:
 						//FIXME later handle OPTIONS request as well.
-						throw new RequestCouldNotBeAddressed();
+						handleOptionsRequest(request, serverTransaction);
+						break;
 					case INVITE:
 						handleInviteRequest(request, serverTransaction);
 						break;
@@ -274,8 +275,40 @@ public class UserAgentServer {
 		}
 		throw new RequestCouldNotBeAddressed();
 	}
+	
+	private void handleOptionsRequest(Request request, ServerTransaction serverTransaction) {
+		boolean withinDialog = serverTransaction != null;
+		if (withinDialog) {
+			handleReDoOptionsRequest(request, serverTransaction);
+			return;
+		}
+		//TODO also consider supporting multicast conferences, by sending silent 2xx responses
+		//when appropriate, by using identifiers within the SDP session description.
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING,
+				RequestMethod.OPTIONS, request, serverTransaction);
+		if (newServerTransaction != null) {
+			bus.post(new CallInvitationArrived(callId, newServerTransaction));
+			RequestMethod method = RequestMethod.OPTIONS;
+			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
+					Response.UNSUPPORTED_MEDIA_TYPE)) {
+				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
+						request, newServerTransaction, false);
+				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
+						+ "negotiation between callee and caller failed.", callId, false));
+			}
+			return;
+		}
+		throw new RequestCouldNotBeAddressed();
+	}
 
 	private void handleReinviteRequest(Request request, ServerTransaction serverTransaction) {
+		//FIXME later implement REINVITE as well.
+		throw new RequestCouldNotBeAddressed();
+	}
+	
+	private void handleReDoOptionsRequest(Request request, ServerTransaction serverTransaction) {
 		//FIXME later implement REINVITE as well.
 		throw new RequestCouldNotBeAddressed();
 	}
