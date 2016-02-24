@@ -301,8 +301,12 @@ public class UserAgentClient {
 			// REGISTERed).
 			additionalHeaders.add(contactHeader);
 		}
+		
+
+		Header[] headers = new Header[additionalHeaders.size()];
+		headers = additionalHeaders.toArray(headers);
 		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
-				callIdHeader, cseq, (Header[]) additionalHeaders.toArray());
+				callIdHeader, cseq, headers);
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser,

@@ -714,10 +714,8 @@ public class UserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(QueryingOptionsSucceed event) {
-				Dialog dialog = event.getDialog();
 				if (event.getCallId().equals(callId)) {
-					List<String> capabilities = new ArrayList<>();
-					callback.onOptionsQueryingSuccess(capabilities);
+					callback.onOptionsQueryingSuccess(callId, event.getSessionDescriptionOffer(), event.getSessionDescriptionAnswer());
 				}
 			}
 

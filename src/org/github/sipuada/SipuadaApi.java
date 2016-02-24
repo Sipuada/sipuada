@@ -4,6 +4,8 @@ import java.util.List;
 
 import org.github.sipuada.plugins.SipuadaPlugin;
 
+import android.javax.sdp.SessionDescription;
+
 public interface SipuadaApi {
 
 	public interface SipuadaListener {
@@ -46,7 +48,7 @@ public interface SipuadaApi {
 	
 	public interface OptionsQueryingCallback extends SipuadaCallback {
 
-		void onOptionsQueryingSuccess(List<String> capabilities);
+		void onOptionsQueryingSuccess(String callId, SessionDescription offerSDP, SessionDescription answerSDP);
 
 		void onOptionsQueryingFailed(String reason);
 		
