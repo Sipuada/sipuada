@@ -1635,4 +1635,9 @@ public class UserAgentClient {
 		return true;
 	}
 
+	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, CallIdHeader callIdHeader) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 }

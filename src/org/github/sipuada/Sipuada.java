@@ -207,4 +207,10 @@ public class Sipuada implements SipuadaApi {
 		return true;
 	}
 
+	@Override
+	public boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback) {
+		return fetchBestAgent(defaultTransport).sendOptionsRequest(remoteUser,
+				remoteDomain, callback);
+	}
+
 }

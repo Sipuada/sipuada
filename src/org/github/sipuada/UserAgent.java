@@ -10,6 +10,7 @@ import java.util.TooManyListenersException;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
+import org.github.sipuada.SipuadaApi.OptionsQueryingCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
@@ -22,6 +23,7 @@ import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.QueryingOptionsSucceed;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.plugins.SipuadaPlugin;
@@ -624,6 +626,10 @@ public class UserAgent implements SipListener {
 			sessionPlugin.performSessionSetup(callId, this);
 		}
 	}
+	
+	private synchronized void queryingOptionsEstablished(String eventBusSubscriberId, String callId, Dialog dialog) {
+		// TODO Auto-generated method stub
+	}
 
 	public synchronized void wipeEstablishedCall(String callId,
 			String eventBusSubscriberId) {
@@ -696,6 +702,55 @@ public class UserAgent implements SipListener {
 	@Subscribe
 	public void onEvent(DeadEvent deadEvent) {
 		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
+	}
+
+	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, OptionsQueryingCallback callback) {
+		if (operationsInProgress.get(RequestMethod.OPTIONS)) {
+			postponedOperations.add(new Operation(callback, remoteUser, remoteDomain));
+			logger.info("OPTIONS request postponed because another is in progress.");
+			return true;
+		}
+		CallIdHeader callIdHeader = provider.getNewCallId();
+		final String callId = callIdHeader.getCallId();
+		final String eventBusSubscriberId = Utils.getInstance().generateTag();
+		Object eventBusSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(QueryingOptionsSucceed event) {
+				Dialog dialog = event.getDialog();
+				if (event.getCallId().equals(callId)) {
+					inviteOperationFinished(eventBusSubscriberId, callId);
+//					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
+					queryingOptionsEstablished(eventBusSubscriberId, callId, dialog);
+					listener.onCallEstablished(callId);
+//					scheduleNextInviteRequest();
+				}
+			}
+
+
+			@Subscribe
+			public void onEvent(CallInvitationFailed event) {
+				if (event.getCallId().equals(callId)) {
+//					inviteOperationFinished(eventBusSubscriberId, callId);
+//					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
+					listener.onCallInvitationFailed(event.getReason(), callId);
+//					scheduleNextInviteRequest();
+				}
+			}
+			
+
+		};
+		eventBus.register(eventBusSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
+		boolean expectRemoteAnswer = uac.sendOptionsRequest(remoteUser, remoteDomain, callIdHeader);
+		if (expectRemoteAnswer) {
+			operationsInProgress.put(RequestMethod.OPTIONS, true);
+		}
+		else {
+			logger.error("OPTIONS request not sent.");
+			eventBus.unregister(eventBusSubscriber);
+		}
+		return expectRemoteAnswer;
 	}
 
 }

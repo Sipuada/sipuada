@@ -43,8 +43,18 @@ public interface SipuadaApi {
 		void onCallInvitationDeclined(String reason);
 
 	}
+	
+	public interface OptionsQueryingCallback extends SipuadaCallback {
+
+		void onOptionsQueryingSuccess(List<String> capabilities);
+
+		void onOptionsQueryingFailed(String reason);
+
+	}
 
 	boolean inviteToCall(String remoteUser, String remoteDomain, CallInvitationCallback callback);
+	
+	boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback);
 
 	boolean cancelCallInvitation(String callId);
 
