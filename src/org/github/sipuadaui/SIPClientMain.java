@@ -196,7 +196,7 @@ public class SIPClientMain implements SipuadaListener {
 					sipuada = new Sipuada(SIPClientMain.this,
 							registrarUserNameTextField.getText(),
 							registrarDomainTextField.getText(), passwordField
-									.getText(), Util.getIPAddress(true) +":55000/TCP");
+									.getText(), "192.168.131.224:55000/TCP");
 				}
 				sipuada.registerCaller(new RegistrationCallback() {
 					@Override
