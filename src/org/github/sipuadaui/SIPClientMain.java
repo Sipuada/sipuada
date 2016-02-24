@@ -315,7 +315,7 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(btCall, "cell 4 3");
 		
 		btOptions = new JButton("Options");
-		setUPCallButton(btCall);
+		setUPOptionsButton(btCall);
 		frmSipuada.getContentPane().add(btOptions, "cell 4 3");
 
 		JLabel lblLog = new JLabel("Log");
