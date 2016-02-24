@@ -20,6 +20,7 @@ import org.github.sipuada.SipuadaApi.OptionsQueryingCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 
+import android.gov.nist.gnjvx.sip.Utils;
 import android.javax.sdp.SessionDescription;
 
 public class SIPClientMain implements SipuadaListener {
@@ -195,8 +196,7 @@ public class SIPClientMain implements SipuadaListener {
 					sipuada = new Sipuada(SIPClientMain.this,
 							registrarUserNameTextField.getText(),
 							registrarDomainTextField.getText(), passwordField
-									.getText(), Util.getIPAddress(true)
-									+ ":55000/TCP");
+									.getText(), Util.getIPAddress(true) +":55000/TCP");
 				}
 				sipuada.registerCaller(new RegistrationCallback() {
 					@Override
@@ -315,7 +315,7 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(btCall, "cell 4 3");
 		
 		btOptions = new JButton("Options");
-		setUPOptionsButton(btCall);
+		setUPOptionsButton(btOptions);
 		frmSipuada.getContentPane().add(btOptions, "cell 4 3");
 
 		JLabel lblLog = new JLabel("Log");
