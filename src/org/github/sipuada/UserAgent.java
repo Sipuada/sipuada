@@ -1,6 +1,5 @@
 package org.github.sipuada;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -102,8 +101,6 @@ public class UserAgent implements SipListener {
 	private UserAgentServer uas;
 
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins;
-	private final Map<String, SipuadaPlugin> activePlugins = new HashMap<>();
-
 	private final String rawAddress;
 
 	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, Map<RequestMethod, SipuadaPlugin> plugins,
@@ -127,6 +124,10 @@ public class UserAgent implements SipListener {
 		registeredPlugins = plugins;
 		initSipuadaListener();
 		rawAddress = String.format("%s:%s/%s", localIp, localPort, transport);
+	}
+
+	protected SipProvider getProvider() {
+		return provider;
 	}
 
 	protected String getRawAddress() {
@@ -615,9 +616,14 @@ public class UserAgent implements SipListener {
 				if (event.getCallId().equals(callId)) {
 					wipeEstablishedCall(callId, eventBusSubscriberId);
 					eventBus.unregister(this);
-					activePlugins.remove(callId);
 					if (sessionPlugin != null) {
-						sessionPlugin.performSessionTermination(callId);
+						try {
+							sessionPlugin.performSessionTermination(callId);
+						} catch (Throwable unexpectedException) {
+							logger.error("Bad Sipuada plug-in crashed while trying " +
+									"to perform session termination in context of call {}.",
+									callId, unexpectedException);
+						}
 					}
 					listener.onCallFinished(callId);
 				}
@@ -626,11 +632,16 @@ public class UserAgent implements SipListener {
 		};
 		eventBus.register(eventBusSubscriber);
 		if (sessionPlugin != null) {
-			activePlugins.put(callId, sessionPlugin);
-			sessionPlugin.performSessionSetup(callId, this);
+			try {
+				sessionPlugin.performSessionSetup(callId, this);
+			} catch (Throwable unexpectedException) {
+				String error = "Bad Sipuada plug-in crashed while trying to perform" +
+						" session setup in context of call";
+				logger.error(String.format("%s {}.", error), callId, unexpectedException);
+				listener.onCallFailure(String.format("%s %s.", error, callId), callId);
+			}
 		}
 	}
-	
 
 	public synchronized void wipeEstablishedCall(String callId,
 			String eventBusSubscriberId) {

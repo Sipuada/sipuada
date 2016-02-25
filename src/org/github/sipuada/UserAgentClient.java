@@ -516,7 +516,14 @@ public class UserAgentClient {
 		if (sessionPlugin == null) {
 			return;
 		}
-		SessionDescription offer = sessionPlugin.generateOffer(callId, method);
+		SessionDescription offer = null;
+		try {
+			offer = sessionPlugin.generateOffer(callId, method);
+		} catch (Throwable unexpectedException) {
+			logger.error("Bad Sipuada plug-in crashed while trying to generate offer " +
+					"to be inserted into {} request.", method, unexpectedException);
+			return;
+		}
 		if (offer == null) {
 			return;
 		}
@@ -1473,12 +1480,9 @@ public class UserAgentClient {
 
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
 			Request request, Response response, Request ackRequest) {
-		
-		// Request with OFFER
 		if (request.getContent() != null) {
 			boolean responseArrivedWithNoAnswer = response.getContent() == null;
 			if (responseArrivedWithNoAnswer) {
-				// Response with OFFER expected BUT has no OFFER
 				logger.error("{} request was sent with an offer but {} response " +
 						"arrived with no answer so this UAC will terminate the dialog right away.",
 						method, response.getStatusCode());
@@ -1489,7 +1493,14 @@ public class UserAgentClient {
 					if (sessionPlugin != null) {
 						SessionDescription answer = SdpFactory.getInstance()
 								.createSessionDescriptionFromString(new String(response.getRawContent()));
-						sessionPlugin.receiveAnswerToAcceptedOffer(callId, answer);
+						try {
+							sessionPlugin.receiveAnswerToAcceptedOffer(callId, answer);
+						} catch (Throwable unexpectedException) {
+							logger.error("Bad Sipuada plug-in crashed while receiving answer " +
+									"that arrived alongside {} response to {} request. The UAC will terminate " +
+									"the dialog right away.", response.getStatusCode(), method, unexpectedException);
+							return false;
+						}
 					}
 				} catch (SdpParseException parseException) {
 					logger.error("Answer arrived in {} response to {} request, but could not be properly" +
@@ -1518,7 +1529,15 @@ public class UserAgentClient {
 					"to {} request.", offer.toString(), response.getStatusCode(), method);
 			return false;
 		}
-		SessionDescription answer = sessionPlugin.generateAnswer(callId, method, offer);
+		SessionDescription answer = null;
+		try {
+			answer = sessionPlugin.generateAnswer(callId, method, offer);
+		} catch (Throwable unexpectedException) {
+			logger.error("Bad Sipuada plug-in crashed while trying to generate answer " +
+					"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
+					"right away.", RequestMethod.ACK, response.getStatusCode(), method, unexpectedException);
+			return false;
+		}
 		if (answer == null) {
 			logger.error("Plug-in {} could not generate valid answer to offer {} in {} response " +
 					"to {} request.", sessionPlugin.getClass().getName(), offer.toString(),

@@ -44,7 +44,12 @@ public class Sipuada implements SipuadaApi {
 		SipStack stack = null;
 		try {
 			stack = factory.createSipStack(properties);
-		} catch (PeerUnavailableException ignore) {}
+		} catch (PeerUnavailableException unexpectedException) {
+			logger.error("Unexpected problem: {}.", unexpectedException.getMessage(),
+					unexpectedException.getCause());
+			throw new SipuadaException("Unexpected problem: "
+					+ unexpectedException.getMessage(), unexpectedException);
+		}
 		List<ListeningPoint> listeningPoints = new LinkedList<>();
 		for (String localAddress : localAddresses) {
 			String localIp = null, localPort = null, transport = null;
@@ -98,7 +103,12 @@ public class Sipuada implements SipuadaApi {
 			SipProvider sipProvider = null;
 			try {
 				sipProvider = stack.createSipProvider(listeningPoint);
-			} catch (ObjectInUseException ignore) {}
+			} catch (ObjectInUseException unexpectedException) {
+				logger.error("Unexpected problem: {}.", unexpectedException.getMessage(),
+						unexpectedException.getCause());
+				throw new SipuadaException("Unexpected problem: "
+						+ unexpectedException.getMessage(), unexpectedException);
+			}
 			userAgents.add(new UserAgent(sipProvider, sipuadaListener,
 					registeredPlugins, sipUsername, sipPrimaryHost, sipPassword,
 					listeningPoint.getIPAddress(),
@@ -146,7 +156,7 @@ public class Sipuada implements SipuadaApi {
 			transportGroupIndex++;
 		}
 		userAgentsDump.append(" }");
-		logger.info("Sipuada created. Default transport: {}. UAS: {}",
+		logger.info("Sipuada created. Default transport: {}. UA: {}",
 				defaultTransport, userAgentsDump.toString());
 	}
 
@@ -211,6 +221,25 @@ public class Sipuada implements SipuadaApi {
 	public boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback) {
 		return fetchBestAgent(defaultTransport).sendOptionsRequest(remoteUser,
 				remoteDomain, callback);
+	}
+
+	public void destroy() {
+		for (Transport transport : transportToUserAgents.keySet()) {
+			Set<UserAgent> userAgents = transportToUserAgents.get(transport);
+			for (UserAgent userAgent : userAgents) {
+				SipProvider provider = userAgent.getProvider();
+				SipStack stack = provider.getSipStack();
+				stack.stop();
+				for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
+					try {
+						stack.deleteListeningPoint(listeningPoint);
+					} catch (ObjectInUseException ignore) {}
+				}
+				try {
+					stack.deleteSipProvider(provider);
+				} catch (ObjectInUseException ignore) {}
+			}
+		}
 	}
 
 }
