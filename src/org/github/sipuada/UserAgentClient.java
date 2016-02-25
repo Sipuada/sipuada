@@ -874,11 +874,10 @@ public class UserAgentClient {
 				proxyAuthCallIdCache.put(toHeaderValue, new HashMap<String, String>());
 			}
 			proxyAuthNoncesCache.get(toHeaderValue).put(realm, nonce);
-			Dialog dialog = clientTransaction.getDialog();
-			String callId = dialog.getCallId().getCallId();
-			if (dialog != null) {
-				proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
-			}
+			CallIdHeader callIdHeader = (CallIdHeader) request
+					.getHeader(CallIdHeader.NAME);
+			String callId = callIdHeader.getCallId();
+			proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
 		}
 
 		if (worthAuthenticating) {
