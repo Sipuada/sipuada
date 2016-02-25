@@ -711,8 +711,9 @@ public class UserAgentClient {
 		switch (statusCode) {
 			case Response.PROXY_AUTHENTICATION_REQUIRED:
 			case Response.UNAUTHORIZED:
-				logger.debug("Performing necessary authorization procedures.");
+				logger.debug("CALL BEGIN - Performing necessary authorization procedures.");
 				handleAuthorizationRequired(response, clientTransaction);
+				logger.debug("CALL END - Performing necessary authorization procedures.");
 				//No method-specific handling is required.
 				return false;
 			case Response.REQUEST_ENTITY_TOO_LARGE:
@@ -852,6 +853,9 @@ public class UserAgentClient {
 					bus.post(new CallInvitationFailed(codeAndReason, callId));
 				}
 				break;
+			case OPTIONS:
+				bus.post(new CallInvitationFailed(codeAndReason, callId));
+				break;	
 			case CANCEL:
 				bus.post(new CallInvitationFailed(codeAndReason, callId));
 				break;
@@ -865,8 +869,13 @@ public class UserAgentClient {
 
 	private void handleAuthorizationRequired(Response response,
 			ClientTransaction clientTransaction) {
+		logger.debug("DEF BEGIN - Performing necessary authorization procedures.");
+		
+		try {
 		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
+		
+		logger.error("REQUEST : " + request);
 
 		SipUri hostUri = new SipUri();
 		try {
@@ -894,7 +903,7 @@ public class UserAgentClient {
 			possiblyFailedAuthRealms.put(authHeader.getRealm(),
 					authHeader.getNonce());
 		}
-
+		
 		Map<String, String> possiblyFailedProxyAuthRealms = new HashMap<>();
 		ListIterator<?> usedProxyAuthHeaders = request
 				.getHeaders(ProxyAuthorizationHeader.NAME);
@@ -904,7 +913,7 @@ public class UserAgentClient {
 			possiblyFailedProxyAuthRealms.put(authHeader.getRealm(),
 					authHeader.getNonce());
 		}
-
+		
 		boolean worthAuthenticating = false;
 		ListIterator<?> wwwAuthenticateHeaders = response
 				.getHeaders(WWWAuthenticateHeader.NAME);
@@ -930,6 +939,8 @@ public class UserAgentClient {
 			}
 			authNoncesCache.get(toHeaderValue).put(realm, nonce);
 		}
+		
+		
 		ListIterator<?> proxyAuthenticateHeaders = response
 				.getHeaders(ProxyAuthenticateHeader.NAME);
 		while (proxyAuthenticateHeaders.hasNext()) {
@@ -948,6 +959,7 @@ public class UserAgentClient {
 					}
 				}
 			}
+			
 			worthAuthenticating = addProxyAuthorizationHeader(request, hostUri,
 					toHeaderValue, username, password, realm, nonce);
 			if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
@@ -960,7 +972,7 @@ public class UserAgentClient {
 			String callId = callIdHeader.getCallId();
 			proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
 		}
-
+		logger.debug("DEF FLAG - Performing necessary authorization procedures. Method:" + request.getMethod());
 		if (worthAuthenticating) {
 			try {
 				if (doSendRequest(request, null, clientTransaction.getDialog(), false)) {
@@ -987,6 +999,10 @@ public class UserAgentClient {
 			logger.error("Credentials for {} request were denied, or no proper auth " +
 					"headers were passed along with the 401/407 response from the UAS.",
 					request.getMethod());
+		}
+		logger.debug("DEF END - Performing necessary authorization procedures.");
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 

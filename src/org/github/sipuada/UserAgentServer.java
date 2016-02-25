@@ -277,6 +277,8 @@ public class UserAgentServer {
 	}
 	
 	private void handleOptionsRequest(Request request, ServerTransaction serverTransaction) {
+		logger.debug("UserAgentServer - HANDLE OPTIONS REQUEST");
+		//FIXME "UserAgentServer - HANDLE OPTIONS REQUEST"
 		boolean withinDialog = serverTransaction != null;
 		if (withinDialog) {
 			handleReDoOptionsRequest(request, serverTransaction);
@@ -300,6 +302,7 @@ public class UserAgentServer {
 			}
 			return;
 		}
+		
 		throw new RequestCouldNotBeAddressed();
 	}
 
