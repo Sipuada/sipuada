@@ -24,6 +24,7 @@ import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.QueryingOptionsArrived;
 import org.github.sipuada.events.QueryingOptionsFailed;
 import org.github.sipuada.events.QueryingOptionsRinging;
 import org.github.sipuada.events.QueryingOptionsSucceed;
@@ -713,6 +714,13 @@ public class UserAgent implements SipListener {
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
+			@Subscribe
+			public void onEvent(QueryingOptionsArrived event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onOptionsQueryingArrived(callId);
+				}
+			}
+			
 			@Subscribe
 			public void onEvent(QueryingOptionsSucceed event) {
 				if (event.getCallId().equals(callId)) {

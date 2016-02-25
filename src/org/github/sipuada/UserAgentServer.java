@@ -12,6 +12,7 @@ import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.QueryingOptionsArrived;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -288,10 +289,10 @@ public class UserAgentServer {
 		//when appropriate, by using identifiers within the SDP session description.
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
-		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING,
+		ServerTransaction newServerTransaction = doSendResponse(Response.OK,
 				RequestMethod.OPTIONS, request, serverTransaction);
 		if (newServerTransaction != null) {
-			bus.post(new CallInvitationArrived(callId, newServerTransaction));
+			bus.post(new QueryingOptionsArrived(callId, newServerTransaction));
 			RequestMethod method = RequestMethod.OPTIONS;
 			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
 					Response.UNSUPPORTED_MEDIA_TYPE)) {
