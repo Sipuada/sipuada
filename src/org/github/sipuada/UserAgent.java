@@ -779,7 +779,7 @@ public class UserAgent implements SipListener {
 			@Subscribe
 			public void onEvent(QueryingOptionsSucceed event) {
 				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingSuccess(callId, event.getSessionDescriptionOffer(), event.getSessionDescriptionAnswer());
+					callback.onOptionsQueryingSuccess(callId, event.getSessionDescription());
 				}
 			}
 
@@ -790,22 +790,7 @@ public class UserAgent implements SipListener {
 					callback.onOptionsQueryingFailed(event.getReason());
 				}
 			}
-			
-			@Subscribe
-			public void onEvent(QueryingOptionsRinging event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingRinging(event.getCallId());
-				}
-			}
-			
-			@Subscribe
-			public void onEvent(QueryingOptionsWaiting event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingWaiting(event.getCallId());
-				}
-			}
-			
-
+						
 		};
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);

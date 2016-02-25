@@ -56,13 +56,9 @@ public interface SipuadaApi {
 
 		void onOptionsQueryingArrived(String callId);
 		
-		void onOptionsQueryingSuccess(String callId, SessionDescription offerSDP, SessionDescription answerSDP);
+		void onOptionsQueryingSuccess(String callId, SessionDescription content);
 
 		void onOptionsQueryingFailed(String reason);
-		
-		void onOptionsQueryingRinging(String callId);
-		
-		void onOptionsQueryingWaiting(String callId);
 		
 	}
 

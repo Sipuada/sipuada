@@ -6,14 +6,12 @@ import android.javax.sip.Dialog;
 public class QueryingOptionsSucceed {
 	private final String callId;
 	private final Dialog dialog;
-	private final SessionDescription sessionDescriptionOffer;
-	private final SessionDescription sessionDescriptionAnswer;
+	private final SessionDescription sessionDescription;
 
-	public QueryingOptionsSucceed(String callId, Dialog dialog, SessionDescription sessionDescriptionOffer, SessionDescription sessionDescriptionAnswer) {
+	public QueryingOptionsSucceed(String callId, Dialog dialog, SessionDescription sessionDescription) {
 		this.callId = callId;
 		this.dialog = dialog;
-		this.sessionDescriptionOffer = sessionDescriptionOffer;
-		this.sessionDescriptionAnswer = sessionDescriptionAnswer;
+		this.sessionDescription = sessionDescription;
 	}
 
 	public String getCallId() {
@@ -24,12 +22,9 @@ public class QueryingOptionsSucceed {
 		return dialog;
 	}
 	
-	public SessionDescription getSessionDescriptionOffer() {
-		return sessionDescriptionOffer;
+	public SessionDescription getSessionDescription() {
+		return sessionDescription;
 	}
 	
-	public SessionDescription getSessionDescriptionAnswer() {
-		return sessionDescriptionAnswer;
-	}
 	
 }
