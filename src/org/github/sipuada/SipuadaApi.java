@@ -50,6 +50,8 @@ public interface SipuadaApi {
 	
 	public interface OptionsQueryingCallback extends SipuadaCallback {
 
+		void onOptionsQueryingArrived(String callId);
+		
 		void onOptionsQueryingSuccess(String callId, SessionDescription offerSDP, SessionDescription answerSDP);
 
 		void onOptionsQueryingFailed(String reason);
@@ -57,7 +59,7 @@ public interface SipuadaApi {
 		void onOptionsQueryingRinging(String callId);
 		
 		void onOptionsQueryingWaiting(String callId);
-
+		
 	}
 
 	boolean inviteToCall(String remoteUser, String remoteDomain, CallInvitationCallback callback);
