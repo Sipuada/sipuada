@@ -36,6 +36,10 @@ public interface SipuadaApi {
 
 	boolean registerCaller(RegistrationCallback callback);
 
+	boolean includeAddresses(RegistrationCallback callback, String... localAddresses);
+
+	boolean overwriteAddresses(RegistrationCallback callback, String... localAddresses);
+
 	public interface CallInvitationCallback extends SipuadaCallback {
 
 		void onWaitingForCallInvitationAnswer(String callId);
