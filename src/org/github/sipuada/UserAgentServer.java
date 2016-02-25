@@ -473,7 +473,7 @@ public class UserAgentServer {
 			try {
 				offer = sessionPlugin.generateOffer(callId, method);
 			} catch (Throwable unexpectedException) {
-				logger.error("Bad Sipuada plug-in crashed while trying to generate offer to be inserted " +
+				logger.error("Bad plug-in crashed while trying to generate offer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);
 				return true;
 			}
@@ -519,7 +519,7 @@ public class UserAgentServer {
 			try {
 				answer = sessionPlugin.generateAnswer(callId, method, offer);
 			} catch (Throwable unexpectedException) {
-				logger.error("Bad Sipuada plug-in crashed while trying to generate answer to be inserted " +
+				logger.error("Bad plug-in crashed while trying to generate answer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);
 				return false;
 			}
