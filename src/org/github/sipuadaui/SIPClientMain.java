@@ -175,6 +175,15 @@ public class SIPClientMain implements SipuadaListener {
 										+ " - " + " Querying Failed ...");
 								optionsButton.setEnabled(true);
 							}
+
+							@Override
+							public void onOptionsQueryingArrived(String callId) {
+								textArea.setText(textArea.getText()
+										+ System.getProperty("line.separator")
+										+ " - " + " Ringing ...");
+								currentCallID = callId;
+								optionsButton.setEnabled(true);
+							}
 						});
 			}
 		});
