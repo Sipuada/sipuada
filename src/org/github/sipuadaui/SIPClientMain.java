@@ -141,33 +141,14 @@ public class SIPClientMain implements SipuadaListener {
 						new OptionsQueryingCallback() {
 							
 							@Override
-							public void onOptionsQueryingWaiting(String callId) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - "
-										+ " Waiting For Options Querying ...");
-								currentCallID = callId;
-								optionsButton.setEnabled(true);
-							}
-							
-							@Override
-							public void onOptionsQueryingSuccess(String callId, SessionDescription offerSDP, SessionDescription answerSDP) {
+							public void onOptionsQueryingSuccess(String callId, SessionDescription sdpContent) {
 								textArea.setText(textArea.getText()
 										+ System.getProperty("line.separator")
 										+ " - " + " Querying Success ...");
 								currentCallID = callId;
 								optionsButton.setEnabled(true);
 							}
-							
-							@Override
-							public void onOptionsQueryingRinging(String callId) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - " + " Ringing ...");
-								currentCallID = callId;
-								optionsButton.setEnabled(true);
-							}
-							
+														
 							@Override
 							public void onOptionsQueryingFailed(String reason) {
 								textArea.setText(textArea.getText()
