@@ -1392,10 +1392,14 @@ public class UserAgentClient {
 	
 	private void handleOptionsResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
+		
+		logger.debug("BEGIN - UserAgentClient - handleOptionsClient");
+
 		Request request = clientTransaction.getRequest();
 		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		Dialog dialog = clientTransaction.getDialog();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			logger.debug("FLAG - UserAgentClient - handleOptionsClient - dialog:" + (dialog == null ? "true" : "false"));
 			if (dialog != null) {
 				try {
 					CSeqHeader cseqHeader = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
@@ -1416,6 +1420,8 @@ public class UserAgentClient {
 					dispatchQueryingOptionsEvent(callId, dialog, request, response, ackRequest);
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
+			} else {
+				dispatchQueryingOptionsOutsideDialogEvent(callId, request, response);
 			}
 		} else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
 			if (statusCode == Response.RINGING) {
@@ -1427,39 +1433,48 @@ public class UserAgentClient {
 			}
 			logger.info("{} response arrived.", statusCode);
 		}
+		
+		logger.debug("END - UserAgentClient - handleOptionsClient");
 	}
 	
 	private void dispatchQueryingOptionsEvent(String callId, Dialog dialog, Request request, Response response, Request ackRequest) {
-		if(null != request.getContent() && null != response.getContent()) {
+		if(null != response.getContent()) {
 			// request has offer and response has answer
-			bus.post(new QueryingOptionsSucceed(callId, dialog, parseRequestContentToSessionDescription(request), parseResponseContentToSessionDescription(response)));
-		} else if (null == request.getContent() && null != response.getContent()) {
-			// response has offer and ackrequest has answer
-			bus.post(new QueryingOptionsSucceed(callId, dialog, parseResponseContentToSessionDescription(response), parseRequestContentToSessionDescription(ackRequest)));
+			bus.post(new QueryingOptionsSucceed(callId, dialog, parseResponseContentToSessionDescription(response)));
 		} else if (null == request.getContent() && null == response.getContent()) {
 			// request has nothing and response has nothing and ackrequest too
-			bus.post(new QueryingOptionsSucceed(callId, dialog, null, null));
+			bus.post(new QueryingOptionsSucceed(callId, dialog, null));
 		} else if (null != request.getContent() && null == response.getContent()) {
 			// request has offer and response has null and ackrequest has null
 			bus.post(new QueryingOptionsFailed("SDP answer cannot be found", callId));
 		} else if (null == request.getContent() && null != response.getContent()) {
 			// request has null and response has offer and ackrequest has null
 			bus.post(new QueryingOptionsFailed("SDP answer cannot be found", callId));
-			
 		}
 	}
 	
-	private SessionDescription parseRequestContentToSessionDescription(Request request) {
-		try {
-			return SdpFactory.getInstance()
-					.createSessionDescriptionFromString((String) request.getContent());
-		} catch (SdpParseException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+	private void dispatchQueryingOptionsOutsideDialogEvent(String callId, Request request, Response response) {
+		logger.debug("dispatchQueryingOptionsOutsideDialogEvent\n"
+				+ "... request content:" + request + "\n"
+				+ "... response content:" + response);
+		
+		if(null != request.getContent() && null != response.getContent()) {
+			logger.debug("... case 1 : OFFER (optional) === ANSWER");
+			bus.post(new QueryingOptionsSucceed(callId, null, parseResponseContentToSessionDescription(response)));
+		} else if (null == request.getContent() && null != response.getContent()) {
+			logger.debug("... case 2 : ---- === OFFER");
+			bus.post(new QueryingOptionsSucceed(callId, null, parseResponseContentToSessionDescription(response)));
+		} else if (null == request.getContent() && null == response.getContent()) {
+			logger.debug("... case 3 : ---- === ----");
+			bus.post(new QueryingOptionsSucceed(callId, null, null));
+		} else {
+			logger.debug("... case 4");
+			// request has null and response has offer and ackrequest has null
+			bus.post(new QueryingOptionsFailed("SDP answer cannot be found", callId));
 		}
-		return null;
 	}
 	
+
 	private SessionDescription parseResponseContentToSessionDescription(Response response) {
 		try {
 			return SdpFactory.getInstance()
