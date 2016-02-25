@@ -103,6 +103,7 @@ public class UserAgent implements SipListener {
 
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins;
 	private final String rawAddress;
+	private final String rawAddressWithTransport;
 
 	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, Map<RequestMethod, SipuadaPlugin> plugins,
 			String username, String primaryHost, String password, String localIp, String localPort, String transport) {
@@ -124,7 +125,8 @@ public class UserAgent implements SipListener {
 		} catch (TooManyListenersException ignore) {}
 		registeredPlugins = plugins;
 		initSipuadaListener();
-		rawAddress = String.format("%s:%s/%s", localIp, localPort, transport);
+		rawAddress = String.format("%s:%s", localIp, localPort);
+		rawAddressWithTransport = String.format("%s:%s/%s", localIp, localPort, transport);
 	}
 
 	protected SipProvider getProvider() {
@@ -133,6 +135,10 @@ public class UserAgent implements SipListener {
 
 	protected String getRawAddress() {
 		return rawAddress;
+	}
+
+	protected String getRawAddressWithTransport() {
+		return rawAddressWithTransport;
 	}
 
 	@Override
@@ -262,9 +268,25 @@ public class UserAgent implements SipListener {
 		}
 	}
 
-	public synchronized boolean sendRegisterRequest(final RegistrationCallback callback) {
+	protected boolean sendRegisterRequest(RegistrationCallback callback,
+			String... additionalAddresses) {
+		return sendRegisterRequest(callback, false, additionalAddresses);
+	}
+
+	protected boolean sendUnregisterRequest(RegistrationCallback callback,
+			String... expiredAddresses) {
+		return sendRegisterRequest(callback, true, expiredAddresses);
+	}
+
+	public synchronized boolean sendRegisterRequest(final RegistrationCallback callback,
+			boolean unregister, String... additionalAddresses) {
 		if (operationsInProgress.get(RequestMethod.REGISTER)) {
-			postponedOperations.add(new Operation(callback));
+			String arguments[] = new String[additionalAddresses.length + 1];
+			arguments[0] = unregister ? "UNREGISTER" : "REGISTER";
+			for (int i=1; i<=additionalAddresses.length; i++) {
+				arguments[i] = additionalAddresses[i - 1];
+			}
+			postponedOperations.add(new Operation(callback, arguments));
 			logger.info("REGISTER request postponed because another is in progress.");
 			return true;
 		}
@@ -286,7 +308,13 @@ public class UserAgent implements SipListener {
 		};
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendRegisterRequest();
+		boolean expectRemoteAnswer = false;
+		if (unregister) {
+			expectRemoteAnswer = uac.sendUnregisterRequest(additionalAddresses);
+		}
+		else {
+			expectRemoteAnswer = uac.sendRegisterRequest(additionalAddresses);
+		}
 		if (expectRemoteAnswer) {
 			operationsInProgress.put(RequestMethod.REGISTER, true);
 		}
@@ -305,7 +333,13 @@ public class UserAgent implements SipListener {
 			while (iterator.hasNext()) {
 				Operation operation = iterator.next();
 				if (operation.callback instanceof RegistrationCallback) {
-					sendRegisterRequest((RegistrationCallback) operation.callback);
+					boolean unregister = operation.arguments[0].equals("UNREGISTER");
+					String[] arguments = new String[operation.arguments.length - 1];
+					for (int i=0; i<arguments.length; i++) {
+						arguments[0] = operation.arguments[i + 1];
+					}
+					sendRegisterRequest((RegistrationCallback) operation.callback,
+							unregister, arguments);
 					iterator.remove();
 					break;
 				}
@@ -619,9 +653,14 @@ public class UserAgent implements SipListener {
 					eventBus.unregister(this);
 					if (sessionPlugin != null) {
 						try {
-							sessionPlugin.performSessionTermination(callId);
+							boolean sessionProperlyTerminated = sessionPlugin
+									.performSessionTermination(callId);
+							if (!sessionProperlyTerminated) {
+								logger.error("Bad plug-in crashed while trying to perform session " +
+										"termination in context of call {}.", callId);
+							}
 						} catch (Throwable unexpectedException) {
-							logger.error("Bad Sipuada plug-in crashed while trying " +
+							logger.error("Bad plug-in crashed while trying " +
 									"to perform session termination in context of call {}.",
 									callId, unexpectedException);
 						}
@@ -634,9 +673,14 @@ public class UserAgent implements SipListener {
 		eventBus.register(eventBusSubscriber);
 		if (sessionPlugin != null) {
 			try {
-				sessionPlugin.performSessionSetup(callId, this);
+				boolean sessionProperlySetup = sessionPlugin.performSessionSetup(callId, this);
+				if (!sessionProperlySetup) {
+					String error = "Plug-in could not perform session setup in context of call";
+					logger.error(String.format("%s {}.", error), callId);
+					listener.onCallFailure(String.format("%s %s.", error, callId), callId);
+				}
 			} catch (Throwable unexpectedException) {
-				String error = "Bad Sipuada plug-in crashed while trying to perform" +
+				String error = "Bad plug-in crashed while trying to perform" +
 						" session setup in context of call";
 				logger.error(String.format("%s {}.", error), callId, unexpectedException);
 				listener.onCallFailure(String.format("%s %s.", error, callId), callId);

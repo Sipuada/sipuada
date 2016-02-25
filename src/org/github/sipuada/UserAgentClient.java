@@ -131,7 +131,7 @@ public class UserAgentClient {
 				credentialsAndAddress[5] : "TCP";
 	}
 
-	public boolean sendRegisterRequest() {
+	public boolean sendRegisterRequest(String... additionalAddresses) {
 		URI requestUri;
 		try {
 			requestUri = addressMaker.createSipURI(null, primaryHost);
@@ -151,9 +151,8 @@ public class UserAgentClient {
 		registerCSeqs.put(requestUri, cseq + 1);
 
 		List<ContactHeader> contactHeaders = new LinkedList<>();
-		SipURI contactUri;
 		try {
-			contactUri = addressMaker.createSipURI(username, localIp);
+			SipURI contactUri = addressMaker.createSipURI(username, localIp);
 			contactUri.setPort(localPort);
 			Address contactAddress = addressMaker.createAddress(contactUri);
 			ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
@@ -162,6 +161,24 @@ public class UserAgentClient {
 			} catch (InvalidArgumentException ignore) {}
 			contactHeaders.add(contactHeader);
 		} catch (ParseException ignore) {}
+
+		for (String address : additionalAddresses) {
+			String addressIp = address.split(":")[0];
+			int addressPort = Integer.parseInt(address.split(":")[1]);
+			if (addressIp.equals(localIp) && addressPort == localPort) {
+				continue;
+			}
+			try {
+				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
+				contactUri.setPort(addressPort);
+				Address contactAddress = addressMaker.createAddress(contactUri);
+				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+				try {
+					contactHeader.setExpires(3600);
+				} catch (InvalidArgumentException ignore) {}
+				contactHeaders.add(contactHeader);
+			} catch (ParseException ignore) {}
+		}
 
 		//TODO Keep in mind that:
 		/*
@@ -174,6 +191,46 @@ public class UserAgentClient {
 		 * Contact header so this doesn't apply to us yet.
 		 */
 
+		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
+				requestUri, callIdHeader, cseq, contactHeaders
+				.toArray(new ContactHeader[contactHeaders.size()]));
+	}
+
+	public boolean sendUnregisterRequest(String... expiredAddresses) {
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(null, primaryHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this REGISTER request to {}." +
+					"\nMust be a valid domain or IP address: {}.", primaryHost,
+					parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		if (!registerCallIds.containsKey(requestUri)) {
+			registerCallIds.put(requestUri, provider.getNewCallId());
+			registerCSeqs.put(requestUri, ++localCSeq);
+		}
+		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
+		long cseq = registerCSeqs.get(requestUri);
+		registerCSeqs.put(requestUri, cseq + 1);
+
+		List<ContactHeader> contactHeaders = new LinkedList<>();
+
+		for (String address : expiredAddresses) {
+			String addressIp = address.split(":")[0];
+			int addressPort = Integer.parseInt(address.split(":")[1]);
+			try {
+				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
+				contactUri.setPort(addressPort);
+				Address contactAddress = addressMaker.createAddress(contactUri);
+				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+				try {
+					contactHeader.setExpires(0);
+				} catch (InvalidArgumentException ignore) {}
+				contactHeaders.add(contactHeader);
+			} catch (ParseException ignore) {}
+		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
 				requestUri, callIdHeader, cseq, contactHeaders
 				.toArray(new ContactHeader[contactHeaders.size()]));
@@ -520,7 +577,7 @@ public class UserAgentClient {
 		try {
 			offer = sessionPlugin.generateOffer(callId, method);
 		} catch (Throwable unexpectedException) {
-			logger.error("Bad Sipuada plug-in crashed while trying to generate offer " +
+			logger.error("Bad plug-in crashed while trying to generate offer " +
 					"to be inserted into {} request.", method, unexpectedException);
 			return;
 		}
@@ -1496,7 +1553,7 @@ public class UserAgentClient {
 						try {
 							sessionPlugin.receiveAnswerToAcceptedOffer(callId, answer);
 						} catch (Throwable unexpectedException) {
-							logger.error("Bad Sipuada plug-in crashed while receiving answer " +
+							logger.error("Bad plug-in crashed while receiving answer " +
 									"that arrived alongside {} response to {} request. The UAC will terminate " +
 									"the dialog right away.", response.getStatusCode(), method, unexpectedException);
 							return false;
@@ -1533,7 +1590,7 @@ public class UserAgentClient {
 		try {
 			answer = sessionPlugin.generateAnswer(callId, method, offer);
 		} catch (Throwable unexpectedException) {
-			logger.error("Bad Sipuada plug-in crashed while trying to generate answer " +
+			logger.error("Bad plug-in crashed while trying to generate answer " +
 					"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
 					"right away.", RequestMethod.ACK, response.getStatusCode(), method, unexpectedException);
 			return false;
