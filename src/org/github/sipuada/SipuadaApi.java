@@ -18,6 +18,8 @@ public interface SipuadaApi {
 
 		void onCallFinished(String callId);
 
+		void onCallFailure(String reason, String callId);
+
 	}
 
 	public interface SipuadaCallback {}

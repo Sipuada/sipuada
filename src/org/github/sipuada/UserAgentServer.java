@@ -469,7 +469,14 @@ public class UserAgentServer {
 			if (sessionPlugin == null) {
 				return true;
 			}
-			SessionDescription offer = sessionPlugin.generateOffer(callId, method);
+			SessionDescription offer = null;
+			try {
+				offer = sessionPlugin.generateOffer(callId, method);
+			} catch (Throwable unexpectedException) {
+				logger.error("Bad Sipuada plug-in crashed while trying to generate offer to be inserted " +
+						"into {} response to {} request.", statusCode, method, unexpectedException);
+				return true;
+			}
 			if (offer == null) {
 				return true;
 			}
@@ -485,7 +492,6 @@ public class UserAgentServer {
 				logger.error("Plug-in-generated offer {{}} by {} could not be inserted into {} response to " +
 						"{} request.", offer.toString(), sessionPlugin.getClass().getName(),
 						statusCode, method, parseException);
-				return true;
 			}
 			return true;
 		}
@@ -509,7 +515,14 @@ public class UserAgentServer {
 						offer.toString(), method);
 				return false;
 			}
-			SessionDescription answer = sessionPlugin.generateAnswer(callId, method, offer);
+			SessionDescription answer = null;
+			try {
+				answer = sessionPlugin.generateAnswer(callId, method, offer);
+			} catch (Throwable unexpectedException) {
+				logger.error("Bad Sipuada plug-in crashed while trying to generate answer to be inserted " +
+						"into {} response to {} request.", statusCode, method, unexpectedException);
+				return false;
+			}
 			if (answer == null) {
 				logger.error("Plug-in {} could not generate valid answer to offer {{}} in {} request.",
 						sessionPlugin.getClass().getName(), offer.toString(), method);
