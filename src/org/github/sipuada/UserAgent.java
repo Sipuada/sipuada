@@ -709,6 +709,7 @@ public class UserAgent implements SipListener {
 	
 		CallIdHeader callIdHeader = provider.getNewCallId();
 		final String callId = callIdHeader.getCallId();
+		logger.debug("UserAgent - sendOptionsRequest - callId:" + callId);
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
