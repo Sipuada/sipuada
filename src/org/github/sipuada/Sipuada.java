@@ -631,7 +631,7 @@ public class Sipuada implements SipuadaApi {
 								&& expiredListeningPoint.getTransport().toUpperCase()
 									.equals(userAgent.getTransport())) {
 							Set<String> activeCallIds = activeUserAgentCallIds.get(userAgent);
-							if (!activeCallIds.isEmpty()) {
+							if (activeCallIds != null && !activeCallIds.isEmpty()) {
 								logger.error("UserAgent bound to {}:{} through {}" +
 										" cannot be removed as it is currently in use.",
 										expiredListeningPoint.getIPAddress(),
@@ -696,13 +696,15 @@ public class Sipuada implements SipuadaApi {
 								stack.deleteListeningPoint(expiredListeningPoint);
 							} catch (ObjectInUseException ignore) {}
 							Set<String> activeCallIds = activeUserAgentCallIds.get(userAgent);
-							synchronized (activeCallIds) {
-								Iterator<String> callIdsIterator = activeCallIds.iterator();
-								while (callIdsIterator.hasNext()) {
-									String callId = callIdsIterator.next();
-									callIdToActiveUserAgent.remove(callId);
+							if (activeCallIds != null) {
+								synchronized (activeCallIds) {
+									Iterator<String> callIdsIterator = activeCallIds.iterator();
+									while (callIdsIterator.hasNext()) {
+										String callId = callIdsIterator.next();
+										callIdToActiveUserAgent.remove(callId);
+									}
+									activeUserAgentCallIds.remove(userAgent);
 								}
-								activeUserAgentCallIds.remove(userAgent);
 							}
 							userAgentsIterator.remove();
 							if (userAgents.isEmpty()) {
