@@ -11,20 +11,27 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.Sipuada.RegisterOperation.OperationMethod;
+import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.eventbus.EventBus;
+import com.google.common.eventbus.Subscribe;
 
 import android.gov.nist.gnjvx.sip.Utils;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.ListeningPoint;
 import android.javax.sip.ObjectInUseException;
 import android.javax.sip.PeerUnavailableException;
+import android.javax.sip.RequestEvent;
 import android.javax.sip.SipFactory;
 import android.javax.sip.SipProvider;
 import android.javax.sip.SipStack;
@@ -35,6 +42,7 @@ public class Sipuada implements SipuadaApi {
 	private final Logger logger = LoggerFactory.getLogger(Sipuada.class);
 	private final String STACK_NAME_PREFIX = "SipuadaUserAgentv0";
 
+	private final EventBus eventBus = new EventBus();
 	private final SipuadaListener listener;
 	private final String username, primaryHost, password;
 
@@ -59,6 +67,11 @@ public class Sipuada implements SipuadaApi {
 	private final Map<UserAgent, Set<String>> activeUserAgentCallIds = Collections
 			.synchronizedMap(new HashMap<UserAgent, Set<String>>());
 
+	private final Map<String, Set<ElectionCandidate>> electionIdToCandidates = Collections
+			.synchronizedMap(new HashMap<String, Set<ElectionCandidate>>());
+	private final Map<String, Boolean> electionStarted = new HashMap<>();
+	private Timer electionTimer;
+
 	protected static class RegisterOperation {
 		
 		public enum OperationMethod {
@@ -78,9 +91,30 @@ public class Sipuada implements SipuadaApi {
 
 	}
 
+	protected class ElectionCandidate {
+
+		private final UserAgent userAgentCandidate;
+		private final RequestEvent requestEvent;
+
+		public ElectionCandidate(UserAgent userAgent, RequestEvent event) {
+			userAgentCandidate = userAgent;
+			requestEvent = event;
+		}
+
+		public UserAgent getUserAgentCandidate() {
+			return userAgentCandidate;
+		}
+
+		public RequestEvent getRequestEvent() {
+			return requestEvent;
+		}
+
+	}
+
 	public Sipuada(SipuadaListener sipuadaListener, final String sipUsername,
 			final String sipPrimaryHost, String sipPassword,
 			String... localAddresses) throws SipuadaException {
+		eventBus.register(this);
 		listener = sipuadaListener;
 		username = sipUsername;
 		primaryHost = sipPrimaryHost;
@@ -148,7 +182,7 @@ public class Sipuada implements SipuadaApi {
 				throw new SipuadaException("Unexpected problem: "
 						+ unexpectedException.getMessage(), unexpectedException);
 			}
-			UserAgent userAgent = new UserAgent(sipProvider, sipuadaListener,
+			UserAgent userAgent = new UserAgent(eventBus, sipProvider, sipuadaListener,
 					registeredPlugins, sipUsername, sipPrimaryHost, sipPassword,
 					listeningPoint.getIPAddress(), Integer.toString(listeningPoint.getPort()),
 					rawTransport, callIdToActiveUserAgent, activeUserAgentCallIds);
@@ -241,6 +275,51 @@ public class Sipuada implements SipuadaApi {
 
 	private boolean wipeAddresses(final RegistrationCallback callback) {
 		return fetchBestAgent(defaultTransport).sendUnregisterRequest(callback);
+	}
+
+	@Subscribe
+	public void electBestUserAgentForIncomingRequest(UserAgentNominatedForIncomingRequest event) {
+		String method = event.getRequestEvent().getRequest().getMethod();
+		String callId = event.getCallId();
+		final String electionId = String.format("(%s:%s)", method, callId);
+		if (!electionStarted.containsKey(electionId) || !electionStarted.get(electionId)) {
+			if (electionTimer != null) {
+				electionTimer.cancel();
+			}
+			if (!electionIdToCandidates.containsKey(electionId)) {
+				electionIdToCandidates.put(electionId, Collections
+						.synchronizedSet(new HashSet<ElectionCandidate>()));
+			}
+			electionIdToCandidates.get(electionId).add(new ElectionCandidate(event.getCandidateUserAgent(),
+					event.getRequestEvent()));
+			electionTimer = new Timer();
+			electionTimer.schedule(new TimerTask() {
+
+				@Override
+				public void run() {
+					electionStarted.put(electionId, true);
+					Set<ElectionCandidate> electionCandidates = electionIdToCandidates.get(electionId);
+					synchronized (electionCandidates) {
+						Iterator<ElectionCandidate> candidatesIterator = electionCandidates.iterator();
+						ElectionCandidate bestCandidate = candidatesIterator.next();
+						int randomNumber = (new Random()).nextInt(electionCandidates.size());
+						while (candidatesIterator.hasNext() && randomNumber > 0) {
+							bestCandidate = candidatesIterator.next();
+							randomNumber--;
+						}
+						UserAgent userAgent = bestCandidate.getUserAgentCandidate();
+						RequestEvent requestEvent = bestCandidate.getRequestEvent();
+						logger.debug("{}:{}/{}'s UAS was elected to process an incoming {} request!",
+								userAgent.getLocalIp(), userAgent.getLocalPort(), userAgent.getTransport(),
+								requestEvent.getRequest().getMethod());
+						userAgent.doProcessRequest(requestEvent);
+					}
+					electionCandidates.clear();
+					electionStarted.put(electionId, false);
+				}
+
+			}, 1000);
+		}
 	}
 
 	@Override
@@ -599,7 +678,7 @@ public class Sipuada implements SipuadaApi {
 					transportToUserAgents.put(transport, new HashSet<UserAgent>());
 				}
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-				UserAgent userAgent = new UserAgent(sipProvider, listener, registeredPlugins,
+				UserAgent userAgent = new UserAgent(eventBus, sipProvider, listener, registeredPlugins,
 						username, primaryHost, password, listeningPoint.getIPAddress(),
 						Integer.toString(listeningPoint.getPort()), rawTransport,
 						callIdToActiveUserAgent, activeUserAgentCallIds);
@@ -826,6 +905,7 @@ public class Sipuada implements SipuadaApi {
 			registerOperationsInProgress.put(RequestMethod.REGISTER, false);
 			postponedRegisterOperations.clear();
 		}
+		eventBus.unregister(this);
 	}
 
 }
