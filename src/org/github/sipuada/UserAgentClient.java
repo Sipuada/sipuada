@@ -61,6 +61,7 @@ import android.javax.sip.address.SipURI;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.AcceptEncodingHeader;
 import android.javax.sip.header.AcceptHeader;
+import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.AuthorizationHeader;
 import android.javax.sip.header.CSeqHeader;
 import android.javax.sip.header.CallIdHeader;
@@ -243,11 +244,11 @@ public class UserAgentClient {
 		/*
 		 * (according to section 13.2.1)
 		 *
-		 * Allow
+		 * Allow (refer, info subscribe, notify)
 		 * Supported
-		 * (later support also: Accept, Expires)
+		 * (later support also: Accept )
 		 */
-
+		
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
@@ -266,11 +267,74 @@ public class UserAgentClient {
 		} catch (InvalidArgumentException ignore) {}
 		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
 
-		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
-				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
+		// Create a new Expires header
+		ExpiresHeader expires = null;
+		try {
+			expires = headerMaker.createExpiresHeader(120);
+		} catch (InvalidArgumentException e) {
+			logger.warn("Expires header can not be made");
+		}
+		
+		AllowHeader allowHeaderInviteMethod = null;
+		AllowHeader allowHeaderAckMethod = null;
+		AllowHeader allowHeaderCancelMethod = null;
+		AllowHeader allowHeaderOptionsMethod = null;
+		AllowHeader allowHeaderByeMethod = null;
+		try {
+			allowHeaderInviteMethod = headerMaker.createAllowHeader(Request.INVITE);
+			allowHeaderAckMethod = headerMaker.createAllowHeader(Request.ACK);
+			allowHeaderCancelMethod = headerMaker.createAllowHeader(Request.CANCEL);
+			allowHeaderOptionsMethod = headerMaker.createAllowHeader(Request.OPTIONS);
+			allowHeaderByeMethod = headerMaker.createAllowHeader(Request.BYE);
+		} catch (ParseException e) {
+			logger.warn("Some allow header was not inserted, maybe all.");
+		}
+				
+		List<Header> additionalHeaders = new ArrayList<>();
+		additionalHeaders.add(contactHeader);
+		
+		if(null != allowHeaderInviteMethod) {
+			additionalHeaders.add(allowHeaderInviteMethod);
+		} else {
+			logger.warn("Allow Invite header was not inserted");
+		}
+		
+		if(null != allowHeaderAckMethod) {
+			additionalHeaders.add(allowHeaderAckMethod);
+		} else {
+			logger.warn("Allow Ack header was not inserted");
+		}
+		
+		if(null != allowHeaderCancelMethod) {
+			additionalHeaders.add(allowHeaderCancelMethod);
+		} else {
+			logger.warn("Allow Cancel header was not inserted");
+		}
+		
+		if(null != allowHeaderOptionsMethod) {
+			additionalHeaders.add(allowHeaderOptionsMethod);
+		} else {
+			logger.warn("Allow Options header was not inserted");
+		}
+		
+		if(null != allowHeaderByeMethod) {
+			additionalHeaders.add(allowHeaderByeMethod);
+		} else {
+			logger.warn("Allow Bye header was not inserted");
+		}
+		
+		if(null != expires) {
+			additionalHeaders.add(0, expires);
+		} else {
+			logger.warn("Expires header was not inserted");
+		}
+		
+		Header[] headers = new Header[additionalHeaders.size()];
+		headers = additionalHeaders.toArray(headers);
+		
 
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost,
-				requestUri, callIdHeader, cseq, additionalHeaders);
+				requestUri, callIdHeader, cseq, headers);
 	}
 
 	public boolean sendOptionsRequest(String remoteUser, String remoteHost,
