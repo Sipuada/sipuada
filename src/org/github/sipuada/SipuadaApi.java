@@ -24,9 +24,7 @@ public interface SipuadaApi {
 
 	}
 
-	public interface SipuadaCallback {}
-
-	public interface RegistrationCallback extends SipuadaCallback {
+	public interface RegistrationCallback {
 
 		void onRegistrationSuccess(List<String> registeredContacts);
 
@@ -40,7 +38,7 @@ public interface SipuadaApi {
 
 	boolean overwriteAddresses(RegistrationCallback callback, String... localAddresses);
 
-	public interface CallInvitationCallback extends SipuadaCallback {
+	public interface CallInvitationCallback {
 
 		void onWaitingForCallInvitationAnswer(String callId);
 
@@ -50,7 +48,7 @@ public interface SipuadaApi {
 
 	}
 	
-	public interface OptionsQueryingCallback extends SipuadaCallback {
+	public interface OptionsQueryingCallback {
 
 		void onOptionsQueryingArrived(String callId);
 		
