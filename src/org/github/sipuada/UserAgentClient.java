@@ -225,6 +225,87 @@ public class UserAgentClient {
 				.toArray(new Header[additionalHeaders.size()]));
 	}
 
+	public boolean sendOptionsRequest(String remoteUser, String remoteHost,
+			CallIdHeader callIdHeader, boolean embedContactHeader) {
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this OPTIONS request to {} at {}." +
+					"\n[remoteUser] must be a valid id, [remoteHost] must be a valid IP address: {}.",
+					remoteUser, remoteHost, parseException.getMessage());
+			// No need for caller to wait for remote responses.
+			return false;
+		}
+		long cseq = ++localCSeq;
+
+		// TODO *IF* request is a OPTIONS, make sure to add the following
+		// headers:
+		/*
+		 * (according to section 13.2.1)
+		 *
+		 * Allow Supported (later support also: Accept, Expires)
+		 */
+
+		/*
+		 * A Contact header field MAY be present in an OPTIONS. An Accept header
+		 * field SHOULD be included to indicate the type of message body the UAC
+		 * wishes to receive in the response. Typically, this is set to a format
+		 * that is used to describe the media capabilities of a UA, such as SDP
+		 * (application/sdp).
+		 * 
+		 * Example OPTIONS request: 
+		 * OPTIONS sip:carol@chicago.com SIP/2.0
+         * Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKhjhs8ass877
+         * Max-Forwards: 70
+         * To: <sip:carol@chicago.com>
+         * From: Alice <sip:alice@atlanta.com>;tag=1928301774
+         * Call-ID: a84b4c76e66710
+         * CSeq: 63104 OPTIONS
+         * Contact: <sip:alice@pc33.atlanta.com>
+         * Accept: application/sdp
+         * Content-Length: 0
+         * 
+		 */
+		SipURI contactUri;
+		List<Header> additionalHeaders = new ArrayList<>();
+		try {
+			AcceptHeader acceptHeader = headerMaker.createAcceptHeader("application", "sdp");
+			additionalHeaders.add(acceptHeader);
+		} catch (ParseException e) {
+			logger.error("Request must have a Accept Header");
+			return false;
+		}
+		
+		if (embedContactHeader) {
+			try {
+				contactUri = addressMaker.createSipURI(username, localIp);
+			} catch (ParseException parseException) {
+				logger.error("Could not properly create the contact URI for {} at {}." +
+						"\n[username] must be a valid id, [localIp] must be a valid IP address: {}",
+						username, localIp, parseException.getMessage());
+				// No need for caller to wait for remote responses.
+				return false;
+			}
+			contactUri.setPort(localPort);
+			Address contactAddress = addressMaker.createAddress(contactUri);
+			ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+			try {
+				contactHeader.setExpires(60);
+			} catch (InvalidArgumentException ignore) {
+			}
+			// TODO later, allow for multiple contact headers here too (the ones
+			// REGISTERed).
+			additionalHeaders.add(contactHeader);
+		}
+		
+
+		Header[] headers = new Header[additionalHeaders.size()];
+		headers = additionalHeaders.toArray(headers);
+		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
+				callIdHeader, cseq, headers);
+	}
+	
 	public boolean sendInviteRequest(String remoteUser, String remoteHost,
 			CallIdHeader callIdHeader) {
 		URI requestUri;
@@ -335,87 +416,6 @@ public class UserAgentClient {
 
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost,
 				requestUri, callIdHeader, cseq, headers);
-	}
-
-	public boolean sendOptionsRequest(String remoteUser, String remoteHost,
-			CallIdHeader callIdHeader, boolean embedContactHeader) {
-		URI requestUri;
-		try {
-			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create URI for this OPTIONS request to {} at {}." +
-					"\n[remoteUser] must be a valid id, [remoteHost] must be a valid IP address: {}.",
-					remoteUser, remoteHost, parseException.getMessage());
-			// No need for caller to wait for remote responses.
-			return false;
-		}
-		long cseq = ++localCSeq;
-
-		// TODO *IF* request is a OPTIONS, make sure to add the following
-		// headers:
-		/*
-		 * (according to section 13.2.1)
-		 *
-		 * Allow Supported (later support also: Accept, Expires)
-		 */
-
-		/*
-		 * A Contact header field MAY be present in an OPTIONS. An Accept header
-		 * field SHOULD be included to indicate the type of message body the UAC
-		 * wishes to receive in the response. Typically, this is set to a format
-		 * that is used to describe the media capabilities of a UA, such as SDP
-		 * (application/sdp).
-		 * 
-		 * Example OPTIONS request: 
-		 * OPTIONS sip:carol@chicago.com SIP/2.0
-         * Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKhjhs8ass877
-         * Max-Forwards: 70
-         * To: <sip:carol@chicago.com>
-         * From: Alice <sip:alice@atlanta.com>;tag=1928301774
-         * Call-ID: a84b4c76e66710
-         * CSeq: 63104 OPTIONS
-         * Contact: <sip:alice@pc33.atlanta.com>
-         * Accept: application/sdp
-         * Content-Length: 0
-         * 
-		 */
-		SipURI contactUri;
-		List<Header> additionalHeaders = new ArrayList<>();
-		try {
-			AcceptHeader acceptHeader = headerMaker.createAcceptHeader("application", "sdp");
-			additionalHeaders.add(acceptHeader);
-		} catch (ParseException e) {
-			logger.error("Request must have a Accept Header");
-			return false;
-		}
-		
-		if (embedContactHeader) {
-			try {
-				contactUri = addressMaker.createSipURI(username, localIp);
-			} catch (ParseException parseException) {
-				logger.error("Could not properly create the contact URI for {} at {}." +
-						"\n[username] must be a valid id, [localIp] must be a valid IP address: {}",
-						username, localIp, parseException.getMessage());
-				// No need for caller to wait for remote responses.
-				return false;
-			}
-			contactUri.setPort(localPort);
-			Address contactAddress = addressMaker.createAddress(contactUri);
-			ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-			try {
-				contactHeader.setExpires(60);
-			} catch (InvalidArgumentException ignore) {
-			}
-			// TODO later, allow for multiple contact headers here too (the ones
-			// REGISTERed).
-			additionalHeaders.add(contactHeader);
-		}
-		
-
-		Header[] headers = new Header[additionalHeaders.size()];
-		headers = additionalHeaders.toArray(headers);
-		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
-				callIdHeader, cseq, headers);
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser,
