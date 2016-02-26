@@ -342,9 +342,15 @@ public class UserAgent implements SipListener {
 					for (int i=1; i<operation.arguments.length; i++) {
 						arguments[i - 1] = operation.arguments[i];
 					}
-					sendRegisterRequest((RegistrationCallback) operation.callback,
+					RegistrationCallback registrationCallback =
+							(RegistrationCallback) operation.callback;
+					boolean couldSendRequest = sendRegisterRequest(registrationCallback,
 							unregister, arguments);
 					iterator.remove();
+					if (!couldSendRequest) {
+						registrationCallback
+							.onRegistrationFailed("Request could not be sent.");
+					}
 					break;
 				}
 			}
@@ -496,9 +502,17 @@ public class UserAgent implements SipListener {
 				Operation operation = iterator.next();
 				if (operation.callback instanceof CallInvitationCallback) {
 					String[] arguments = operation.arguments;
-					sendInviteRequest(arguments[0], arguments[1],
-							(CallInvitationCallback) operation.callback);
+					CallInvitationCallback callInvitationCallback =
+							(CallInvitationCallback) operation.callback;
+					boolean couldSendRequest = sendInviteRequest(arguments[0],
+							arguments[1], callInvitationCallback);
 					iterator.remove();
+					if (!couldSendRequest) {
+						CallIdHeader callIdHeader = provider.getNewCallId();
+						final String callId = callIdHeader.getCallId();
+						listener.onCallInvitationFailed("Request could not" +
+								" be sent.", callId);
+					}
 					break;
 				}
 			}
