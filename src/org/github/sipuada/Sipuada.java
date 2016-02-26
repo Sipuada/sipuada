@@ -725,22 +725,22 @@ public class Sipuada implements SipuadaApi {
 
 	@Override
 	public boolean cancelCallInvitation(String callId) {
-		return fetchBestAgent(defaultTransport).cancelInviteRequest(callId);
+		return callIdToActiveUserAgent.get(callId).cancelInviteRequest(callId);
 	}
 
 	@Override
 	public boolean acceptCallInvitation(String callId) {
-		return fetchBestAgent(defaultTransport).answerInviteRequest(callId, true);
+		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, true);
 	}
 
 	@Override
 	public boolean declineCallInvitation(String callId) {
-		return fetchBestAgent(defaultTransport).answerInviteRequest(callId, false);
+		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, false);
 	}
 
 	@Override
 	public boolean finishCall(String callId) {
-		return fetchBestAgent(defaultTransport).finishCall(callId);
+		return callIdToActiveUserAgent.get(callId).finishCall(callId);
 	}
 
 	private UserAgent fetchBestAgent(String rawTransport) {

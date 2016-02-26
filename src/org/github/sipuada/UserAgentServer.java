@@ -279,7 +279,7 @@ public class UserAgentServer {
 		//FIXME later implement REINVITE as well.
 		throw new RequestCouldNotBeAddressed();
 	}
-	
+
 	private void handleAckRequest(Request request, ServerTransaction serverTransaction) {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
@@ -361,10 +361,8 @@ public class UserAgentServer {
 					"{} requests.", method);
 			return null;
 		}
-//		boolean withinDialog = true;
 		ServerTransaction newServerTransaction = serverTransaction;
 		if (newServerTransaction == null) {
-//			withinDialog = false;
 			try {
 				newServerTransaction = provider.getNewServerTransaction(request);
 			} catch (TransactionAlreadyExistsException requestIsRetransmit) {
@@ -382,33 +380,8 @@ public class UserAgentServer {
 				return null;
 			}
 		}
-//		Dialog dialog = newServerTransaction.getDialog();
-//		withinDialog &= dialog != null;
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
-//		if (Constants.getResponseClass(statusCode) == ResponseClass.PROVISIONAL &&
-//				method == RequestMethod.INVITE && withinDialog) {
-//			try {
-//				Response response = dialog.createReliableProvisionalResponse(statusCode);
-//				for (Header header : additionalHeaders) {
-//					response.addHeader(header);
-//				}
-//				logger.info("Sending {} response to {} request...", statusCode, method);
-//				dialog.sendReliableProvisionalResponse(response);
-//				logger.info("{} response sent.", statusCode);
-//				return newServerTransaction;
-//			} catch (InvalidArgumentException ignore) {
-//			} catch (SipException invalidResponse) {
-//				//A final response to this request was already sent, so this
-//				//provisional response shall not be sent, or another reliable
-//				//provisional response is still pending.
-//				//In either case, we won't send this new response.
-//				logger.debug("{} response could not be sent to {} request: {} ({}).",
-//						statusCode, method, invalidResponse.getMessage(),
-//						invalidResponse.getCause().getMessage());
-//				return null;
-//			}
-//		}
 		try {
 			Response response = messenger.createResponse(statusCode, request);
 			for (Header header : additionalHeaders) {
@@ -443,8 +416,8 @@ public class UserAgentServer {
 
 	private boolean isDialogCreatingRequest(RequestMethod method) {
 		switch (method) {
-			case INVITE:
 			case OPTIONS:
+			case INVITE:
 				return true;
 			default:
 				return false;
