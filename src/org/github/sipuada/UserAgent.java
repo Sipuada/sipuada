@@ -22,6 +22,7 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.QueryingOptionsArrived;
@@ -62,7 +63,8 @@ public class UserAgent implements SipListener {
 
 	private final Logger logger = LoggerFactory.getLogger(UserAgent.class);
 
-	private final EventBus eventBus = new EventBus();
+	private final EventBus sipuadaEventBus;
+	private final EventBus internalEventBus = new EventBus();
 	private final Map<String, Object> eventBusSubscribers = Collections
 			.synchronizedMap(new HashMap<String, Object>());
 	private final Map<String, String> callIdToEventBusSubscriberId =
@@ -87,20 +89,22 @@ public class UserAgent implements SipListener {
 	private final Map<String, UserAgent> callIdToActiveUserAgent;
 	private final Map<UserAgent, Set<String>> activeUserAgentCallIds;
 
-	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, Map<RequestMethod, SipuadaPlugin> plugins,
-			String username, String primaryHost, String password, String localIp, String localPort, String transport,
-			Map<String, UserAgent> callIdToActiveUserAgent, Map<UserAgent, Set<String>> activeUserAgentCallIds) {
+	public UserAgent(EventBus eventBus, SipProvider sipProvider, SipuadaListener sipuadaListener,
+			Map<RequestMethod, SipuadaPlugin> plugins, String username, String primaryHost, String password,
+			String localIp, String localPort, String transport, Map<String, UserAgent> callIdToActiveUserAgent,
+			Map<UserAgent, Set<String>> activeUserAgentCallIds) {
+		sipuadaEventBus = eventBus;
 		provider = sipProvider;
 		listener = sipuadaListener;
-		eventBus.register(this);
+		internalEventBus.register(this);
 		try {
 			SipFactory factory = SipFactory.getInstance();
 			MessageFactory messenger = factory.createMessageFactory();
 			HeaderFactory headerMaker = factory.createHeaderFactory();
 			AddressFactory addressMaker = factory.createAddressFactory();
-			uac = new UserAgentClient(eventBus, provider, plugins, messenger, headerMaker, addressMaker,
+			uac = new UserAgentClient(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					username, primaryHost, password, localIp, localPort, transport);
-			uas = new UserAgentServer(eventBus, provider, plugins, messenger, headerMaker, addressMaker,
+			uas = new UserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					username, localIp, localPort);
 		} catch (PeerUnavailableException ignore){}
 		try {
@@ -133,11 +137,30 @@ public class UserAgent implements SipListener {
 
 	@Override
 	public void processRequest(RequestEvent requestEvent) {
+		Request request = requestEvent.getRequest();
+		CallIdHeader callIdHeader = ((CallIdHeader) request.getHeader(CallIdHeader.NAME));
+		String callId = callIdHeader.getCallId();
+		if (callIdToActiveUserAgent.containsKey(callId) && callIdToActiveUserAgent.get(callId) == this) {
+			logger.debug("{}:{}/{}'s UAS will avoid election and process an incoming {} request right away.",
+					localIp, localPort, transport, requestEvent.getRequest().getMethod());
+			doProcessRequest(requestEvent);
+		}
+		else {
+			logger.debug("{}:{}/{}'s UAS nominates itself to process an incoming {} request...",
+					localIp, localPort, transport, requestEvent.getRequest().getMethod());
+			sipuadaEventBus.post(new UserAgentNominatedForIncomingRequest(this, callId, requestEvent));
+		}
+	}
+
+	protected void doProcessRequest(RequestEvent requestEvent) {
 		uas.processRequest(requestEvent);
 	}
 
 	@Override
 	public void processResponse(ResponseEvent responseEvent) {
+		logger.debug("{}:{}/{}'s UAC about to process an incoming {} response to a {} request...",
+				localIp, localPort, transport, responseEvent.getResponse().getStatusCode(),
+				responseEvent.getClientTransaction().getRequest().getMethod());
 		uac.processResponse(responseEvent);
 	}
 
@@ -150,7 +173,7 @@ public class UserAgent implements SipListener {
 			uas.processRetransmission(timeoutOrRetransmissionEvent);
 		}
 	}
-	
+
 	@Override
 	public void processIOException(IOExceptionEvent exceptionEvent) {
 		uac.processFatalTransportError(exceptionEvent);
@@ -189,14 +212,14 @@ public class UserAgent implements SipListener {
 						if (event.getCallId().equals(callId)) {
 							wipeAnswerableInviteOperation(callId, eventBusSubscriberId,
 									event.shouldTerminateOriginalInvite());
-							eventBus.unregister(this);
+							internalEventBus.unregister(this);
 							listener.onCallInvitationCanceled(event.getReason(),
 									callId);
 						}
 					}
 
 				};
-				eventBus.register(inviteCancelerEventBusSubscriber);
+				internalEventBus.register(inviteCancelerEventBusSubscriber);
 				boolean currentlyBusy = listener.onCallInvitationArrived(callId);
 				if (currentlyBusy) {
 					logger.info("Callee is currently busy.");
@@ -205,7 +228,7 @@ public class UserAgent implements SipListener {
 			}
 
 		};
-		eventBus.register(eventBusSubscriber);
+		internalEventBus.register(eventBusSubscriber);
 	}
 
 	private synchronized void inviteOperationIsAnswerable(String eventBusSubscriberId,
@@ -289,18 +312,18 @@ public class UserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(RegistrationSuccess event) {
-				eventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
+				internalEventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
 				callback.onRegistrationSuccess(event.getContactBindings());
 			}
 
 			@Subscribe
 			public void onEvent(RegistrationFailed event) {
-				eventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
+				internalEventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
 				callback.onRegistrationFailed(event.getReason());
 			}
 
 		};
-		eventBus.register(eventBusSubscriber);
+		internalEventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = false;
 		if (unregister) {
@@ -311,7 +334,7 @@ public class UserAgent implements SipListener {
 		}
 		if (!expectRemoteAnswer) {
 			logger.error("REGISTER request not sent.");
-			eventBus.unregister(eventBusSubscriber);
+			internalEventBus.unregister(eventBusSubscriber);
 		}
 		return expectRemoteAnswer;
 	}
@@ -345,12 +368,12 @@ public class UserAgent implements SipListener {
 			}
 
 		};
-		eventBus.register(eventBusSubscriber);
+		internalEventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = uac.sendOptionsRequest(remoteUser, remoteDomain, callIdHeader, true);
 		if (!expectRemoteAnswer) {
 			logger.error("OPTIONS request not sent.");
-			eventBus.unregister(eventBusSubscriber);
+			internalEventBus.unregister(eventBusSubscriber);
 		}
 		return true;
 	}
@@ -412,12 +435,12 @@ public class UserAgent implements SipListener {
 			}
 
 		};
-		eventBus.register(eventBusSubscriber);
+		internalEventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain, callIdHeader);
 		if (!expectRemoteAnswer) {
 			logger.error("INVITE request not sent.");
-			eventBus.unregister(eventBusSubscriber);
+			internalEventBus.unregister(eventBusSubscriber);
 		}
 		return expectRemoteAnswer;
 	}
@@ -491,7 +514,7 @@ public class UserAgent implements SipListener {
 			String callId) {
 		Object eventBusSubscriber = eventBusSubscribers.remove(eventBusSubscriberId);
 		if (eventBusSubscriber != null) {
-			eventBus.unregister(eventBusSubscriber);
+			internalEventBus.unregister(eventBusSubscriber);
 		}
 	}
 
@@ -526,7 +549,7 @@ public class UserAgent implements SipListener {
 							public void onEvent(CallInvitationCanceled event) {
 								if (event.getCallId().equals(callId)) {
 									inviteOperationFinished(eventBusSubscriberId, callId);
-									eventBus.unregister(this);
+									internalEventBus.unregister(this);
 									listener.onCallInvitationCanceled(event.getReason(),
 											callId);
 								}
@@ -535,14 +558,14 @@ public class UserAgent implements SipListener {
 							@Subscribe
 							public void onEvent(CallInvitationFailed event) {
 								if (event.getCallId().equals(callId)) {
-									eventBus.unregister(this);
+									internalEventBus.unregister(this);
 									listener.onCallInvitationFailed(event.getReason(),
 											callId);
 								}
 							}
 
 						};
-						eventBus.register(eventBusSubscriber);
+						internalEventBus.register(eventBusSubscriber);
 						return uac.sendCancelRequest(clientTransaction);
 					}
 				}
@@ -590,7 +613,7 @@ public class UserAgent implements SipListener {
 										event.getCallId().equals(callId)) {
 									callEstablished(eventBusSubscriberId, callId,
 											event.getDialog());
-									eventBus.unregister(this);
+									internalEventBus.unregister(this);
 									listener.onCallEstablished(callId);
 								}
 							}
@@ -598,14 +621,14 @@ public class UserAgent implements SipListener {
 							@Subscribe
 							public void onEvent(CallInvitationFailed event) {
 								if (event.getCallId().equals(callId)) {
-									eventBus.unregister(this);
+									internalEventBus.unregister(this);
 									listener.onCallInvitationFailed(event.getReason(),
 											callId);
 								}
 							}
 
 						};
-						eventBus.register(eventBusSubscriber);
+						internalEventBus.register(eventBusSubscriber);
 						RequestMethod method = RequestMethod.UNKNOWN;
 						try {
 							method = RequestMethod.valueOf(request.getMethod());
@@ -650,7 +673,7 @@ public class UserAgent implements SipListener {
 			public void onEvent(EstablishedCallFinished event) {
 				if (event.getCallId().equals(callId)) {
 					wipeEstablishedCall(callId, eventBusSubscriberId);
-					eventBus.unregister(this);
+					internalEventBus.unregister(this);
 					if (sessionPlugin != null) {
 						try {
 							boolean sessionProperlyTerminated = sessionPlugin
@@ -670,7 +693,7 @@ public class UserAgent implements SipListener {
 			}
 
 		};
-		eventBus.register(eventBusSubscriber);
+		internalEventBus.register(eventBusSubscriber);
 		if (sessionPlugin != null) {
 			try {
 				boolean sessionProperlySetup = sessionPlugin.performSessionSetup(callId, this);
