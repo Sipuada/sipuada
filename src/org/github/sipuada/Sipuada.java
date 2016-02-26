@@ -14,7 +14,7 @@ import java.util.Set;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.Transport;
-import org.github.sipuada.Sipuada.Operation.OperationMethod;
+import org.github.sipuada.Sipuada.RegisterOperation.OperationMethod;
 import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -44,27 +44,27 @@ public class Sipuada implements SipuadaApi {
 
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins = new HashMap<>();
 
-	private final Map<RequestMethod, Boolean> operationsInProgress = Collections
+	private final Map<RequestMethod, Boolean> registerOperationsInProgress = Collections
 			.synchronizedMap(new HashMap<RequestMethod, Boolean>());
 	{
 		for (RequestMethod method : RequestMethod.values()) {
-			operationsInProgress.put(method, false);
+			registerOperationsInProgress.put(method, false);
 		}
 	}
-	private final List<Operation> postponedOperations = Collections
-			.synchronizedList(new LinkedList<Operation>());
+	private final List<RegisterOperation> postponedRegisterOperations = Collections
+			.synchronizedList(new LinkedList<RegisterOperation>());
 
-	protected static class Operation {
+	protected static class RegisterOperation {
 		
 		public enum OperationMethod {
 			REGISTER_ADDRESSES, INCLUDE_ADDRESSES, OVERWRITE_ADDRESSES
 		}
 
 		public final OperationMethod method;
-		public final SipuadaCallback callback;
+		public final RegistrationCallback callback;
 		public final String[] arguments;
 
-		public Operation(OperationMethod method, SipuadaCallback callback,
+		public RegisterOperation(OperationMethod method, RegistrationCallback callback,
 				String... arguments) {
 			this.method = method;
 			this.callback = callback;
@@ -197,7 +197,7 @@ public class Sipuada implements SipuadaApi {
 			logger.info("Sipuada created. Default transport: {}. UA: {}",
 					defaultTransport, userAgentsDump.toString());
 		}
-		operationsInProgress.put(RequestMethod.REGISTER, true);
+		registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 		wipeAddresses(new RegistrationCallback() {
 
 			@Override
@@ -238,8 +238,8 @@ public class Sipuada implements SipuadaApi {
 
 	@Override
 	public boolean registerAddresses(final RegistrationCallback callback) {
-		if (operationsInProgress.get(RequestMethod.REGISTER)) {
-			postponedOperations.add(new Operation(OperationMethod.REGISTER_ADDRESSES,
+		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.REGISTER_ADDRESSES,
 					callback));
 			logger.info("Register addresses: operation postponed because another " +
 					"related operation is in progress.");
@@ -275,7 +275,7 @@ public class Sipuada implements SipuadaApi {
 
 		}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
 		if (couldDispatchOperation) {
-			operationsInProgress.put(RequestMethod.REGISTER, true);
+			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 		}
 		return couldDispatchOperation;
 	}
@@ -288,8 +288,8 @@ public class Sipuada implements SipuadaApi {
 					"were provided.");
 			return false;
 		}
-		if (operationsInProgress.get(RequestMethod.REGISTER)) {
-			postponedOperations.add(new Operation(OperationMethod.INCLUDE_ADDRESSES,
+		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.INCLUDE_ADDRESSES,
 					callback, localAddresses));
 			logger.info("Include addresses: operation postponed because another " +
 					"related operation is in progress.");
@@ -333,7 +333,7 @@ public class Sipuada implements SipuadaApi {
 
 		}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
 		if (couldDispatchOperation) {
-			operationsInProgress.put(RequestMethod.REGISTER, true);
+			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 		}
 		return couldDispatchOperation;
 	}
@@ -346,8 +346,8 @@ public class Sipuada implements SipuadaApi {
 					"were provided.");
 			return false;
 		}
-		if (operationsInProgress.get(RequestMethod.REGISTER)) {
-			postponedOperations.add(new Operation(OperationMethod.OVERWRITE_ADDRESSES,
+		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.OVERWRITE_ADDRESSES,
 					callback, localAddresses));
 			logger.info("Overwrite addresses: operation postponed because another " +
 					"related operation is in progress.");
@@ -442,7 +442,7 @@ public class Sipuada implements SipuadaApi {
 			}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
 		}
 		if (couldDispatchOperation) {
-			operationsInProgress.put(RequestMethod.REGISTER, true);
+			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 		}
 		return couldDispatchOperation;
 	}
@@ -549,38 +549,33 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	private void registerRelatedOperationFinished() {
-		operationsInProgress.put(RequestMethod.REGISTER, false);
-		synchronized (postponedOperations) {
-			Iterator<Operation> iterator = postponedOperations.iterator();
+		registerOperationsInProgress.put(RequestMethod.REGISTER, false);
+		synchronized (postponedRegisterOperations) {
+			Iterator<RegisterOperation> iterator = postponedRegisterOperations.iterator();
 			while (iterator.hasNext()) {
-				Operation operation = iterator.next();
-				if (operation.callback instanceof RegistrationCallback) {
-					iterator.remove();
-					RegistrationCallback registrationCallback =
-							(RegistrationCallback) operation.callback;
-					String[] localAddresses = operation.arguments;
-					boolean couldDispatchOperation = false;
-					switch (operation.method) {
-						case REGISTER_ADDRESSES:
-							couldDispatchOperation = registerAddresses
-								(registrationCallback);
-							break;
-						case INCLUDE_ADDRESSES:
-							couldDispatchOperation = includeAddresses
-								(registrationCallback, localAddresses);
-							break;
-						case OVERWRITE_ADDRESSES:
-							couldDispatchOperation = overwriteAddresses
-								(registrationCallback, localAddresses);
-							break;
-					}
-					if (!couldDispatchOperation) {
-						registrationCallback
-							.onRegistrationFailed("Request could not be sent.");
-						continue;
-					}
-					break;
+				RegisterOperation operation = iterator.next();
+				iterator.remove();
+				boolean couldDispatchOperation = false;
+				switch (operation.method) {
+					case REGISTER_ADDRESSES:
+						couldDispatchOperation = registerAddresses
+							(operation.callback);
+						break;
+					case INCLUDE_ADDRESSES:
+						couldDispatchOperation = includeAddresses
+							(operation.callback, operation.arguments);
+						break;
+					case OVERWRITE_ADDRESSES:
+						couldDispatchOperation = overwriteAddresses
+							(operation.callback, operation.arguments);
+						break;
 				}
+				if (!couldDispatchOperation) {
+					operation.callback
+						.onRegistrationFailed("Request could not be sent.");
+					continue;
+				}
+				break;
 			}
 		}
 	}
