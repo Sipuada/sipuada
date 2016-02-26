@@ -2,10 +2,12 @@ package org.github.sipuada;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TooManyListenersException;
 
 import org.github.sipuada.Constants.RequestMethod;
@@ -82,8 +84,12 @@ public class UserAgent implements SipListener {
 	private final int localPort;
 	private final String transport;
 
+	private final Map<String, UserAgent> callIdToActiveUserAgent;
+	private final Map<UserAgent, Set<String>> activeUserAgentCallIds;
+
 	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, Map<RequestMethod, SipuadaPlugin> plugins,
-			String username, String primaryHost, String password, String localIp, String localPort, String transport) {
+			String username, String primaryHost, String password, String localIp, String localPort, String transport,
+			Map<String, UserAgent> callIdToActiveUserAgent, Map<UserAgent, Set<String>> activeUserAgentCallIds) {
 		provider = sipProvider;
 		listener = sipuadaListener;
 		eventBus.register(this);
@@ -105,6 +111,8 @@ public class UserAgent implements SipListener {
 		this.localIp = localIp;
 		this.localPort = Integer.parseInt(localPort);
 		this.transport = transport;
+		this.callIdToActiveUserAgent = callIdToActiveUserAgent;
+		this.activeUserAgentCallIds = activeUserAgentCallIds;
 	}
 
 	protected SipProvider getProvider() {
@@ -202,6 +210,12 @@ public class UserAgent implements SipListener {
 
 	private synchronized void inviteOperationIsAnswerable(String eventBusSubscriberId,
 			String callId, ServerTransaction serverTransaction) {
+		callIdToActiveUserAgent.put(callId, this);
+		if (!activeUserAgentCallIds.containsKey(this)) {
+			activeUserAgentCallIds.put(this, Collections
+					.synchronizedSet(new HashSet<String>()));
+		}
+		activeUserAgentCallIds.get(this).add(callId);
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
 		if (!answerableInviteOperations.containsKey(eventBusSubscriberId)) {
 			answerableInviteOperations.put(eventBusSubscriberId, Collections
@@ -212,6 +226,14 @@ public class UserAgent implements SipListener {
 
 	private synchronized void wipeAnswerableInviteOperation(String callId,
 			String eventBusSubscriberId, boolean shouldTerminate) {
+		callIdToActiveUserAgent.remove(callId);
+		Set<String> activeCallIds = activeUserAgentCallIds.get(this);
+		if (activeCallIds != null) {
+			activeCallIds.remove(callId);
+			if (activeCallIds.isEmpty()) {
+				activeUserAgentCallIds.remove(this);
+			}
+		}
 		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
 		if (foundSubscriberId == null ||
 				!foundSubscriberId.equals(eventBusSubscriberId)) {
@@ -363,6 +385,12 @@ public class UserAgent implements SipListener {
 
 	private synchronized void inviteOperationIsCancelable(String eventBusSubscriberId,
 			String callId, ClientTransaction clientTransaction) {
+		callIdToActiveUserAgent.put(callId, this);
+		if (!activeUserAgentCallIds.containsKey(this)) {
+			activeUserAgentCallIds.put(this, Collections
+					.synchronizedSet(new HashSet<String>()));
+		}
+		activeUserAgentCallIds.get(this).add(callId);
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
 		if (!cancelableInviteOperations.containsKey(eventBusSubscriberId)) {
 			cancelableInviteOperations.put(eventBusSubscriberId, Collections
@@ -377,6 +405,14 @@ public class UserAgent implements SipListener {
 			//No data relation should have been assigned for this callId
 			//in the first place, so we wouldn't have any links to remove.
 			return;
+		}
+		callIdToActiveUserAgent.remove(callId);
+		Set<String> activeCallIds = activeUserAgentCallIds.get(this);
+		if (activeCallIds != null) {
+			activeCallIds.remove(callId);
+			if (activeCallIds.isEmpty()) {
+				activeUserAgentCallIds.remove(this);
+			}
 		}
 		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
 		if (foundSubscriberId == null ||
@@ -556,6 +592,12 @@ public class UserAgent implements SipListener {
 
 	private synchronized void callEstablished(final String eventBusSubscriberId,
 			final String callId, Dialog dialog) {
+		callIdToActiveUserAgent.put(callId, this);
+		if (!activeUserAgentCallIds.containsKey(this)) {
+			activeUserAgentCallIds.put(this, Collections
+					.synchronizedSet(new HashSet<String>()));
+		}
+		activeUserAgentCallIds.get(this).add(callId);
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
 		if (!establishedCalls.containsKey(eventBusSubscriberId)) {
 			establishedCalls.put(eventBusSubscriberId, Collections
@@ -609,6 +651,14 @@ public class UserAgent implements SipListener {
 
 	public synchronized void wipeEstablishedCall(String callId,
 			String eventBusSubscriberId) {
+		callIdToActiveUserAgent.remove(callId);
+		Set<String> activeCallIds = activeUserAgentCallIds.get(this);
+		if (activeCallIds != null) {
+			activeCallIds.remove(callId);
+			if (activeCallIds.isEmpty()) {
+				activeUserAgentCallIds.remove(this);
+			}
+		}
 		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
 		if (foundSubscriberId == null ||
 				!foundSubscriberId.equals(eventBusSubscriberId)) {
