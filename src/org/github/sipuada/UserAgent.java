@@ -268,17 +268,17 @@ public class UserAgent implements SipListener {
 		}
 	}
 
-	protected boolean sendRegisterRequest(RegistrationCallback callback,
+	public synchronized boolean sendRegisterRequest(RegistrationCallback callback,
 			String... additionalAddresses) {
 		return sendRegisterRequest(callback, false, additionalAddresses);
 	}
 
-	protected boolean sendUnregisterRequest(RegistrationCallback callback,
+	public synchronized boolean sendUnregisterRequest(RegistrationCallback callback,
 			String... expiredAddresses) {
 		return sendRegisterRequest(callback, true, expiredAddresses);
 	}
 
-	public synchronized boolean sendRegisterRequest(final RegistrationCallback callback,
+	private synchronized boolean sendRegisterRequest(final RegistrationCallback callback,
 			boolean unregister, String... additionalAddresses) {
 		if (operationsInProgress.get(RequestMethod.REGISTER)) {
 			String arguments[] = new String[additionalAddresses.length + 1];
@@ -335,8 +335,8 @@ public class UserAgent implements SipListener {
 				if (operation.callback instanceof RegistrationCallback) {
 					boolean unregister = operation.arguments[0].equals("UNREGISTER");
 					String[] arguments = new String[operation.arguments.length - 1];
-					for (int i=0; i<arguments.length; i++) {
-						arguments[0] = operation.arguments[i + 1];
+					for (int i=1; i<operation.arguments.length; i++) {
+						arguments[i - 1] = operation.arguments[i];
 					}
 					sendRegisterRequest((RegistrationCallback) operation.callback,
 							unregister, arguments);
