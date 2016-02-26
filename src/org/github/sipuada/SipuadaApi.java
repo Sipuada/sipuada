@@ -28,13 +28,11 @@ public interface SipuadaApi {
 
 		void onRegistrationSuccess(List<String> registeredContacts);
 
-		void onRegistrationRenewed();
-
 		void onRegistrationFailed(String reason);
 
 	}
 
-	boolean registerCaller(RegistrationCallback callback);
+	boolean registerAddresses(RegistrationCallback callback);
 
 	boolean includeAddresses(RegistrationCallback callback, String... localAddresses);
 
