@@ -96,8 +96,9 @@ public class UserAgent implements SipListener {
 	private UserAgentServer uas;
 
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins;
-	private final String rawAddress;
-	private final String rawAddressWithTransport;
+	private final String localIp;
+	private final int localPort;
+	private final String transport;
 
 	public UserAgent(SipProvider sipProvider, SipuadaListener sipuadaListener, Map<RequestMethod, SipuadaPlugin> plugins,
 			String username, String primaryHost, String password, String localIp, String localPort, String transport) {
@@ -119,20 +120,25 @@ public class UserAgent implements SipListener {
 		} catch (TooManyListenersException ignore) {}
 		registeredPlugins = plugins;
 		initSipuadaListener();
-		rawAddress = String.format("%s:%s", localIp, localPort);
-		rawAddressWithTransport = String.format("%s:%s/%s", localIp, localPort, transport);
+		this.localIp = localIp;
+		this.localPort = Integer.parseInt(localPort);
+		this.transport = transport;
 	}
 
 	protected SipProvider getProvider() {
 		return provider;
 	}
 
-	protected String getRawAddress() {
-		return rawAddress;
+	protected String getLocalIp() {
+		return localIp;
 	}
 
-	protected String getRawAddressWithTransport() {
-		return rawAddressWithTransport;
+	protected int getLocalPort() {
+		return localPort;
+	}
+
+	protected String getTransport() {
+		return transport;
 	}
 
 	@Override
