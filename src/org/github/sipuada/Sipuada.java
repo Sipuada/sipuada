@@ -1,5 +1,8 @@
 package org.github.sipuada;
 
+import java.io.IOException;
+import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -799,15 +802,61 @@ public class Sipuada implements SipuadaApi {
 
 	@Override
 	public boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback) {
-		return fetchBestAgent(defaultTransport).sendOptionsRequest(remoteUser,
+		return chooseBestAgentThatIsAvailable().sendOptionsRequest(remoteUser,
 				remoteDomain, callback);
 	}
 
 	@Override
 	public boolean inviteToCall(String remoteUser, String remoteDomain,
 			CallInvitationCallback callback) {
-		return fetchBestAgent(defaultTransport).sendInviteRequest(remoteUser,
+		return chooseBestAgentThatIsAvailable().sendInviteRequest(remoteUser,
 				remoteDomain, callback);
+	}
+
+	private UserAgent chooseBestAgentThatIsAvailable() {
+		return chooseBestAgentThatIsAvailable(true);
+	}
+
+	private UserAgent chooseBestAgentThatIsAvailable(boolean justStartedChoosing) {
+		UserAgent originalBestUserAgent = null;
+		try {
+			originalBestUserAgent = fetchBestAgent(defaultTransport);
+		} catch (SipuadaException noUserAgentAvailable) {
+			if (justStartedChoosing) {
+				throw noUserAgentAvailable;
+			}
+			return originalBestUserAgent;
+		}
+		boolean originalUserAgentIsUnavailable = !checkUserAgentAvailability(originalBestUserAgent);
+		logger.info(originalUserAgentIsUnavailable ? "UNAVAILABLE!" : "AVAILABLE!");
+		UserAgent nextBestUserAgent = null;
+		if (originalUserAgentIsUnavailable) {
+			String rawTransport = originalBestUserAgent.getTransport();
+			Transport transport = Transport.UNKNOWN;
+			try {
+				transport = Transport.valueOf(rawTransport);
+			} catch (IllegalArgumentException ignore) {}
+			Set<UserAgent> userAgents = transportToUserAgents.get(transport);
+			userAgents.remove(originalBestUserAgent);
+			nextBestUserAgent = chooseBestAgentThatIsAvailable(false);
+			userAgents.add(originalBestUserAgent);
+			return nextBestUserAgent != null ? nextBestUserAgent : originalBestUserAgent;
+		}
+		return originalBestUserAgent;
+	}
+
+	private boolean checkUserAgentAvailability(UserAgent userAgent) {
+		String addressIp = userAgent.getLocalIp();
+		int addressPort = userAgent.getLocalPort();
+		try {
+			logger.info("Checking UserAgent availability: ({}:{})?", addressIp, addressPort);
+			new Socket(addressIp, addressPort).close();
+			return true;
+//			return InetAddress.getByName(String
+//					.format("%s:%d", addressIp, addressPort)).isReachable(500);
+		} catch (UnknownHostException unknownHost) {
+		} catch (IOException hostUnreachable) {}
+		return false;
 	}
 
 	@Override
