@@ -47,11 +47,13 @@ public class SipuadaTest {
 			}
 
 		};
-		Sipuada sipuada = new Sipuada(sipuadaListener, "xibaca", "192.168.25.217:5060", "xibaca",
+		Sipuada sipuada = new Sipuada(sipuadaListener,
+				"xibaca", "192.168.25.217:5060", "xibaca",
 				"192.168.25.217:55501/TCP",
 				"192.168.25.217:55502/TCP"
 		);
-		RegistrationCallback registrationCallback = new RegistrationCallback() {
+		RegistrationCallback registrationCallback =
+				new RegistrationCallback() {
 
 			@Override
 			public void onRegistrationSuccess(List<String> registeredContacts) {
@@ -64,38 +66,24 @@ public class SipuadaTest {
 			}
 
 		};
-//		try {
-//			Thread.sleep(15000);
-//		} catch (InterruptedException ignore) {}
 		sipuada.registerAddresses(registrationCallback);
-//		try {
-//			Thread.sleep(15000);
-//		} catch (InterruptedException ignore) {}
-		sipuada.overwriteAddresses(registrationCallback, "192.168.25.217:55503/TCP");
-//		try {
-//			Thread.sleep(15000);
-//		} catch (InterruptedException ignore) {}
+
+		sipuada.overwriteAddresses(registrationCallback,
+				"192.168.25.217:55503/TCP");
+
 		sipuada.includeAddresses(registrationCallback,
 				"192.168.25.217:55504/TCP",
 				"192.168.25.217:55505/TCP");
-//		try {
-//			Thread.sleep(15000);
-//		} catch (InterruptedException ignore) {}
+
 		sipuada.overwriteAddresses(registrationCallback);
-//		try {
-//			Thread.sleep(15000);
-//		} catch (InterruptedException ignore) {}
+
 		sipuada.registerAddresses(registrationCallback);
-//		try {
-//			Thread.sleep(15000);
-//		} catch (InterruptedException ignore) {}
+
 		sipuada.overwriteAddresses(registrationCallback,
 				"192.168.25.217:55506/UDP",
 				"192.168.25.217:55507/UDP",
 				"192.168.25.217:55508/UDP");
-//		try {
-//			Thread.sleep(15000);
-//		} catch (InterruptedException ignore) {}
+
 		sipuada.overwriteAddresses(registrationCallback,
 				"192.168.25.217:55507/UDP");
 	}
