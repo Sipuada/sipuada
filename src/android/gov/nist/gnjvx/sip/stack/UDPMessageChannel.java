@@ -29,26 +29,32 @@
 
 package android.gov.nist.gnjvx.sip.stack;
 
-import java.net.*;
-import android.gov.nist.gnjvx.sip.*;
-import android.gov.nist.core.*;
-import android.gov.nist.gnjvx.sip.header.*;
-import android.gov.nist.gnjvx.sip.parser.*;
-import android.gov.nist.gnjvx.sip.message.*;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.lang.String;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.Socket;
 import java.text.ParseException;
 
+import android.gov.nist.core.InternalErrorHandler;
+import android.gov.nist.core.LogWriter;
+import android.gov.nist.core.ThreadAuditor;
+import android.gov.nist.gnjvx.sip.SIPConstants;
+import android.gov.nist.gnjvx.sip.header.CSeq;
+import android.gov.nist.gnjvx.sip.header.CallID;
+import android.gov.nist.gnjvx.sip.header.From;
+import android.gov.nist.gnjvx.sip.header.RequestLine;
+import android.gov.nist.gnjvx.sip.header.StatusLine;
+import android.gov.nist.gnjvx.sip.header.To;
+import android.gov.nist.gnjvx.sip.header.Via;
+import android.gov.nist.gnjvx.sip.header.ViaList;
+import android.gov.nist.gnjvx.sip.message.SIPMessage;
+import android.gov.nist.gnjvx.sip.message.SIPRequest;
+import android.gov.nist.gnjvx.sip.message.SIPResponse;
+import android.gov.nist.gnjvx.sip.parser.ParseExceptionListener;
+import android.gov.nist.gnjvx.sip.parser.StringMsgParser;
 import android.javax.sip.address.Hop;
-import android.javax.sip.header.CSeqHeader;
-import android.javax.sip.header.CallIdHeader;
-import android.javax.sip.header.ContentTypeHeader;
-import android.javax.sip.header.FromHeader;
-import android.javax.sip.header.ToHeader;
-import android.javax.sip.header.ViaHeader;
-import android.javax.sip.message.Request;
-import android.javax.sip.message.Response;
 
 /*
  * Kim Kirby (Keyvoice) suggested that duplicate checking should be added to the
@@ -674,7 +680,6 @@ public class UDPMessageChannel extends MessageChannel implements
 				sock = new DatagramSocket();
 				created = true;
 			}
-			sock.setSoTimeout(30000);
 			sock.send(reply);
 			if (created)
 				sock.close();
@@ -735,7 +740,6 @@ public class UDPMessageChannel extends MessageChannel implements
 							+ peerAddress.getHostAddress() + "/" + peerPort
 							+ "\n" + new String(msg));
 				}
-				sock.setSoTimeout(30000);
 				sock.send(reply);
 				if (!sipStack.udpFlag)
 					sock.close();
@@ -750,7 +754,6 @@ public class UDPMessageChannel extends MessageChannel implements
 			Socket outputSocket = sipStack.ioHandler.sendBytes(
 					this.messageProcessor.getIpAddress(), peerAddress,
 					peerPort, "tcp", msg, retry);
-			outputSocket.setSoTimeout(30000);
 			OutputStream myOutputStream = outputSocket.getOutputStream();
 			myOutputStream.write(msg, 0, msg.length);
 			myOutputStream.flush();

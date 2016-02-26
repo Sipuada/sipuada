@@ -40,14 +40,28 @@
  ******************************************************************************/
 package android.gov.nist.gnjvx.sip.stack;
 
-import android.gov.nist.gnjvx.sip.header.*;
-import android.gov.nist.gnjvx.sip.message.*;
-import android.gov.nist.gnjvx.sip.parser.*;
-import android.gov.nist.core.*;
-import java.net.*;
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.Socket;
 import java.text.ParseException;
 
+import android.gov.nist.core.InternalErrorHandler;
+import android.gov.nist.gnjvx.sip.header.CSeq;
+import android.gov.nist.gnjvx.sip.header.CallID;
+import android.gov.nist.gnjvx.sip.header.From;
+import android.gov.nist.gnjvx.sip.header.RequestLine;
+import android.gov.nist.gnjvx.sip.header.RetryAfter;
+import android.gov.nist.gnjvx.sip.header.StatusLine;
+import android.gov.nist.gnjvx.sip.header.To;
+import android.gov.nist.gnjvx.sip.header.Via;
+import android.gov.nist.gnjvx.sip.header.ViaList;
+import android.gov.nist.gnjvx.sip.message.SIPMessage;
+import android.gov.nist.gnjvx.sip.message.SIPRequest;
+import android.gov.nist.gnjvx.sip.message.SIPResponse;
+import android.gov.nist.gnjvx.sip.parser.Pipeline;
+import android.gov.nist.gnjvx.sip.parser.PipelinedMsgParser;
+import android.gov.nist.gnjvx.sip.parser.SIPMessageListener;
 import android.javax.sip.address.Hop;
 import android.javax.sip.message.Response;
 
@@ -249,7 +263,6 @@ public final class TLSMessageChannel extends MessageChannel implements SIPMessag
             } catch (IOException ex) {
             }
             mySock = sock;
-            mySock.setSoTimeout(30000);
             this.myClientInputStream = mySock.getInputStream();
 
             Thread thread = new Thread(this);
@@ -303,7 +316,6 @@ public final class TLSMessageChannel extends MessageChannel implements SIPMessag
                 /* ignore */
             }
             mySock = sock;
-            mySock.setSoTimeout(30000);
             this.myClientInputStream = mySock.getInputStream();
 
             // start a new reader on this end of the pipe.

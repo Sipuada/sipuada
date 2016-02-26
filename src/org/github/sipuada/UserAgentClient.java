@@ -67,6 +67,7 @@ import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.ContentEncodingHeader;
 import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.ExpiresHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ProxyAuthenticateHeader;
@@ -131,7 +132,11 @@ public class UserAgentClient {
 				credentialsAndAddress[5] : "TCP";
 	}
 
-	public boolean sendRegisterRequest(String... additionalAddresses) {
+	public boolean sendRegisterRequest(String... addresses) {
+		if (addresses.length == 0) {
+			logger.error("Cannot send a REGISTER request with no bindings.");
+			return false;
+		}
 		URI requestUri;
 		try {
 			requestUri = addressMaker.createSipURI(null, primaryHost);
@@ -149,25 +154,10 @@ public class UserAgentClient {
 		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
 		long cseq = registerCSeqs.get(requestUri);
 		registerCSeqs.put(requestUri, cseq + 1);
-
 		List<ContactHeader> contactHeaders = new LinkedList<>();
-		try {
-			SipURI contactUri = addressMaker.createSipURI(username, localIp);
-			contactUri.setPort(localPort);
-			Address contactAddress = addressMaker.createAddress(contactUri);
-			ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-			try {
-				contactHeader.setExpires(3600);
-			} catch (InvalidArgumentException ignore) {}
-			contactHeaders.add(contactHeader);
-		} catch (ParseException ignore) {}
-
-		for (String address : additionalAddresses) {
+		for (String address : addresses) {
 			String addressIp = address.split(":")[0];
 			int addressPort = Integer.parseInt(address.split(":")[1]);
-			if (addressIp.equals(localIp) && addressPort == localPort) {
-				continue;
-			}
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
 				contactUri.setPort(addressPort);
@@ -179,18 +169,6 @@ public class UserAgentClient {
 				contactHeaders.add(contactHeader);
 			} catch (ParseException ignore) {}
 		}
-
-		//TODO Keep in mind that:
-		/*
-		 * UAs MUST NOT send a new registration (that is, containing new Contact
-		 * header field values, as opposed to a retransmission) until they have
-		 * received a final response from the registrar for the previous one or
-		 * the previous REGISTER request has timed out.
-		 *
-		 * FIXME for now we only allow REGISTER requests passing a single hardcoded
-		 * Contact header so this doesn't apply to us yet.
-		 */
-
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
 				requestUri, callIdHeader, cseq, contactHeaders
 				.toArray(new ContactHeader[contactHeaders.size()]));
@@ -214,9 +192,19 @@ public class UserAgentClient {
 		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
 		long cseq = registerCSeqs.get(requestUri);
 		registerCSeqs.put(requestUri, cseq + 1);
-
-		List<ContactHeader> contactHeaders = new LinkedList<>();
-
+		List<Header> additionalHeaders = new LinkedList<>();
+		if (expiredAddresses.length == 0) {
+			ExpiresHeader expiresHeader;
+			try {
+				expiresHeader = headerMaker.createExpiresHeader(0);
+				additionalHeaders.add(expiresHeader);
+			} catch (InvalidArgumentException ignore) {}
+			ContactHeader contactHeader = headerMaker.createContactHeader();
+			try {
+				contactHeader.setExpires(0);
+			} catch (InvalidArgumentException ignore) {}
+			additionalHeaders.add(contactHeader);
+		}
 		for (String address : expiredAddresses) {
 			String addressIp = address.split(":")[0];
 			int addressPort = Integer.parseInt(address.split(":")[1]);
@@ -228,12 +216,12 @@ public class UserAgentClient {
 				try {
 					contactHeader.setExpires(0);
 				} catch (InvalidArgumentException ignore) {}
-				contactHeaders.add(contactHeader);
+				additionalHeaders.add(contactHeader);
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
-				requestUri, callIdHeader, cseq, contactHeaders
-				.toArray(new ContactHeader[contactHeaders.size()]));
+				requestUri, callIdHeader, cseq, additionalHeaders
+				.toArray(new Header[additionalHeaders.size()]));
 	}
 
 	public boolean sendInviteRequest(String remoteUser, String remoteHost,
@@ -518,7 +506,8 @@ public class UserAgentClient {
 				public void run() {
 					try {
 						if (doSendRequest(request, clientTransaction, dialog)) {
-							logger.info("{} request sent.", method);
+							logger.info("{} request sent by {}:{} through {}.", method,
+									localIp, localPort, transport);
 						}
 						else {
 							logger.error("Could not send this {} request.", method);
@@ -775,9 +764,8 @@ public class UserAgentClient {
 		switch (statusCode) {
 			case Response.PROXY_AUTHENTICATION_REQUIRED:
 			case Response.UNAUTHORIZED:
-				logger.debug("CALL BEGIN - Performing necessary authorization procedures.");
+				logger.debug("Performing necessary authorization procedures.");
 				handleAuthorizationRequired(response, clientTransaction);
-				logger.debug("CALL END - Performing necessary authorization procedures.");
 				//No method-specific handling is required.
 				return false;
 			case Response.REQUEST_ENTITY_TOO_LARGE:
@@ -933,14 +921,8 @@ public class UserAgentClient {
 
 	private void handleAuthorizationRequired(Response response,
 			ClientTransaction clientTransaction) {
-		logger.debug("DEF BEGIN - Performing necessary authorization procedures.");
-		
-		try {
 		Request request = createFromRequest(clientTransaction.getRequest());
 		incrementCSeq(request);
-		
-		logger.error("REQUEST : " + request);
-
 		SipUri hostUri = new SipUri();
 		try {
 			hostUri.setHost(primaryHost);
@@ -949,7 +931,6 @@ public class UserAgentClient {
 					primaryHost, parseException.getMessage());
 			return;
 		}
-
 		String username = this.username, password = this.password;
 		if (username.trim().isEmpty()) {
 			username = "anonymous";
@@ -957,7 +938,6 @@ public class UserAgentClient {
 		}
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String toHeaderValue = toHeader.getAddress().getURI().toString();
-
 		Map<String, String> possiblyFailedAuthRealms = new HashMap<>();
 		ListIterator<?> usedAuthHeaders = request
 				.getHeaders(AuthorizationHeader.NAME);
@@ -967,7 +947,6 @@ public class UserAgentClient {
 			possiblyFailedAuthRealms.put(authHeader.getRealm(),
 					authHeader.getNonce());
 		}
-		
 		Map<String, String> possiblyFailedProxyAuthRealms = new HashMap<>();
 		ListIterator<?> usedProxyAuthHeaders = request
 				.getHeaders(ProxyAuthorizationHeader.NAME);
@@ -977,7 +956,6 @@ public class UserAgentClient {
 			possiblyFailedProxyAuthRealms.put(authHeader.getRealm(),
 					authHeader.getNonce());
 		}
-		
 		boolean worthAuthenticating = false;
 		ListIterator<?> wwwAuthenticateHeaders = response
 				.getHeaders(WWWAuthenticateHeader.NAME);
@@ -1003,8 +981,6 @@ public class UserAgentClient {
 			}
 			authNoncesCache.get(toHeaderValue).put(realm, nonce);
 		}
-		
-		
 		ListIterator<?> proxyAuthenticateHeaders = response
 				.getHeaders(ProxyAuthenticateHeader.NAME);
 		while (proxyAuthenticateHeaders.hasNext()) {
@@ -1036,7 +1012,6 @@ public class UserAgentClient {
 			String callId = callIdHeader.getCallId();
 			proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
 		}
-		logger.debug("DEF FLAG - Performing necessary authorization procedures. Method:" + request.getMethod());
 		if (worthAuthenticating) {
 			try {
 				if (doSendRequest(request, null, clientTransaction.getDialog(), false)) {
@@ -1063,10 +1038,6 @@ public class UserAgentClient {
 			logger.error("Credentials for {} request were denied, or no proper auth " +
 					"headers were passed along with the 401/407 response from the UAS.",
 					request.getMethod());
-		}
-		logger.debug("DEF END - Performing necessary authorization procedures.");
-		} catch (Exception e) {
-			e.printStackTrace();
 		}
 	}
 
