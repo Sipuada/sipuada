@@ -97,7 +97,6 @@ public class UserAgentServer {
 						handleCancelRequest(request, serverTransaction);
 						break;
 					case OPTIONS:
-						//FIXME later handle OPTIONS request as well.
 						handleOptionsRequest(request, serverTransaction);
 						break;
 					case INVITE:
@@ -250,33 +249,6 @@ public class UserAgentServer {
 				request, serverTransaction);
 	}
 
-	private void handleInviteRequest(Request request, ServerTransaction serverTransaction) {
-		boolean withinDialog = serverTransaction != null;
-		if (withinDialog) {
-			handleReinviteRequest(request, serverTransaction);
-			return;
-		}
-		//TODO also consider supporting multicast conferences, by sending silent 2xx responses
-		//when appropriate, by using identifiers within the SDP session description.
-		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
-		String callId = callIdHeader.getCallId();
-		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING,
-				RequestMethod.INVITE, request, serverTransaction);
-		if (newServerTransaction != null) {
-			bus.post(new CallInvitationArrived(callId, newServerTransaction));
-			RequestMethod method = RequestMethod.INVITE;
-			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
-					Response.UNSUPPORTED_MEDIA_TYPE)) {
-				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
-						request, newServerTransaction, false);
-				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
-						+ "negotiation between callee and caller failed.", callId, false));
-			}
-			return;
-		}
-		throw new RequestCouldNotBeAddressed();
-	}
-	
 	private void handleOptionsRequest(Request request, ServerTransaction serverTransaction) {
 		logger.debug("UserAgentServer - HANDLE OPTIONS REQUEST");
 		//FIXME "UserAgentServer - HANDLE OPTIONS REQUEST"
@@ -303,7 +275,33 @@ public class UserAgentServer {
 			}
 			return;
 		}
-		
+		throw new RequestCouldNotBeAddressed();
+	}
+
+	private void handleInviteRequest(Request request, ServerTransaction serverTransaction) {
+		boolean withinDialog = serverTransaction != null;
+		if (withinDialog) {
+			handleReinviteRequest(request, serverTransaction);
+			return;
+		}
+		//TODO also consider supporting multicast conferences, by sending silent 2xx responses
+		//when appropriate, by using identifiers within the SDP session description.
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING,
+				RequestMethod.INVITE, request, serverTransaction);
+		if (newServerTransaction != null) {
+			bus.post(new CallInvitationArrived(callId, newServerTransaction));
+			RequestMethod method = RequestMethod.INVITE;
+			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
+					Response.UNSUPPORTED_MEDIA_TYPE)) {
+				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
+						request, newServerTransaction, false);
+				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
+						+ "negotiation between callee and caller failed.", callId, false));
+			}
+			return;
+		}
 		throw new RequestCouldNotBeAddressed();
 	}
 
@@ -311,12 +309,12 @@ public class UserAgentServer {
 		//FIXME later implement REINVITE as well.
 		throw new RequestCouldNotBeAddressed();
 	}
-	
+
 	private void handleReDoOptionsRequest(Request request, ServerTransaction serverTransaction) {
 		//FIXME later implement REINVITE as well.
 		throw new RequestCouldNotBeAddressed();
 	}
-	
+
 	private void handleAckRequest(Request request, ServerTransaction serverTransaction) {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
@@ -398,10 +396,8 @@ public class UserAgentServer {
 					"{} requests.", method);
 			return null;
 		}
-//		boolean withinDialog = true;
 		ServerTransaction newServerTransaction = serverTransaction;
 		if (newServerTransaction == null) {
-//			withinDialog = false;
 			try {
 				newServerTransaction = provider.getNewServerTransaction(request);
 			} catch (TransactionAlreadyExistsException requestIsRetransmit) {
@@ -419,33 +415,8 @@ public class UserAgentServer {
 				return null;
 			}
 		}
-//		Dialog dialog = newServerTransaction.getDialog();
-//		withinDialog &= dialog != null;
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
-//		if (Constants.getResponseClass(statusCode) == ResponseClass.PROVISIONAL &&
-//				method == RequestMethod.INVITE && withinDialog) {
-//			try {
-//				Response response = dialog.createReliableProvisionalResponse(statusCode);
-//				for (Header header : additionalHeaders) {
-//					response.addHeader(header);
-//				}
-//				logger.info("Sending {} response to {} request...", statusCode, method);
-//				dialog.sendReliableProvisionalResponse(response);
-//				logger.info("{} response sent.", statusCode);
-//				return newServerTransaction;
-//			} catch (InvalidArgumentException ignore) {
-//			} catch (SipException invalidResponse) {
-//				//A final response to this request was already sent, so this
-//				//provisional response shall not be sent, or another reliable
-//				//provisional response is still pending.
-//				//In either case, we won't send this new response.
-//				logger.debug("{} response could not be sent to {} request: {} ({}).",
-//						statusCode, method, invalidResponse.getMessage(),
-//						invalidResponse.getCause().getMessage());
-//				return null;
-//			}
-//		}
 		try {
 			Response response = messenger.createResponse(statusCode, request);
 			for (Header header : additionalHeaders) {
@@ -480,8 +451,8 @@ public class UserAgentServer {
 
 	private boolean isDialogCreatingRequest(RequestMethod method) {
 		switch (method) {
-			case INVITE:
 			case OPTIONS:
+			case INVITE:
 				return true;
 			default:
 				return false;

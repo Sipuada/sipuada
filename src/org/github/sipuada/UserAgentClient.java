@@ -224,55 +224,6 @@ public class UserAgentClient {
 				.toArray(new Header[additionalHeaders.size()]));
 	}
 
-	public boolean sendInviteRequest(String remoteUser, String remoteHost,
-			CallIdHeader callIdHeader) {
-		URI requestUri;
-		try {
-			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create URI for this INVITE request " +
-					"to {} at {}.\n[remoteUser] must be a valid id, [remoteHost] " +
-					"must be a valid IP address: {}.", remoteUser, remoteHost,
-					parseException.getMessage());
-			//No need for caller to wait for remote responses.
-			return false;
-		}
-		long cseq = ++localCSeq;
-
-		//TODO *IF* request is a INVITE, make sure to add the following headers:
-		/*
-		 * (according to section 13.2.1)
-		 *
-		 * Allow
-		 * Supported
-		 * (later support also: Accept, Expires)
-		 */
-
-		SipURI contactUri;
-		try {
-			contactUri = addressMaker.createSipURI(username, localIp);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create the contact URI for {} at {}." +
-					"[username] must be a valid id, [localIp] must be a valid " +
-					"IP address: {}", username, localIp, parseException.getMessage());
-			//No need for caller to wait for remote responses.
-			return false;
-		}
-		contactUri.setPort(localPort);
-		Address contactAddress = addressMaker.createAddress(contactUri);
-		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-		try {
-			contactHeader.setExpires(60);
-		} catch (InvalidArgumentException ignore) {}
-		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
-
-		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
-				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
-
-		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost,
-				requestUri, callIdHeader, cseq, additionalHeaders);
-	}
-
 	public boolean sendOptionsRequest(String remoteUser, String remoteHost,
 			CallIdHeader callIdHeader, boolean embedContactHeader) {
 		URI requestUri;
@@ -352,6 +303,55 @@ public class UserAgentClient {
 		headers = additionalHeaders.toArray(headers);
 		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
 				callIdHeader, cseq, headers);
+	}
+
+	public boolean sendInviteRequest(String remoteUser, String remoteHost,
+			CallIdHeader callIdHeader) {
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this INVITE request " +
+					"to {} at {}.\n[remoteUser] must be a valid id, [remoteHost] " +
+					"must be a valid IP address: {}.", remoteUser, remoteHost,
+					parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		long cseq = ++localCSeq;
+
+		//TODO *IF* request is a INVITE, make sure to add the following headers:
+		/*
+		 * (according to section 13.2.1)
+		 *
+		 * Allow
+		 * Supported
+		 * (later support also: Accept, Expires)
+		 */
+
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the contact URI for {} at {}." +
+					"[username] must be a valid id, [localIp] must be a valid " +
+					"IP address: {}", username, localIp, parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		contactUri.setPort(localPort);
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		try {
+			contactHeader.setExpires(60);
+		} catch (InvalidArgumentException ignore) {}
+		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
+
+		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
+				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
+
+		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost,
+				requestUri, callIdHeader, cseq, additionalHeaders);
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser,

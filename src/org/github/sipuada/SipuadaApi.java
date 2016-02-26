@@ -38,16 +38,6 @@ public interface SipuadaApi {
 
 	boolean overwriteAddresses(RegistrationCallback callback, String... localAddresses);
 
-	public interface CallInvitationCallback {
-
-		void onWaitingForCallInvitationAnswer(String callId);
-
-		void onCallInvitationRinging(String callId);
-
-		void onCallInvitationDeclined(String reason);
-
-	}
-	
 	public interface OptionsQueryingCallback {
 
 		void onOptionsQueryingArrived(String callId);
@@ -58,9 +48,19 @@ public interface SipuadaApi {
 		
 	}
 
-	boolean inviteToCall(String remoteUser, String remoteDomain, CallInvitationCallback callback);
-	
 	boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback);
+
+	public interface CallInvitationCallback {
+
+		void onWaitingForCallInvitationAnswer(String callId);
+
+		void onCallInvitationRinging(String callId);
+
+		void onCallInvitationDeclined(String reason);
+
+	}
+
+	boolean inviteToCall(String remoteUser, String remoteDomain, CallInvitationCallback callback);
 
 	boolean cancelCallInvitation(String callId);
 

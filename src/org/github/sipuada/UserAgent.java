@@ -316,6 +316,45 @@ public class UserAgent implements SipListener {
 		return expectRemoteAnswer;
 	}
 
+	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, final OptionsQueryingCallback callback) {
+		CallIdHeader callIdHeader = provider.getNewCallId();
+		final String callId = callIdHeader.getCallId();
+		logger.debug("UserAgent - sendOptionsRequest - callId:" + callId);
+		final String eventBusSubscriberId = Utils.getInstance().generateTag();
+		Object eventBusSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(QueryingOptionsArrived event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onOptionsQueryingArrived(callId);
+				}
+			}
+
+			@Subscribe
+			public void onEvent(QueryingOptionsSucceed event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onOptionsQueryingSuccess(callId, event.getSessionDescription());
+				}
+			}
+
+			@Subscribe
+			public void onEvent(QueryingOptionsFailed event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onOptionsQueryingFailed(event.getReason());
+				}
+			}
+
+		};
+		eventBus.register(eventBusSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
+		boolean expectRemoteAnswer = uac.sendOptionsRequest(remoteUser, remoteDomain, callIdHeader, true);
+		if (!expectRemoteAnswer) {
+			logger.error("OPTIONS request not sent.");
+			eventBus.unregister(eventBusSubscriber);
+		}
+		return true;
+	}
+
 	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
 			final CallInvitationCallback callback) {
 		CallIdHeader callIdHeader = provider.getNewCallId();
@@ -728,47 +767,6 @@ public class UserAgent implements SipListener {
 	@Subscribe
 	public void onEvent(DeadEvent deadEvent) {
 		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
-	}
-
-	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, final OptionsQueryingCallback callback) {
-	
-		CallIdHeader callIdHeader = provider.getNewCallId();
-		final String callId = callIdHeader.getCallId();
-		logger.debug("UserAgent - sendOptionsRequest - callId:" + callId);
-		final String eventBusSubscriberId = Utils.getInstance().generateTag();
-		Object eventBusSubscriber = new Object() {
-
-			@Subscribe
-			public void onEvent(QueryingOptionsArrived event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingArrived(callId);
-				}
-			}
-			
-			@Subscribe
-			public void onEvent(QueryingOptionsSucceed event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingSuccess(callId, event.getSessionDescription());
-				}
-			}
-
-
-			@Subscribe
-			public void onEvent(QueryingOptionsFailed event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingFailed(event.getReason());
-				}
-			}
-						
-		};
-		eventBus.register(eventBusSubscriber);
-		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendOptionsRequest(remoteUser, remoteDomain, callIdHeader, true);
-		if (!expectRemoteAnswer) {
-			logger.error("OPTIONS request not sent.");
-			eventBus.unregister(eventBusSubscriber);
-		}
-		return true;
 	}
 
 }
