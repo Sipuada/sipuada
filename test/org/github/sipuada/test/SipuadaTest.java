@@ -3,6 +3,7 @@ package org.github.sipuada.test;
 import java.util.List;
 
 import org.github.sipuada.Sipuada;
+import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.slf4j.Logger;
@@ -71,6 +72,27 @@ public class SipuadaTest {
 		sipuada.overwriteAddresses(registrationCallback,
 				"192.168.130.207:55503/TCP");
 
+		CallInvitationCallback callInvitationCallback = new CallInvitationCallback() {
+
+			@Override
+			public void onWaitingForCallInvitationAnswer(String callId) {
+				logger.debug("onWaitingForCallInvitationAnswer: [callId={{}}].", callId);
+			}
+
+			@Override
+			public void onCallInvitationRinging(String callId) {
+				logger.debug("onCallInvitationRinging: [callId={{}}].", callId);
+			}
+
+			@Override
+			public void onCallInvitationDeclined(String reason) {
+				logger.debug("onCallInvitationDeclined: [reason={{}}].", reason);
+			}
+
+		};
+
+		sipuada.inviteToCall("renan", "192.168.130.207:5060", callInvitationCallback);
+
 		sipuada.includeAddresses(registrationCallback,
 				"192.168.130.207:55504/TCP",
 				"192.168.130.207:55505/TCP");
@@ -86,6 +108,11 @@ public class SipuadaTest {
 
 		sipuada.overwriteAddresses(registrationCallback,
 				"192.168.130.207:55507/UDP");
+
+		try {
+			Thread.sleep(30000);
+		} catch (InterruptedException ignore) {}
+		sipuada.inviteToCall("renan", "192.168.130.207:5060", callInvitationCallback);
 	}
 
 }
