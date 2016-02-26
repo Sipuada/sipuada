@@ -11,7 +11,6 @@ import java.util.TooManyListenersException;
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
-import org.github.sipuada.SipuadaApi.SipuadaCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.events.CallInvitationAccepted;
 import org.github.sipuada.events.CallInvitationArrived;
@@ -57,30 +56,9 @@ public class UserAgent implements SipListener {
 
 	private final Logger logger = LoggerFactory.getLogger(UserAgent.class);
 
-	private class Operation {
-
-		public final SipuadaCallback callback;
-		public final String[] arguments;
-		
-		public Operation(SipuadaCallback callback, String... arguments) {
-			this.callback = callback;
-			this.arguments = arguments;
-		}
-
-	}
-
 	private final EventBus eventBus = new EventBus();
 	private final Map<String, Object> eventBusSubscribers = Collections
 			.synchronizedMap(new HashMap<String, Object>());
-	private final Map<RequestMethod, Boolean> operationsInProgress = Collections
-			.synchronizedMap(new HashMap<RequestMethod, Boolean>());
-	{
-		for (RequestMethod method : RequestMethod.values()) {
-			operationsInProgress.put(method, false);
-		}
-	}
-	private final List<Operation> postponedOperations = Collections
-			.synchronizedList(new LinkedList<Operation>());
 	private final Map<String, String> callIdToEventBusSubscriberId =
 			Collections.synchronizedMap(new HashMap<String, String>());
 	private final Map<String, List<ClientTransaction>> cancelableInviteOperations =
@@ -280,28 +258,18 @@ public class UserAgent implements SipListener {
 
 	private synchronized boolean sendRegisterRequest(final RegistrationCallback callback,
 			boolean unregister, String... additionalAddresses) {
-		if (operationsInProgress.get(RequestMethod.REGISTER)) {
-			String arguments[] = new String[additionalAddresses.length + 1];
-			arguments[0] = unregister ? "UNREGISTER" : "REGISTER";
-			for (int i=1; i<=additionalAddresses.length; i++) {
-				arguments[i] = additionalAddresses[i - 1];
-			}
-			postponedOperations.add(new Operation(callback, arguments));
-			logger.info("REGISTER request postponed because another is in progress.");
-			return true;
-		}
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
 			@Subscribe
 			public void onEvent(RegistrationSuccess event) {
-				registerOperationFinished(eventBusSubscriberId);
+				eventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
 				callback.onRegistrationSuccess(event.getContactBindings());
 			}
 
 			@Subscribe
 			public void onEvent(RegistrationFailed event) {
-				registerOperationFinished(eventBusSubscriberId);
+				eventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
 				callback.onRegistrationFailed(event.getReason());
 			}
 
@@ -315,51 +283,15 @@ public class UserAgent implements SipListener {
 		else {
 			expectRemoteAnswer = uac.sendRegisterRequest(additionalAddresses);
 		}
-		if (expectRemoteAnswer) {
-			operationsInProgress.put(RequestMethod.REGISTER, true);
-		}
-		else {
+		if (!expectRemoteAnswer) {
 			logger.error("REGISTER request not sent.");
 			eventBus.unregister(eventBusSubscriber);
 		}
 		return expectRemoteAnswer;
 	}
 
-	private synchronized void registerOperationFinished(String eventBusSubscriberId) {
-		eventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
-		operationsInProgress.put(RequestMethod.REGISTER, false);
-		synchronized (postponedOperations) {
-			Iterator<Operation> iterator = postponedOperations.iterator();
-			while (iterator.hasNext()) {
-				Operation operation = iterator.next();
-				if (operation.callback instanceof RegistrationCallback) {
-					boolean unregister = operation.arguments[0].equals("UNREGISTER");
-					String[] arguments = new String[operation.arguments.length - 1];
-					for (int i=1; i<operation.arguments.length; i++) {
-						arguments[i - 1] = operation.arguments[i];
-					}
-					RegistrationCallback registrationCallback =
-							(RegistrationCallback) operation.callback;
-					boolean couldSendRequest = sendRegisterRequest(registrationCallback,
-							unregister, arguments);
-					iterator.remove();
-					if (!couldSendRequest) {
-						registrationCallback
-							.onRegistrationFailed("Request could not be sent.");
-					}
-					break;
-				}
-			}
-		}
-	}
-
 	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
 			final CallInvitationCallback callback) {
-		if (operationsInProgress.get(RequestMethod.INVITE)) {
-			postponedOperations.add(new Operation(callback, remoteUser, remoteDomain));
-			logger.info("INVITE request postponed because another is in progress.");
-			return true;
-		}
 		CallIdHeader callIdHeader = provider.getNewCallId();
 		final String callId = callIdHeader.getCallId();
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
@@ -391,7 +323,6 @@ public class UserAgent implements SipListener {
 					inviteOperationFinished(eventBusSubscriberId, callId);
 					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
 					callback.onCallInvitationDeclined(event.getReason());
-					scheduleNextInviteRequest();
 				}
 			}
 
@@ -403,7 +334,6 @@ public class UserAgent implements SipListener {
 					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
 					callEstablished(eventBusSubscriberId, callId, dialog);
 					listener.onCallEstablished(callId);
-					scheduleNextInviteRequest();
 				}
 			}
 
@@ -413,7 +343,6 @@ public class UserAgent implements SipListener {
 					inviteOperationFinished(eventBusSubscriberId, callId);
 					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
 					listener.onCallInvitationFailed(event.getReason(), callId);
-					scheduleNextInviteRequest();
 				}
 			}
 
@@ -421,10 +350,7 @@ public class UserAgent implements SipListener {
 		eventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = uac.sendInviteRequest(remoteUser, remoteDomain, callIdHeader);
-		if (expectRemoteAnswer) {
-			operationsInProgress.put(RequestMethod.INVITE, true);
-		}
-		else {
+		if (!expectRemoteAnswer) {
 			logger.error("INVITE request not sent.");
 			eventBus.unregister(eventBusSubscriber);
 		}
@@ -487,31 +413,6 @@ public class UserAgent implements SipListener {
 		Object eventBusSubscriber = eventBusSubscribers.remove(eventBusSubscriberId);
 		if (eventBusSubscriber != null) {
 			eventBus.unregister(eventBusSubscriber);
-		}
-		operationsInProgress.put(RequestMethod.INVITE, false);
-	}
-
-	private void scheduleNextInviteRequest() {
-		synchronized (postponedOperations) {
-			Iterator<Operation> iterator = postponedOperations.iterator();
-			while (iterator.hasNext()) {
-				Operation operation = iterator.next();
-				if (operation.callback instanceof CallInvitationCallback) {
-					String[] arguments = operation.arguments;
-					CallInvitationCallback callInvitationCallback =
-							(CallInvitationCallback) operation.callback;
-					boolean couldSendRequest = sendInviteRequest(arguments[0],
-							arguments[1], callInvitationCallback);
-					iterator.remove();
-					if (!couldSendRequest) {
-						CallIdHeader callIdHeader = provider.getNewCallId();
-						final String callId = callIdHeader.getCallId();
-						listener.onCallInvitationFailed("Request could not" +
-								" be sent.", callId);
-					}
-					break;
-				}
-			}
 		}
 	}
 
