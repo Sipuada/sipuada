@@ -54,6 +54,7 @@ import android.javax.sip.Timeout;
 import android.javax.sip.TimeoutEvent;
 import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.address.AddressFactory;
+import android.javax.sip.address.URI;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
@@ -92,7 +93,8 @@ public class UserAgent implements SipListener {
 	public UserAgent(EventBus eventBus, SipProvider sipProvider, SipuadaListener sipuadaListener,
 			Map<RequestMethod, SipuadaPlugin> plugins, String username, String primaryHost, String password,
 			String localIp, String localPort, String transport, Map<String, UserAgent> callIdToActiveUserAgent,
-			Map<UserAgent, Set<String>> activeUserAgentCallIds) {
+			Map<UserAgent, Set<String>> activeUserAgentCallIds, Map<URI, CallIdHeader> globalRegisterCallIds,
+			Map<URI, Long> globalRegisterCSeqs) {
 		sipuadaEventBus = eventBus;
 		provider = sipProvider;
 		listener = sipuadaListener;
@@ -103,7 +105,8 @@ public class UserAgent implements SipListener {
 			HeaderFactory headerMaker = factory.createHeaderFactory();
 			AddressFactory addressMaker = factory.createAddressFactory();
 			uac = new UserAgentClient(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
-					username, primaryHost, password, localIp, localPort, transport);
+					globalRegisterCallIds, globalRegisterCSeqs, username, primaryHost, password,
+					localIp, localPort, transport);
 			uas = new UserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					username, localIp, localPort);
 		} catch (PeerUnavailableException ignore){}
@@ -231,30 +234,36 @@ public class UserAgent implements SipListener {
 		internalEventBus.register(eventBusSubscriber);
 	}
 
-	private synchronized void inviteOperationIsAnswerable(String eventBusSubscriberId,
+	private void inviteOperationIsAnswerable(String eventBusSubscriberId,
 			String callId, ServerTransaction serverTransaction) {
 		callIdToActiveUserAgent.put(callId, this);
-		if (!activeUserAgentCallIds.containsKey(this)) {
-			activeUserAgentCallIds.put(this, Collections
-					.synchronizedSet(new HashSet<String>()));
+		synchronized (activeUserAgentCallIds) {
+			if (!activeUserAgentCallIds.containsKey(this)) {
+				activeUserAgentCallIds.put(this, Collections
+						.synchronizedSet(new HashSet<String>()));
+			}
+			activeUserAgentCallIds.get(this).add(callId);
 		}
-		activeUserAgentCallIds.get(this).add(callId);
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
-		if (!answerableInviteOperations.containsKey(eventBusSubscriberId)) {
-			answerableInviteOperations.put(eventBusSubscriberId, Collections
-				.synchronizedList(new LinkedList<ServerTransaction>()));
+		synchronized (answerableInviteOperations) {
+			if (!answerableInviteOperations.containsKey(eventBusSubscriberId)) {
+				answerableInviteOperations.put(eventBusSubscriberId, Collections
+					.synchronizedList(new LinkedList<ServerTransaction>()));
+			}
 		}
 		answerableInviteOperations.get(eventBusSubscriberId).add(serverTransaction);
 	}
 
-	private synchronized void wipeAnswerableInviteOperation(String callId,
+	private void wipeAnswerableInviteOperation(String callId,
 			String eventBusSubscriberId, boolean shouldTerminate) {
 		callIdToActiveUserAgent.remove(callId);
-		Set<String> activeCallIds = activeUserAgentCallIds.get(this);
-		if (activeCallIds != null) {
-			activeCallIds.remove(callId);
-			if (activeCallIds.isEmpty()) {
-				activeUserAgentCallIds.remove(this);
+		synchronized (activeUserAgentCallIds) {
+			Set<String> activeCallIds = activeUserAgentCallIds.get(this);
+			if (activeCallIds != null) {
+				activeCallIds.remove(callId);
+				if (activeCallIds.isEmpty()) {
+					activeUserAgentCallIds.remove(this);
+				}
 			}
 		}
 		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
@@ -265,47 +274,49 @@ public class UserAgent implements SipListener {
 			//Otherwise state is pretty inconsistent.
 			return;
 		}
-		List<ServerTransaction> operations = answerableInviteOperations
-				.get(eventBusSubscriberId);
-		if (operations == null) {
-			//No data relation should have been assigned for this callId
-			//in the first place, so we wouldn't have any links to remove.
-			return;
-		}
-		synchronized (operations) {
-			Iterator<ServerTransaction> iterator = operations.iterator();
-			while (iterator.hasNext()) {
-				ServerTransaction serverTransaction = iterator.next();
-				Request request = serverTransaction.getRequest();
-				CallIdHeader callIdHeader = (CallIdHeader) request
-						.getHeader(CallIdHeader.NAME);
-				String transactionCallId = callIdHeader.getCallId();
-				if (transactionCallId.equals(callId)) {
-					if (shouldTerminate) {
-						inviteOperationFinished(eventBusSubscriberId, callId);
-						uas.doTerminateCanceledInvite(request, serverTransaction);
-					}
-					iterator.remove();
-					break;
-				}
+		synchronized (answerableInviteOperations) {
+			List<ServerTransaction> operations = answerableInviteOperations
+					.get(eventBusSubscriberId);
+			if (operations == null) {
+				//No data relation should have been assigned for this callId
+				//in the first place, so we wouldn't have any links to remove.
+				return;
 			}
-			if (operations.isEmpty()) {
-				answerableInviteOperations.remove(eventBusSubscriberId);
+			synchronized (operations) {
+				Iterator<ServerTransaction> iterator = operations.iterator();
+				while (iterator.hasNext()) {
+					ServerTransaction serverTransaction = iterator.next();
+					Request request = serverTransaction.getRequest();
+					CallIdHeader callIdHeader = (CallIdHeader) request
+							.getHeader(CallIdHeader.NAME);
+					String transactionCallId = callIdHeader.getCallId();
+					if (transactionCallId.equals(callId)) {
+						if (shouldTerminate) {
+							inviteOperationFinished(eventBusSubscriberId, callId);
+							uas.doTerminateCanceledInvite(request, serverTransaction);
+						}
+						iterator.remove();
+						break;
+					}
+				}
+				if (operations.isEmpty()) {
+					answerableInviteOperations.remove(eventBusSubscriberId);
+				}
 			}
 		}
 	}
 
-	public synchronized boolean sendRegisterRequest(RegistrationCallback callback,
+	public boolean sendRegisterRequest(RegistrationCallback callback,
 			String... additionalAddresses) {
 		return sendRegisterRequest(callback, false, additionalAddresses);
 	}
 
-	public synchronized boolean sendUnregisterRequest(RegistrationCallback callback,
+	public boolean sendUnregisterRequest(RegistrationCallback callback,
 			String... expiredAddresses) {
 		return sendRegisterRequest(callback, true, expiredAddresses);
 	}
 
-	private synchronized boolean sendRegisterRequest(final RegistrationCallback callback,
+	private boolean sendRegisterRequest(final RegistrationCallback callback,
 			boolean unregister, String... additionalAddresses) {
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
@@ -445,23 +456,27 @@ public class UserAgent implements SipListener {
 		return expectRemoteAnswer;
 	}
 
-	private synchronized void inviteOperationIsCancelable(String eventBusSubscriberId,
+	private void inviteOperationIsCancelable(String eventBusSubscriberId,
 			String callId, ClientTransaction clientTransaction) {
 		callIdToActiveUserAgent.put(callId, this);
-		if (!activeUserAgentCallIds.containsKey(this)) {
-			activeUserAgentCallIds.put(this, Collections
-					.synchronizedSet(new HashSet<String>()));
+		synchronized (activeUserAgentCallIds) {
+			if (!activeUserAgentCallIds.containsKey(this)) {
+				activeUserAgentCallIds.put(this, Collections
+						.synchronizedSet(new HashSet<String>()));
+			}
+			activeUserAgentCallIds.get(this).add(callId);
 		}
-		activeUserAgentCallIds.get(this).add(callId);
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
-		if (!cancelableInviteOperations.containsKey(eventBusSubscriberId)) {
-			cancelableInviteOperations.put(eventBusSubscriberId, Collections
-				.synchronizedList(new LinkedList<ClientTransaction>()));
+		synchronized (cancelableInviteOperations) {
+			if (!cancelableInviteOperations.containsKey(eventBusSubscriberId)) {
+				cancelableInviteOperations.put(eventBusSubscriberId, Collections
+					.synchronizedList(new LinkedList<ClientTransaction>()));
+			}
 		}
 		cancelableInviteOperations.get(eventBusSubscriberId).add(clientTransaction);
 	}
 
-	private synchronized void wipeCancelableInviteOperation(String callId,
+	private void wipeCancelableInviteOperation(String callId,
 			String eventBusSubscriberId) {
 		if (callId == null) {
 			//No data relation should have been assigned for this callId
@@ -469,11 +484,13 @@ public class UserAgent implements SipListener {
 			return;
 		}
 		callIdToActiveUserAgent.remove(callId);
-		Set<String> activeCallIds = activeUserAgentCallIds.get(this);
-		if (activeCallIds != null) {
-			activeCallIds.remove(callId);
-			if (activeCallIds.isEmpty()) {
-				activeUserAgentCallIds.remove(this);
+		synchronized (activeUserAgentCallIds) {
+			Set<String> activeCallIds = activeUserAgentCallIds.get(this);
+			if (activeCallIds != null) {
+				activeCallIds.remove(callId);
+				if (activeCallIds.isEmpty()) {
+					activeUserAgentCallIds.remove(this);
+				}
 			}
 		}
 		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
@@ -484,57 +501,16 @@ public class UserAgent implements SipListener {
 			//Otherwise state is pretty inconsistent.
 			return;
 		}
-		List<ClientTransaction> operations = cancelableInviteOperations
-				.get(eventBusSubscriberId);
-		if (operations == null) {
-			//No data relation should have been assigned for this callId
-			//in the first place, so we wouldn't have any links to remove.
-			return;
-		}
-		synchronized (operations) {
-			Iterator<ClientTransaction> iterator = operations.iterator();
-			while (iterator.hasNext()) {
-				ClientTransaction clientTransaction = iterator.next();
-				Request request = clientTransaction.getRequest();
-				CallIdHeader callIdHeader = (CallIdHeader) request
-						.getHeader(CallIdHeader.NAME);
-				String transactionCallId = callIdHeader.getCallId();
-				if (transactionCallId.equals(callId)) {
-					iterator.remove();
-					break;
-				}
+		synchronized (cancelableInviteOperations) {
+			List<ClientTransaction> operations = cancelableInviteOperations
+					.get(eventBusSubscriberId);
+			if (operations == null) {
+				//No data relation should have been assigned for this callId
+				//in the first place, so we wouldn't have any links to remove.
+				return;
 			}
-			if (operations.isEmpty()) {
-				cancelableInviteOperations.remove(eventBusSubscriberId);
-			}
-		}
-	}
-
-	private synchronized void inviteOperationFinished(String eventBusSubscriberId,
-			String callId) {
-		Object eventBusSubscriber = eventBusSubscribers.remove(eventBusSubscriberId);
-		if (eventBusSubscriber != null) {
-			internalEventBus.unregister(eventBusSubscriber);
-		}
-	}
-
-	public synchronized boolean cancelInviteRequest(final String callId) {
-		final String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
-		if (eventBusSubscriberId == null) {
-			logger.error("Cannot cancel invitation.\nINVITE request with callId " +
-					"'{}' not found.", callId);
-			return false;
-		}
-		List<ClientTransaction> operations = cancelableInviteOperations
-				.get(eventBusSubscriberId);
-		if (operations == null) {
-			logger.error("Cannot cancel invitation.\nINVITE request with callId " +
-					"'{}' not found.", callId);
-			return false;
-		}
-		synchronized (operations) {
-			Iterator<ClientTransaction> iterator = operations.iterator();
-			try {
+			synchronized (operations) {
+				Iterator<ClientTransaction> iterator = operations.iterator();
 				while (iterator.hasNext()) {
 					ClientTransaction clientTransaction = iterator.next();
 					Request request = clientTransaction.getRequest();
@@ -543,35 +519,79 @@ public class UserAgent implements SipListener {
 					String transactionCallId = callIdHeader.getCallId();
 					if (transactionCallId.equals(callId)) {
 						iterator.remove();
-						Object eventBusSubscriber = new Object() {
-
-							@Subscribe
-							public void onEvent(CallInvitationCanceled event) {
-								if (event.getCallId().equals(callId)) {
-									inviteOperationFinished(eventBusSubscriberId, callId);
-									internalEventBus.unregister(this);
-									listener.onCallInvitationCanceled(event.getReason(),
-											callId);
-								}
-							}
-
-							@Subscribe
-							public void onEvent(CallInvitationFailed event) {
-								if (event.getCallId().equals(callId)) {
-									internalEventBus.unregister(this);
-									listener.onCallInvitationFailed(event.getReason(),
-											callId);
-								}
-							}
-
-						};
-						internalEventBus.register(eventBusSubscriber);
-						return uac.sendCancelRequest(clientTransaction);
+						break;
 					}
 				}
-			} finally {
 				if (operations.isEmpty()) {
 					cancelableInviteOperations.remove(eventBusSubscriberId);
+				}
+			}
+		}
+	}
+
+	private void inviteOperationFinished(String eventBusSubscriberId, String callId) {
+		Object eventBusSubscriber = eventBusSubscribers.remove(eventBusSubscriberId);
+		if (eventBusSubscriber != null) {
+			internalEventBus.unregister(eventBusSubscriber);
+		}
+	}
+
+	public boolean cancelInviteRequest(final String callId) {
+		final String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot cancel invitation.\nINVITE request with callId " +
+					"'{}' not found.", callId);
+			return false;
+		}
+		synchronized (cancelableInviteOperations) {
+			List<ClientTransaction> operations = cancelableInviteOperations
+					.get(eventBusSubscriberId);
+			if (operations == null) {
+				logger.error("Cannot cancel invitation.\nINVITE request with callId " +
+						"'{}' not found.", callId);
+				return false;
+			}
+			synchronized (operations) {
+				Iterator<ClientTransaction> iterator = operations.iterator();
+				try {
+					while (iterator.hasNext()) {
+						ClientTransaction clientTransaction = iterator.next();
+						Request request = clientTransaction.getRequest();
+						CallIdHeader callIdHeader = (CallIdHeader) request
+								.getHeader(CallIdHeader.NAME);
+						String transactionCallId = callIdHeader.getCallId();
+						if (transactionCallId.equals(callId)) {
+							iterator.remove();
+							Object eventBusSubscriber = new Object() {
+
+								@Subscribe
+								public void onEvent(CallInvitationCanceled event) {
+									if (event.getCallId().equals(callId)) {
+										inviteOperationFinished(eventBusSubscriberId, callId);
+										internalEventBus.unregister(this);
+										listener.onCallInvitationCanceled(event.getReason(),
+												callId);
+									}
+								}
+
+								@Subscribe
+								public void onEvent(CallInvitationFailed event) {
+									if (event.getCallId().equals(callId)) {
+										internalEventBus.unregister(this);
+										listener.onCallInvitationFailed(event.getReason(),
+												callId);
+									}
+								}
+
+							};
+							internalEventBus.register(eventBusSubscriber);
+							return uac.sendCancelRequest(clientTransaction);
+						}
+					}
+				} finally {
+					if (operations.isEmpty()) {
+						cancelableInviteOperations.remove(eventBusSubscriberId);
+					}
 				}
 			}
 		}
@@ -588,62 +608,64 @@ public class UserAgent implements SipListener {
 					"not found.", acceptCallInvitation ? "accept" : "decline", callId);
 			return false;
 		}
-		List<ServerTransaction> operations = answerableInviteOperations.get(eventBusSubscriberId);
-		if (operations == null) {
-			logger.error("Cannot {} invitation.\nINVITE request with callId '{}' " +
-					"not found.", acceptCallInvitation ? "accept" : "decline", callId);
-			return false;
-		}
-		synchronized (operations) {
-			Iterator<ServerTransaction> iterator = operations.iterator();
-			try {
-				while (iterator.hasNext()) {
-					ServerTransaction serverTransaction = iterator.next();
-					Request request = serverTransaction.getRequest();
-					CallIdHeader callIdHeader = (CallIdHeader) request
-							.getHeader(CallIdHeader.NAME);
-					String transactionCallId = callIdHeader.getCallId();
-					if (transactionCallId.equals(callId)) {
-						iterator.remove();
-						Object eventBusSubscriber = new Object() {
+		synchronized (answerableInviteOperations) {
+			List<ServerTransaction> operations = answerableInviteOperations.get(eventBusSubscriberId);
+			if (operations == null) {
+				logger.error("Cannot {} invitation.\nINVITE request with callId '{}' " +
+						"not found.", acceptCallInvitation ? "accept" : "decline", callId);
+				return false;
+			}
+			synchronized (operations) {
+				Iterator<ServerTransaction> iterator = operations.iterator();
+				try {
+					while (iterator.hasNext()) {
+						ServerTransaction serverTransaction = iterator.next();
+						Request request = serverTransaction.getRequest();
+						CallIdHeader callIdHeader = (CallIdHeader) request
+								.getHeader(CallIdHeader.NAME);
+						String transactionCallId = callIdHeader.getCallId();
+						if (transactionCallId.equals(callId)) {
+							iterator.remove();
+							Object eventBusSubscriber = new Object() {
 
-							@Subscribe
-							public void onEvent(EstablishedCallStarted event) {
-								if (acceptCallInvitation &&
-										event.getCallId().equals(callId)) {
-									callEstablished(eventBusSubscriberId, callId,
-											event.getDialog());
-									internalEventBus.unregister(this);
-									listener.onCallEstablished(callId);
+								@Subscribe
+								public void onEvent(EstablishedCallStarted event) {
+									if (acceptCallInvitation &&
+											event.getCallId().equals(callId)) {
+										callEstablished(eventBusSubscriberId, callId,
+												event.getDialog());
+										internalEventBus.unregister(this);
+										listener.onCallEstablished(callId);
+									}
 								}
-							}
 
-							@Subscribe
-							public void onEvent(CallInvitationFailed event) {
-								if (event.getCallId().equals(callId)) {
-									internalEventBus.unregister(this);
-									listener.onCallInvitationFailed(event.getReason(),
-											callId);
+								@Subscribe
+								public void onEvent(CallInvitationFailed event) {
+									if (event.getCallId().equals(callId)) {
+										internalEventBus.unregister(this);
+										listener.onCallInvitationFailed(event.getReason(),
+												callId);
+									}
 								}
-							}
 
-						};
-						internalEventBus.register(eventBusSubscriber);
-						RequestMethod method = RequestMethod.UNKNOWN;
-						try {
-							method = RequestMethod.valueOf(request.getMethod());
-						} catch (IllegalArgumentException ignore) {};
-						if (acceptCallInvitation) {
-							return uas.sendAcceptResponse(method, request, serverTransaction);
-						}
-						else {
-							return uas.sendRejectResponse(method, request, serverTransaction);
+							};
+							internalEventBus.register(eventBusSubscriber);
+							RequestMethod method = RequestMethod.UNKNOWN;
+							try {
+								method = RequestMethod.valueOf(request.getMethod());
+							} catch (IllegalArgumentException ignore) {};
+							if (acceptCallInvitation) {
+								return uas.sendAcceptResponse(method, request, serverTransaction);
+							}
+							else {
+								return uas.sendRejectResponse(method, request, serverTransaction);
+							}
 						}
 					}
-				}
-			} finally {
-				if (operations.isEmpty()) {
-					answerableInviteOperations.remove(eventBusSubscriberId);
+				} finally {
+					if (operations.isEmpty()) {
+						answerableInviteOperations.remove(eventBusSubscriberId);
+					}
 				}
 			}
 		}
@@ -652,18 +674,22 @@ public class UserAgent implements SipListener {
 		return false;
 	}
 
-	private synchronized void callEstablished(final String eventBusSubscriberId,
+	private void callEstablished(final String eventBusSubscriberId,
 			final String callId, Dialog dialog) {
 		callIdToActiveUserAgent.put(callId, this);
-		if (!activeUserAgentCallIds.containsKey(this)) {
-			activeUserAgentCallIds.put(this, Collections
-					.synchronizedSet(new HashSet<String>()));
+		synchronized (activeUserAgentCallIds) {
+			if (!activeUserAgentCallIds.containsKey(this)) {
+				activeUserAgentCallIds.put(this, Collections
+						.synchronizedSet(new HashSet<String>()));
+			}
+			activeUserAgentCallIds.get(this).add(callId);
 		}
-		activeUserAgentCallIds.get(this).add(callId);
 		callIdToEventBusSubscriberId.put(callId, eventBusSubscriberId);
-		if (!establishedCalls.containsKey(eventBusSubscriberId)) {
-			establishedCalls.put(eventBusSubscriberId, Collections
-					.synchronizedList(new LinkedList<Dialog>()));
+		synchronized (establishedCalls) {
+			if (!establishedCalls.containsKey(eventBusSubscriberId)) {
+				establishedCalls.put(eventBusSubscriberId, Collections
+						.synchronizedList(new LinkedList<Dialog>()));
+			}
 		}
 		establishedCalls.get(eventBusSubscriberId).add(dialog);
 		final SipuadaPlugin sessionPlugin = registeredPlugins.get(RequestMethod.INVITE);
@@ -711,14 +737,16 @@ public class UserAgent implements SipListener {
 		}
 	}
 
-	public synchronized void wipeEstablishedCall(String callId,
+	public void wipeEstablishedCall(String callId,
 			String eventBusSubscriberId) {
 		callIdToActiveUserAgent.remove(callId);
-		Set<String> activeCallIds = activeUserAgentCallIds.get(this);
-		if (activeCallIds != null) {
-			activeCallIds.remove(callId);
-			if (activeCallIds.isEmpty()) {
-				activeUserAgentCallIds.remove(this);
+		synchronized (activeUserAgentCallIds) {
+			Set<String> activeCallIds = activeUserAgentCallIds.get(this);
+			if (activeCallIds != null) {
+				activeCallIds.remove(callId);
+				if (activeCallIds.isEmpty()) {
+					activeUserAgentCallIds.remove(this);
+				}
 			}
 		}
 		String foundSubscriberId = callIdToEventBusSubscriberId.remove(callId);
@@ -729,56 +757,60 @@ public class UserAgent implements SipListener {
 			//Otherwise state is pretty inconsistent.
 			return;
 		}
-		List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
-		if (calls == null) {
-			//No data relation should have been assigned for this callId
-			//in the first place, so we wouldn't have any links to remove.
-			return;
-		}
-		synchronized (calls) {
-			Iterator<Dialog> iterator = calls.iterator();
-			try {
-				while (iterator.hasNext()) {
-					Dialog dialog = iterator.next();
-					if (dialog.getCallId().getCallId().equals(callId)) {
-						iterator.remove();
-						break;
+		synchronized (establishedCalls) {
+			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+			if (calls == null) {
+				//No data relation should have been assigned for this callId
+				//in the first place, so we wouldn't have any links to remove.
+				return;
+			}
+			synchronized (calls) {
+				Iterator<Dialog> iterator = calls.iterator();
+				try {
+					while (iterator.hasNext()) {
+						Dialog dialog = iterator.next();
+						if (dialog.getCallId().getCallId().equals(callId)) {
+							iterator.remove();
+							break;
+						}
 					}
-				}
-			} finally {
-				if (calls.isEmpty()) {
-					establishedCalls.remove(eventBusSubscriberId);
+				} finally {
+					if (calls.isEmpty()) {
+						establishedCalls.remove(eventBusSubscriberId);
+					}
 				}
 			}
 		}
 	}
 
-	public synchronized boolean finishCall(String callId) {
+	public boolean finishCall(String callId) {
 		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
 		if (eventBusSubscriberId == null) {
 			logger.error("Cannot finish call.\nEstablished call with callId " +
 					"'{}' not found.", callId);
 			return false;
 		}
-		List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
-		if (calls == null) {
-			logger.error("Cannot finish call.\nEstablished call with callId " +
-					"'{}' not found.", callId);
-			return false;
-		}
-		synchronized (calls) {
-			Iterator<Dialog> iterator = calls.iterator();
-			try {
-				while (iterator.hasNext()) {
-					Dialog dialog = iterator.next();
-					if (dialog.getCallId().getCallId().equals(callId)) {
-						iterator.remove();
-						return uac.sendByeRequest(dialog);
+		synchronized (establishedCalls) {
+			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+			if (calls == null) {
+				logger.error("Cannot finish call.\nEstablished call with callId " +
+						"'{}' not found.", callId);
+				return false;
+			}
+			synchronized (calls) {
+				Iterator<Dialog> iterator = calls.iterator();
+				try {
+					while (iterator.hasNext()) {
+						Dialog dialog = iterator.next();
+						if (dialog.getCallId().getCallId().equals(callId)) {
+							iterator.remove();
+							return uac.sendByeRequest(dialog);
+						}
 					}
-				}
-			} finally {
-				if (calls.isEmpty()) {
-					establishedCalls.remove(eventBusSubscriberId);
+				} finally {
+					if (calls.isEmpty()) {
+						establishedCalls.remove(eventBusSubscriberId);
+					}
 				}
 			}
 		}
