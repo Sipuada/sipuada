@@ -38,6 +38,7 @@ import android.javax.sip.ListeningPoint;
 import android.javax.sip.ObjectInUseException;
 import android.javax.sip.PeerUnavailableException;
 import android.javax.sip.RequestEvent;
+import android.javax.sip.SipException;
 import android.javax.sip.SipFactory;
 import android.javax.sip.SipProvider;
 import android.javax.sip.SipStack;
@@ -186,11 +187,17 @@ public class Sipuada implements SipuadaApi {
 				}
 			}
 			Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-			SipProvider sipProvider = null;
+			SipProvider sipProvider;
 			try {
 				SipStack stack = listeningPointToStack.get(listeningPoint);
 				sipProvider = stack.createSipProvider(listeningPoint);
+				stack.start();
 			} catch (ObjectInUseException unexpectedException) {
+				logger.error("Unexpected problem: {}.", unexpectedException.getMessage(),
+						unexpectedException.getCause());
+				throw new SipuadaException("Unexpected problem: "
+						+ unexpectedException.getMessage(), unexpectedException);
+			} catch (SipException unexpectedException) {
 				logger.error("Unexpected problem: {}.", unexpectedException.getMessage(),
 						unexpectedException.getCause());
 				throw new SipuadaException("Unexpected problem: "
@@ -694,6 +701,7 @@ public class Sipuada implements SipuadaApi {
 			try {
 				SipStack stack = listeningPointToStack.get(listeningPoint);
 				SipProvider sipProvider = stack.createSipProvider(listeningPoint);
+				stack.start();
 				String rawTransport = listeningPoint.getTransport().toUpperCase();
 				Transport transport = Transport.UNKNOWN;
 				try {
@@ -714,6 +722,11 @@ public class Sipuada implements SipuadaApi {
 				activeUserAgentCallIds.put(userAgent, Collections
 						.synchronizedSet(new HashSet<String>()));
 			} catch (ObjectInUseException unexpectedException) {
+				logger.error("Unexpected problem: {}.", unexpectedException.getMessage(),
+						unexpectedException.getCause());
+				throw new SipuadaException("Unexpected problem: "
+						+ unexpectedException.getMessage(), unexpectedException);
+			} catch (SipException unexpectedException) {
 				logger.error("Unexpected problem: {}.", unexpectedException.getMessage(),
 						unexpectedException.getCause());
 				throw new SipuadaException("Unexpected problem: "
@@ -1002,7 +1015,6 @@ public class Sipuada implements SipuadaApi {
 					for (UserAgent userAgent : userAgents) {
 						SipProvider provider = userAgent.getProvider();
 						SipStack stack = provider.getSipStack();
-						stack.stop();
 						for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
 							try {
 								stack.deleteListeningPoint(listeningPoint);
@@ -1011,6 +1023,7 @@ public class Sipuada implements SipuadaApi {
 						try {
 							stack.deleteSipProvider(provider);
 						} catch (ObjectInUseException ignore) {}
+						stack.stop();
 					}
 				}
 			}
