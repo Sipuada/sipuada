@@ -18,10 +18,8 @@ import org.github.sipuada.SipuadaApi.RegistrationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.plugins.nop.NoOperationSipuadaPlugin;
 
-import net.miginfocom.swing.MigLayout;
-
-import android.gov.nist.gnjvx.sip.Utils;
 import android.javax.sdp.SessionDescription;
+import net.miginfocom.swing.MigLayout;
 
 public class SIPClientMain implements SipuadaListener {
 
@@ -186,12 +184,13 @@ public class SIPClientMain implements SipuadaListener {
 		registerButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				if (sipuada == null) {
-					sipuada = new Sipuada(SIPClientMain.this,
-							registrarUserNameTextField.getText(),
-							registrarDomainTextField.getText(), passwordField
-									.getText(), Util.getIPAddress(true) + ":55000/TCP");
+				if (sipuada != null) {
+					sipuada.destroySipuada();
 				}
+				sipuada = new Sipuada(SIPClientMain.this,
+						registrarUserNameTextField.getText(),
+						registrarDomainTextField.getText(), passwordField
+								.getText(), "192.168.25.217:55001/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
