@@ -101,18 +101,22 @@ public class UserAgentClient {
 	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
 	private long localCSeq = 0;
 	private final List<Address> configuredRouteSet = new LinkedList<>();
-	private Map<URI, CallIdHeader> registerCallIds = new HashMap<>();
-	private Map<URI, Long> registerCSeqs = new HashMap<>();
+	private final Map<URI, CallIdHeader> registerCallIds;
+	private final Map<URI, Long> registerCSeqs;
 
-	public UserAgentClient(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
-			MessageFactory messageFactory, HeaderFactory headerFactory, AddressFactory addressFactory,
+	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
+			Map<RequestMethod, SipuadaPlugin> plugins, MessageFactory messageFactory,
+			HeaderFactory headerFactory, AddressFactory addressFactory,
+			Map<URI, CallIdHeader> globalRegisterCallIds, Map<URI, Long> globalRegisterCSeqs,
 			String... credentialsAndAddress) {
 		bus = eventBus;
 		provider = sipProvider;
+		sessionPlugins = plugins;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
-		sessionPlugins = plugins;
+		registerCallIds = globalRegisterCallIds;
+		registerCSeqs = globalRegisterCSeqs;
 		username = credentialsAndAddress.length > 0 && credentialsAndAddress[0] != null ?
 				credentialsAndAddress[0] : "";
 		primaryHost = credentialsAndAddress.length > 1 && credentialsAndAddress[1] != null ?
@@ -142,14 +146,19 @@ public class UserAgentClient {
 			//No need for caller to wait for remote responses.
 			return false;
 		}
-		if (!registerCallIds.containsKey(requestUri)) {
-			registerCallIds.put(requestUri, provider.getNewCallId());
-			registerCSeqs.put(requestUri, ++localCSeq);
+		CallIdHeader callIdHeader;
+		synchronized (registerCallIds) {
+			if (!registerCallIds.containsKey(requestUri)) {
+				registerCallIds.put(requestUri, provider.getNewCallId());
+				registerCSeqs.put(requestUri, ++localCSeq);
+			}
+			callIdHeader = registerCallIds.get(requestUri);
 		}
-		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
-		long cseq = registerCSeqs.get(requestUri);
-		registerCSeqs.put(requestUri, cseq + 1);
-
+		long cseq;
+		synchronized (registerCSeqs) {
+			cseq = registerCSeqs.get(requestUri);
+			registerCSeqs.put(requestUri, cseq + 1);
+		}
 		List<ContactHeader> contactHeaders = new LinkedList<>();
 		for (String address : addresses) {
 			String addressIp = address.split(":")[0];

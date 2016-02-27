@@ -42,6 +42,8 @@ import android.javax.sip.SipFactory;
 import android.javax.sip.SipProvider;
 import android.javax.sip.SipStack;
 import android.javax.sip.TransportNotSupportedException;
+import android.javax.sip.address.URI;
+import android.javax.sip.header.CallIdHeader;
 
 public class Sipuada implements SipuadaApi {
 
@@ -58,6 +60,10 @@ public class Sipuada implements SipuadaApi {
 
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins = new HashMap<>();
 
+	private final Map<URI, CallIdHeader> registerCallIds = Collections
+			.synchronizedMap(new HashMap<URI, CallIdHeader>());
+	private final Map<URI, Long> registerCSeqs = Collections
+			.synchronizedMap(new HashMap<URI, Long>());
 	private final Map<RequestMethod, Boolean> registerOperationsInProgress = Collections
 			.synchronizedMap(new HashMap<RequestMethod, Boolean>());
 	{
@@ -174,8 +180,10 @@ public class Sipuada implements SipuadaApi {
 			try {
 				transport = Transport.valueOf(rawTransport);
 			} catch (IllegalArgumentException ignore) {}
-			if (!transportToUserAgents.containsKey(transport)) {
-				transportToUserAgents.put(transport, new HashSet<UserAgent>());
+			synchronized (transportToUserAgents) {
+				if (!transportToUserAgents.containsKey(transport)) {
+					transportToUserAgents.put(transport, new HashSet<UserAgent>());
+				}
 			}
 			Set<UserAgent> userAgents = transportToUserAgents.get(transport);
 			SipProvider sipProvider = null;
@@ -191,7 +199,8 @@ public class Sipuada implements SipuadaApi {
 			UserAgent userAgent = new UserAgent(eventBus, sipProvider, sipuadaListener,
 					registeredPlugins, sipUsername, sipPrimaryHost, sipPassword,
 					listeningPoint.getIPAddress(), Integer.toString(listeningPoint.getPort()),
-					rawTransport, callIdToActiveUserAgent, activeUserAgentCallIds);
+					rawTransport, callIdToActiveUserAgent, activeUserAgentCallIds,
+					registerCallIds, registerCSeqs);
 			userAgents.add(userAgent);
 			activeUserAgentCallIds.put(userAgent, Collections
 					.synchronizedSet(new HashSet<String>()));
@@ -219,23 +228,25 @@ public class Sipuada implements SipuadaApi {
 		userAgentsDump.append("{ ");
 		int transportGroupIndex = 0;
 		Set<Transport> transports = transportToUserAgents.keySet();
-		synchronized (transports) {
+		synchronized (transportToUserAgents) {
 			for (Transport transport : transports) {
 				if (transportGroupIndex != 0) {
 					userAgentsDump.append(", ");
 				}
 				userAgentsDump.append(String.format("'%s' : { ", transport));
-				Iterator<UserAgent> iterator = transportToUserAgents
-						.get(transport).iterator();
-				int userAgentIndex = 0;
-				while (iterator.hasNext()) {
-					if (userAgentIndex != 0) {
-						userAgentsDump.append(", ");
+				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
+				synchronized (userAgents) {
+					Iterator<UserAgent> iterator = userAgents.iterator();
+					int userAgentIndex = 0;
+					while (iterator.hasNext()) {
+						if (userAgentIndex != 0) {
+							userAgentsDump.append(", ");
+						}
+						UserAgent userAgent = iterator.next();
+						userAgentsDump.append(String.format("'%s:%d'",
+								userAgent.getLocalIp(), userAgent.getLocalPort()));
+						userAgentIndex++;
 					}
-					UserAgent userAgent = iterator.next();
-					userAgentsDump.append(String.format("'%s:%d'",
-							userAgent.getLocalIp(), userAgent.getLocalPort()));
-					userAgentIndex++;
 				}
 				userAgentsDump.append(" } ");
 				transportGroupIndex++;
@@ -284,7 +295,7 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Subscribe
-	public void electBestUserAgentForIncomingRequest(UserAgentNominatedForIncomingRequest event) {
+	public synchronized void electBestUserAgentForIncomingRequest(UserAgentNominatedForIncomingRequest event) {
 		String method = event.getRequestEvent().getRequest().getMethod();
 		String callId = event.getCallId();
 		final String electionId = String.format("(%s:%s)", method, callId);
@@ -292,12 +303,15 @@ public class Sipuada implements SipuadaApi {
 			if (electionTimer != null) {
 				electionTimer.cancel();
 			}
-			if (!electionIdToCandidates.containsKey(electionId)) {
-				electionIdToCandidates.put(electionId, Collections
-						.synchronizedSet(new HashSet<ElectionCandidate>()));
+			synchronized (electionIdToCandidates) {
+				if (!electionIdToCandidates.containsKey(electionId)) {
+					electionIdToCandidates.put(electionId, Collections
+							.synchronizedSet(new HashSet<ElectionCandidate>()));
+				}
+				electionIdToCandidates.get(electionId)
+					.add(new ElectionCandidate(event.getCandidateUserAgent(),
+							event.getRequestEvent()));
 			}
-			electionIdToCandidates.get(electionId).add(new ElectionCandidate(event.getCandidateUserAgent(),
-					event.getRequestEvent()));
 			electionTimer = new Timer();
 			electionTimer.schedule(new TimerTask() {
 
@@ -339,14 +353,16 @@ public class Sipuada implements SipuadaApi {
 		}
 		List<String> registeredAddresses = new LinkedList<>();
 		Set<Transport> transports = transportToUserAgents.keySet();
-		synchronized (transports) {
+		synchronized (transportToUserAgents) {
 			for (Transport transport : transports) {
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-				Iterator<UserAgent> iterator = userAgents.iterator();
-				while (iterator.hasNext()) {
-					UserAgent userAgent = iterator.next();
-					registeredAddresses.add(String.format("%s:%d",
-							userAgent.getLocalIp(), userAgent.getLocalPort()));
+				synchronized (userAgents) {
+					Iterator<UserAgent> iterator = userAgents.iterator();
+					while (iterator.hasNext()) {
+						UserAgent userAgent = iterator.next();
+						registeredAddresses.add(String.format("%s:%d",
+								userAgent.getLocalIp(), userAgent.getLocalPort()));
+					}
 				}
 			}
 		}
@@ -557,46 +573,49 @@ public class Sipuada implements SipuadaApi {
 			String... localAddresses) {
 		boolean oldAddresses[] = new boolean[localAddresses.length];
 		Set<Transport> transports = transportToUserAgents.keySet();
-		synchronized (transports) {
+		synchronized (transportToUserAgents) {
 			for (Transport transport : transports) {
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-				Iterator<UserAgent> iterator = userAgents.iterator();
-				while (iterator.hasNext()) {
-					UserAgent userAgent = iterator.next();
-					SipProvider provider = userAgent.getProvider();
-					for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
-						int index = 0;
-						boolean addressRenewed = false;
-						for (String localAddress : localAddresses) {
-							String localIp = null, localPortRaw = null, localTransport = null;
-							int localPort = -1;
-							try {
-								localIp = localAddress.split(":")[0];
-								localPortRaw = localAddress.split(":")[1].split("/")[0];
-								localPort = Integer.parseInt(localPortRaw);
-								localTransport = localAddress.split("/")[1];
-							} catch (IndexOutOfBoundsException malformedAddress) {
-								logger.error("Malformed address: {}.", localAddress);
-								throw new SipuadaException("Malformed address provided: " + localAddress,
-										malformedAddress);
-							} catch (NumberFormatException invalidPort) {
-								logger.error("Invalid port for address {}: {}.", localAddress, localPort);
-								throw new SipuadaException("Invalid port provided for address "
-										+ localAddress + ": " + localPort, invalidPort);
+				synchronized (userAgents) {
+					Iterator<UserAgent> iterator = userAgents.iterator();
+					while (iterator.hasNext()) {
+						UserAgent userAgent = iterator.next();
+						SipProvider provider = userAgent.getProvider();
+						for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
+							int index = 0;
+							boolean addressRenewed = false;
+							for (String localAddress : localAddresses) {
+								String localIp = null, localPortRaw = null, localTransport = null;
+								int localPort = -1;
+								try {
+									localIp = localAddress.split(":")[0];
+									localPortRaw = localAddress.split(":")[1].split("/")[0];
+									localPort = Integer.parseInt(localPortRaw);
+									localTransport = localAddress.split("/")[1];
+								} catch (IndexOutOfBoundsException malformedAddress) {
+									logger.error("Malformed address: {}.", localAddress);
+									throw new SipuadaException("Malformed address provided: " +
+											localAddress, malformedAddress);
+								} catch (NumberFormatException invalidPort) {
+									logger.error("Invalid port for address {}: {}.",
+											localAddress, localPort);
+									throw new SipuadaException("Invalid port provided for address "
+											+ localAddress + ": " + localPort, invalidPort);
+								}
+								if (listeningPoint.getIPAddress().equals(localIp)
+										&& listeningPoint.getPort() == localPort
+										&& listeningPoint.getTransport().toUpperCase()
+											.equals(localTransport)) {
+									renewed.add(listeningPoint);
+									addressRenewed = true;
+									oldAddresses[index] = true;
+									break;
+								}
+								index++;
 							}
-							if (listeningPoint.getIPAddress().equals(localIp)
-									&& listeningPoint.getPort() == localPort
-									&& listeningPoint.getTransport().toUpperCase()
-										.equals(localTransport)) {
-								renewed.add(listeningPoint);
-								addressRenewed = true;
-								oldAddresses[index] = true;
-								break;
+							if (!addressRenewed) {
+								expired.add(listeningPoint);
 							}
-							index++;
-						}
-						if (!addressRenewed) {
-							expired.add(listeningPoint);
 						}
 					}
 				}
@@ -680,14 +699,17 @@ public class Sipuada implements SipuadaApi {
 				try {
 					transport = Transport.valueOf(rawTransport);
 				} catch (IllegalArgumentException ignore) {}
-				if (!transportToUserAgents.containsKey(transport)) {
-					transportToUserAgents.put(transport, new HashSet<UserAgent>());
+				synchronized (transportToUserAgents) {
+					if (!transportToUserAgents.containsKey(transport)) {
+						transportToUserAgents.put(transport, new HashSet<UserAgent>());
+					}
 				}
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
 				UserAgent userAgent = new UserAgent(eventBus, sipProvider, listener, registeredPlugins,
 						username, primaryHost, password, listeningPoint.getIPAddress(),
 						Integer.toString(listeningPoint.getPort()), rawTransport,
-						callIdToActiveUserAgent, activeUserAgentCallIds);
+						callIdToActiveUserAgent, activeUserAgentCallIds,
+						registerCallIds, registerCSeqs);
 				userAgents.add(userAgent);
 				activeUserAgentCallIds.put(userAgent, Collections
 						.synchronizedSet(new HashSet<String>()));
@@ -702,27 +724,29 @@ public class Sipuada implements SipuadaApi {
 
 	private boolean preventActiveUserAgentsRemoval(List<ListeningPoint> expiredListeningPoints) {
 		Set<Transport> transports = transportToUserAgents.keySet();
-		synchronized (transports) {
+		synchronized (transportToUserAgents) {
 			Iterator<Transport> transportsIterator = transports.iterator();
 			while (transportsIterator.hasNext()) {
 				Transport transport = transportsIterator.next();
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-				Iterator<UserAgent> userAgentsIterator = userAgents.iterator();
-				while (userAgentsIterator.hasNext()) {
-					UserAgent userAgent = userAgentsIterator.next();
-					for (ListeningPoint expiredListeningPoint : expiredListeningPoints) {
-						if (expiredListeningPoint.getIPAddress().equals(userAgent.getLocalIp())
-								&& expiredListeningPoint.getPort() == userAgent.getLocalPort()
-								&& expiredListeningPoint.getTransport().toUpperCase()
-									.equals(userAgent.getTransport())) {
-							Set<String> activeCallIds = activeUserAgentCallIds.get(userAgent);
-							if (activeCallIds != null && !activeCallIds.isEmpty()) {
-								logger.error("UserAgent bound to {}:{} through {}" +
-										" cannot be removed as it is currently in use.",
-										expiredListeningPoint.getIPAddress(),
-										expiredListeningPoint.getPort(),
-										expiredListeningPoint.getTransport().toUpperCase());
-								return true;
+				synchronized (userAgents) {
+					Iterator<UserAgent> userAgentsIterator = userAgents.iterator();
+					while (userAgentsIterator.hasNext()) {
+						UserAgent userAgent = userAgentsIterator.next();
+						for (ListeningPoint expiredListeningPoint : expiredListeningPoints) {
+							if (expiredListeningPoint.getIPAddress().equals(userAgent.getLocalIp())
+									&& expiredListeningPoint.getPort() == userAgent.getLocalPort()
+									&& expiredListeningPoint.getTransport().toUpperCase()
+										.equals(userAgent.getTransport())) {
+								Set<String> activeCallIds = activeUserAgentCallIds.get(userAgent);
+								if (activeCallIds != null && !activeCallIds.isEmpty()) {
+									logger.error("UserAgent bound to {}:{} through {}" +
+											" cannot be removed as it is currently in use.",
+											expiredListeningPoint.getIPAddress(),
+											expiredListeningPoint.getPort(),
+											expiredListeningPoint.getTransport().toUpperCase());
+									return true;
+								}
 							}
 						}
 					}
@@ -775,41 +799,45 @@ public class Sipuada implements SipuadaApi {
 
 	private synchronized void performUserAgentsCleanup(List<ListeningPoint> expiredListeningPoints) {
 		Set<Transport> transports = transportToUserAgents.keySet();
-		synchronized (transports) {
+		synchronized (transportToUserAgents) {
 			Iterator<Transport> transportsIterator = transports.iterator();
 			while (transportsIterator.hasNext()) {
 				Transport transport = transportsIterator.next();
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-				Iterator<UserAgent> userAgentsIterator = userAgents.iterator();
-				while (userAgentsIterator.hasNext()) {
-					UserAgent userAgent = userAgentsIterator.next();
-					for (ListeningPoint expiredListeningPoint : expiredListeningPoints) {
-						if (expiredListeningPoint.getIPAddress().equals(userAgent.getLocalIp())
-								&& expiredListeningPoint.getPort() == userAgent.getLocalPort()
-								&& expiredListeningPoint.getTransport().toUpperCase()
-									.equals(userAgent.getTransport())) {
-							SipProvider provider = userAgent.getProvider();
-							SipStack stack = provider.getSipStack();
-							try {
-								stack.deleteSipProvider(provider);
-								stack.deleteListeningPoint(expiredListeningPoint);
-							} catch (ObjectInUseException ignore) {}
-							Set<String> activeCallIds = activeUserAgentCallIds.get(userAgent);
-							if (activeCallIds != null) {
-								synchronized (activeCallIds) {
-									Iterator<String> callIdsIterator = activeCallIds.iterator();
-									while (callIdsIterator.hasNext()) {
-										String callId = callIdsIterator.next();
-										callIdToActiveUserAgent.remove(callId);
+				synchronized (userAgents) {
+					Iterator<UserAgent> userAgentsIterator = userAgents.iterator();
+					while (userAgentsIterator.hasNext()) {
+						UserAgent userAgent = userAgentsIterator.next();
+						for (ListeningPoint expiredListeningPoint : expiredListeningPoints) {
+							if (expiredListeningPoint.getIPAddress().equals(userAgent.getLocalIp())
+									&& expiredListeningPoint.getPort() == userAgent.getLocalPort()
+									&& expiredListeningPoint.getTransport().toUpperCase()
+										.equals(userAgent.getTransport())) {
+								SipProvider provider = userAgent.getProvider();
+								SipStack stack = provider.getSipStack();
+								try {
+									stack.deleteSipProvider(provider);
+									stack.deleteListeningPoint(expiredListeningPoint);
+								} catch (ObjectInUseException ignore) {}
+								synchronized (activeUserAgentCallIds) {
+									Set<String> activeCallIds = activeUserAgentCallIds.get(userAgent);
+									if (activeCallIds != null) {
+										synchronized (activeCallIds) {
+											Iterator<String> callIdsIterator = activeCallIds.iterator();
+											while (callIdsIterator.hasNext()) {
+												String callId = callIdsIterator.next();
+												callIdToActiveUserAgent.remove(callId);
+											}
+											activeUserAgentCallIds.remove(userAgent);
+										}
 									}
-									activeUserAgentCallIds.remove(userAgent);
 								}
+								userAgentsIterator.remove();
+								if (userAgents.isEmpty()) {
+									transportsIterator.remove();
+								}
+								break;
 							}
-							userAgentsIterator.remove();
-							if (userAgents.isEmpty()) {
-								transportsIterator.remove();
-							}
-							break;
 						}
 					}
 				}
@@ -908,7 +936,7 @@ public class Sipuada implements SipuadaApi {
 			randomNumber = (new Random()).nextInt(userAgentCandidates.size());
 		} catch (NoSuchElementException noUserAgentsOfGivenTransport) {
 			Set<Transport> transports = transportToUserAgents.keySet();
-			synchronized (transports) {
+			synchronized (transportToUserAgents) {
 				for (Transport otherTransport : transports) {
 					if (otherTransport == transport) {
 						continue;
@@ -967,21 +995,23 @@ public class Sipuada implements SipuadaApi {
 	public void destroySipuada() {
 		eventBus.unregister(this);
 		Set<Transport> transports = transportToUserAgents.keySet();
-		synchronized (transports) {
+		synchronized (transportToUserAgents) {
 			for (Transport transport : transports) {
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
-				for (UserAgent userAgent : userAgents) {
-					SipProvider provider = userAgent.getProvider();
-					SipStack stack = provider.getSipStack();
-					stack.stop();
-					for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
+				synchronized (userAgents) {
+					for (UserAgent userAgent : userAgents) {
+						SipProvider provider = userAgent.getProvider();
+						SipStack stack = provider.getSipStack();
+						stack.stop();
+						for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
+							try {
+								stack.deleteListeningPoint(listeningPoint);
+							} catch (ObjectInUseException ignore) {}
+						}
 						try {
-							stack.deleteListeningPoint(listeningPoint);
+							stack.deleteSipProvider(provider);
 						} catch (ObjectInUseException ignore) {}
 					}
-					try {
-						stack.deleteSipProvider(provider);
-					} catch (ObjectInUseException ignore) {}
 				}
 			}
 			transportToUserAgents.clear();
