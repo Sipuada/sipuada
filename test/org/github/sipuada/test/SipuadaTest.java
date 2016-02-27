@@ -49,9 +49,9 @@ public class SipuadaTest {
 
 		};
 		Sipuada sipuada = new Sipuada(sipuadaListener,
-				"xibaca", "192.168.130.207:5060", "xibaca",
-				"192.168.130.207:55501/TCP",
-				"192.168.130.207:55502/TCP"
+				"xibaca", "192.168.25.217:5060", "xibaca",
+				"192.168.25.217:55501/TCP",
+				"192.168.25.217:55502/TCP"
 		);
 		RegistrationCallback registrationCallback =
 				new RegistrationCallback() {
@@ -70,7 +70,7 @@ public class SipuadaTest {
 		sipuada.registerAddresses(registrationCallback);
 
 		sipuada.overwriteAddresses(registrationCallback,
-				"192.168.130.207:55503/TCP");
+				"192.168.25.217:55503/TCP");
 
 		CallInvitationCallback callInvitationCallback = new CallInvitationCallback() {
 
@@ -91,28 +91,28 @@ public class SipuadaTest {
 
 		};
 
-		sipuada.inviteToCall("renan", "192.168.130.207:5060", callInvitationCallback);
+		sipuada.inviteToCall("larson", "192.168.25.217:5060", callInvitationCallback);
 
 		sipuada.includeAddresses(registrationCallback,
-				"192.168.130.207:55504/TCP",
-				"192.168.130.207:55505/TCP");
+				"192.168.25.217:55504/TCP",
+				"192.168.25.217:55505/TCP");
 
 		sipuada.overwriteAddresses(registrationCallback);
 
 		sipuada.registerAddresses(registrationCallback);
 
 		sipuada.overwriteAddresses(registrationCallback,
-				"192.168.130.207:55506/UDP",
-				"192.168.130.207:55507/UDP",
-				"192.168.130.207:55508/UDP");
+				"192.168.25.217:55506/UDP",
+				"192.168.25.217:55507/UDP",
+				"192.168.25.217:55508/UDP");
 
 		sipuada.overwriteAddresses(registrationCallback,
-				"192.168.130.207:55507/UDP");
+				"192.168.25.217:55507/UDP");
 
 		try {
 			Thread.sleep(30000);
 		} catch (InterruptedException ignore) {}
-		sipuada.inviteToCall("renan", "192.168.130.207:5060", callInvitationCallback);
+		sipuada.inviteToCall("larson", "192.168.25.217:5060", callInvitationCallback);
 	}
 
 }
