@@ -40,12 +40,10 @@ public interface SipuadaApi {
 
 	public interface OptionsQueryingCallback {
 
-		void onOptionsQueryingArrived(String callId);
-		
 		void onOptionsQueryingSuccess(String callId, SessionDescription content);
 
 		void onOptionsQueryingFailed(String reason);
-		
+
 	}
 
 	boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback);
