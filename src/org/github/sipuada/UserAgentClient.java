@@ -110,7 +110,6 @@ public class UserAgentClient {
 	private final Map<URI, Long> registerCSeqs;
 
 	private final URI registerRequestUri;
-	private final URI dialoglessRequestUri;
 
 	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			Map<RequestMethod, SipuadaPlugin> plugins, MessageFactory messageFactory,
@@ -145,16 +144,6 @@ public class UserAgentClient {
 					primaryHost, parseException);
 			throw new SipuadaException(String
 					.format("Invalid host '%s'.", primaryHost), parseException);
-		}
-		try {
-			dialoglessRequestUri = addressMaker.createSipURI(username, primaryHost);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create the Request URI for request outside "+
-					"Dialogs. \nMust be a valid domain or IP address, but was: {}.",
-					primaryHost, parseException);
-			throw new SipuadaException(String
-					.format("Invalid username '%s' or host '%s'.",
-							username, primaryHost), parseException);
 		}
 	}
 
@@ -244,6 +233,16 @@ public class UserAgentClient {
 
 	public boolean sendOptionsRequest(String remoteUser, String remoteHost,
 			CallIdHeader callIdHeader, boolean embedContactHeader) {
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this OPTIONS request to {} at {}." +
+					"\n[remoteUser] must be a valid id, [remoteHost] must be a valid IP address: {}.",
+					remoteUser, remoteHost, parseException.getMessage());
+			// No need for caller to wait for remote responses.
+			return false;
+		}
 		long cseq = ++localCSeq;
 		List<Header> additionalHeaders = new ArrayList<>();
 		try {
@@ -289,12 +288,23 @@ public class UserAgentClient {
 				additionalHeaders.add(allowHeader);
 			} catch (ParseException ignore) {}
 		}
-		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, dialoglessRequestUri,
+		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
 				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
 	public boolean sendInviteRequest(String remoteUser, String remoteHost,
 			CallIdHeader callIdHeader) {
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this INVITE request " +
+					"to {} at {}.\n[remoteUser] must be a valid id, [remoteHost] " +
+					"must be a valid IP address: {}.", remoteUser, remoteHost,
+					parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
 		long cseq = ++localCSeq;
 		List<Header> additionalHeaders = new ArrayList<>();
 		SipURI contactUri;
@@ -331,7 +341,7 @@ public class UserAgentClient {
 				additionalHeaders.add(allowHeader);
 			} catch (ParseException ignore) {}
 		}
-		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost, dialoglessRequestUri,
+		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost, requestUri,
 				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
