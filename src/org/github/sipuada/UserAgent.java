@@ -21,11 +21,11 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
-import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -354,14 +354,7 @@ public class UserAgent implements SipListener {
 		Object eventBusSubscriber = new Object() {
 
 			@Subscribe
-			public void onEvent(QueryingOptionsArrived event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingArrived(callId);
-				}
-			}
-
-			@Subscribe
-			public void onEvent(QueryingOptionsSucceed event) {
+			public void onEvent(QueryingOptionsSuccess event) {
 				if (event.getCallId().equals(callId)) {
 					callback.onOptionsQueryingSuccess(callId, event.getSessionDescription());
 				}

@@ -27,6 +27,7 @@ import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.exceptions.ResponseDiscarded;
 import org.github.sipuada.exceptions.ResponsePostponed;
+import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,6 +105,9 @@ public class UserAgentClient {
 	private final Map<URI, CallIdHeader> registerCallIds;
 	private final Map<URI, Long> registerCSeqs;
 
+	private final URI registerRequestUri;
+	private final URI dialoglessRequestUri;
+
 	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			Map<RequestMethod, SipuadaPlugin> plugins, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
@@ -129,6 +133,25 @@ public class UserAgentClient {
 				Integer.parseInt(credentialsAndAddress[4]) : 5060;
 		transport = credentialsAndAddress.length > 5 && credentialsAndAddress[5] != null ?
 				credentialsAndAddress[5] : "TCP";
+		try {
+			registerRequestUri = addressMaker.createSipURI(null, primaryHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the Request URI for REGISTER requests." +
+					"\n[primaryHost] must be a valid domain or IP address, but was: {}.",
+					primaryHost, parseException);
+			throw new SipuadaException(String
+					.format("Invalid host '%s'.", primaryHost), parseException);
+		}
+		try {
+			dialoglessRequestUri = addressMaker.createSipURI(username, primaryHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the Request URI for request outside "+
+					"Dialogs. \nMust be a valid domain or IP address, but was: {}.",
+					primaryHost, parseException);
+			throw new SipuadaException(String
+					.format("Invalid username '%s' or host '%s'.",
+							username, primaryHost), parseException);
+		}
 	}
 
 	public boolean sendRegisterRequest(String... addresses) {
@@ -136,28 +159,18 @@ public class UserAgentClient {
 			logger.error("Cannot send a REGISTER request with no bindings.");
 			return false;
 		}
-		URI requestUri;
-		try {
-			requestUri = addressMaker.createSipURI(null, primaryHost);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create URI for this REGISTER request to {}." +
-					"\nMust be a valid domain or IP address: {}.", primaryHost,
-					parseException.getMessage());
-			//No need for caller to wait for remote responses.
-			return false;
-		}
 		CallIdHeader callIdHeader;
 		synchronized (registerCallIds) {
-			if (!registerCallIds.containsKey(requestUri)) {
-				registerCallIds.put(requestUri, provider.getNewCallId());
-				registerCSeqs.put(requestUri, ++localCSeq);
+			if (!registerCallIds.containsKey(registerRequestUri)) {
+				registerCallIds.put(registerRequestUri, provider.getNewCallId());
+				registerCSeqs.put(registerRequestUri, ++localCSeq);
 			}
-			callIdHeader = registerCallIds.get(requestUri);
+			callIdHeader = registerCallIds.get(registerRequestUri);
 		}
 		long cseq;
 		synchronized (registerCSeqs) {
-			cseq = registerCSeqs.get(requestUri);
-			registerCSeqs.put(requestUri, cseq + 1);
+			cseq = registerCSeqs.get(registerRequestUri);
+			registerCSeqs.put(registerRequestUri, cseq + 1);
 		}
 		List<ContactHeader> contactHeaders = new LinkedList<>();
 		for (String address : addresses) {
@@ -175,28 +188,24 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
-				requestUri, callIdHeader, cseq, contactHeaders
+				registerRequestUri, callIdHeader, cseq, contactHeaders
 				.toArray(new ContactHeader[contactHeaders.size()]));
 	}
 
 	public boolean sendUnregisterRequest(String... expiredAddresses) {
-		URI requestUri;
-		try {
-			requestUri = addressMaker.createSipURI(null, primaryHost);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create URI for this REGISTER request to {}." +
-					"\nMust be a valid domain or IP address: {}.", primaryHost,
-					parseException.getMessage());
-			//No need for caller to wait for remote responses.
-			return false;
+		CallIdHeader callIdHeader;
+		synchronized (registerCallIds) {
+			if (!registerCallIds.containsKey(registerRequestUri)) {
+				registerCallIds.put(registerRequestUri, provider.getNewCallId());
+				registerCSeqs.put(registerRequestUri, ++localCSeq);
+			}
+			callIdHeader = registerCallIds.get(registerRequestUri);
 		}
-		if (!registerCallIds.containsKey(requestUri)) {
-			registerCallIds.put(requestUri, provider.getNewCallId());
-			registerCSeqs.put(requestUri, ++localCSeq);
+		long cseq;
+		synchronized (registerCSeqs) {
+			cseq = registerCSeqs.get(registerRequestUri);
+			registerCSeqs.put(registerRequestUri, cseq + 1);
 		}
-		CallIdHeader callIdHeader = registerCallIds.get(requestUri);
-		long cseq = registerCSeqs.get(requestUri);
-		registerCSeqs.put(requestUri, cseq + 1);
 		List<Header> additionalHeaders = new LinkedList<>();
 		if (expiredAddresses.length == 0) {
 			ExpiresHeader expiresHeader;
@@ -225,7 +234,7 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
-				requestUri, callIdHeader, cseq, additionalHeaders
+				registerRequestUri, callIdHeader, cseq, additionalHeaders
 				.toArray(new Header[additionalHeaders.size()]));
 	}
 
@@ -239,35 +248,15 @@ public class UserAgentClient {
 
 	public boolean sendInviteRequest(String remoteUser, String remoteHost,
 			CallIdHeader callIdHeader) {
-		URI requestUri;
-		try {
-			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
-		} catch (ParseException parseException) {
-			logger.error("Could not properly create URI for this INVITE request " +
-					"to {} at {}.\n[remoteUser] must be a valid id, [remoteHost] " +
-					"must be a valid IP address: {}.", remoteUser, remoteHost,
-					parseException.getMessage());
-			//No need for caller to wait for remote responses.
-			return false;
-		}
 		long cseq = ++localCSeq;
-
-		//TODO *IF* request is a INVITE, make sure to add the following headers:
-		/*
-		 * (according to section 13.2.1)
-		 *
-		 * Allow
-		 * Supported
-		 * (later support also: Accept, Expires)
-		 */
-
+		List<Header> additionalHeaders = new ArrayList<>();
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create the contact URI for {} at {}." +
 					"[username] must be a valid id, [localIp] must be a valid " +
-					"IP address: {}", username, localIp, parseException.getMessage());
+					"IP address.", username, localIp, parseException);
 			//No need for caller to wait for remote responses.
 			return false;
 		}
@@ -277,13 +266,26 @@ public class UserAgentClient {
 		try {
 			contactHeader.setExpires(60);
 		} catch (InvalidArgumentException ignore) {}
-		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
-
-		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
-				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
-
-		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost,
-				requestUri, callIdHeader, cseq, additionalHeaders);
+		additionalHeaders.add(contactHeader);
+		try {
+			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
+			additionalHeaders.add(expiresHeader);
+		} catch (InvalidArgumentException ignore) {}
+		RequestMethod acceptedMethods[] = {
+				RequestMethod.CANCEL,
+				RequestMethod.OPTIONS,
+				RequestMethod.INVITE,
+				RequestMethod.ACK,
+				RequestMethod.BYE
+		};
+		for (RequestMethod method : acceptedMethods) {
+			try {
+				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+				additionalHeaders.add(allowHeader);
+			} catch (ParseException ignore) {}
+		}
+		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost, dialoglessRequestUri,
+				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser,
@@ -383,7 +385,6 @@ public class UserAgentClient {
 			canonRouteSet.addAll(configuredRouteSet);
 		}
 		List<Address> normalizedRouteSet = new LinkedList<>();
-
 		if (!canonRouteSet.isEmpty()) {
 			if (((SipURI)canonRouteSet.get(0).getURI()).hasLrParam()) {
 				requestUri = remoteTargetUri;
@@ -1312,6 +1313,33 @@ public class UserAgentClient {
 		}
 	}
 
+	private void handleOptionsResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
+		Request request = clientTransaction.getRequest();
+		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
+		Dialog dialog = clientTransaction.getDialog();
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			SessionDescription responseSdp = null;
+			if (response.getContent() != null) {
+				try {
+					responseSdp = SdpFactory.getInstance()
+							.createSessionDescriptionFromString(new String(response.getRawContent()));
+				} catch (SdpParseException ignore) {}
+			}
+			if (request.getContent() != null && responseSdp != null) {
+				bus.post(new QueryingOptionsSuccess(callId, dialog, responseSdp));
+			} else if (request.getContent() == null && responseSdp != null) {
+				bus.post(new QueryingOptionsSuccess(callId, dialog, responseSdp));
+			} else if (request.getContent() == null && responseSdp == null) {
+				bus.post(new QueryingOptionsSuccess(callId, dialog, null));
+			} else {
+				bus.post(new QueryingOptionsFailed(String
+						.format("Could not find session offer within the %s response.",
+								response.getStatusCode()), callId));
+			}
+		}
+	}
+
 	private void handleInviteResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		Request request = clientTransaction.getRequest();
@@ -1327,9 +1355,12 @@ public class UserAgentClient {
 							callId, request, response, ackRequest)) {
 						sendByeRightAway = true;
 					}
+					logger.info("Sending {} to {} response to {} request...",
+							RequestMethod.ACK, response.getStatusCode(), request.getMethod());
+					logger.debug("Request Dump:\n{}\n", ackRequest);
 					dialog.sendAck(ackRequest);
-					logger.info("{} response to INVITE arrived, so {} sent.", statusCode,
-							RequestMethod.ACK);
+					logger.info("{} response to {} arrived, so {} sent.", statusCode,
+							RequestMethod.INVITE, RequestMethod.ACK);
 					logger.info("New call established: {}.", callId);
 					if (sendByeRightAway) {
 						sendByeRequest(dialog);
@@ -1488,6 +1519,12 @@ public class UserAgentClient {
 		CSeqHeader cseq = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
 		try {
 			long newCSeq = cseq.getSeqNumber() + 1;
+			if (request.getMethod().equals(RequestMethod.REGISTER.toString())) {
+				synchronized (registerCSeqs) {
+					newCSeq = registerCSeqs.get(registerRequestUri);
+					registerCSeqs.put(registerRequestUri, newCSeq + 1);
+				}
+			}
 			cseq.setSeqNumber(newCSeq);
 			if (localCSeq < newCSeq) {
 				localCSeq = newCSeq;
@@ -1576,6 +1613,7 @@ public class UserAgentClient {
 		if (dialog != null) {
 			try {
 				logger.info("Sending {} request...", request.getMethod());
+				logger.debug("Request Dump:\n{}\n", request);
 				dialog.sendRequest(newClientTransaction);
 				//Caller must expect remote responses.
 				return true;
@@ -1591,6 +1629,7 @@ public class UserAgentClient {
 		}
 		else {
 			logger.info("Sending {} request...", request.getMethod());
+			logger.debug("Request Dump:\n{}\n", request);
 			newClientTransaction.sendRequest();
 			//Caller must expect remote responses.
 			return true;
