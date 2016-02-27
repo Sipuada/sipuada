@@ -1,9 +1,12 @@
 package org.github.sipuada;
 
-import java.io.IOException;
-import java.net.Socket;
-import java.net.UnknownHostException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -277,7 +280,7 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	private boolean wipeAddresses(final RegistrationCallback callback) {
-		return fetchBestAgent(defaultTransport).sendUnregisterRequest(callback);
+		return chooseBestAgentThatIsAvailable().sendUnregisterRequest(callback);
 	}
 
 	@Subscribe
@@ -347,7 +350,7 @@ public class Sipuada implements SipuadaApi {
 				}
 			}
 		}
-		boolean couldDispatchOperation = fetchBestAgent(defaultTransport)
+		boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
 				.sendRegisterRequest(new RegistrationCallback() {
 
 			@Override
@@ -407,7 +410,7 @@ public class Sipuada implements SipuadaApi {
 			logger.debug("{}:{}/{} registration will be left untouched.", listeningPoint.getIPAddress(),
 					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
 		}
-		boolean couldDispatchOperation = fetchBestAgent(defaultTransport)
+		boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
 				.sendRegisterRequest(new RegistrationCallback() {
 
 			@Override
@@ -730,7 +733,20 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	private UserAgent chooseBestAgentThatWontBeRemoved(List<ListeningPoint> expiredListeningPoints) {
-		UserAgent originalBestUserAgent = fetchBestAgent(defaultTransport);
+		return chooseBestAgentThatWontBeRemoved(true, expiredListeningPoints);
+	}
+
+	private UserAgent chooseBestAgentThatWontBeRemoved(boolean justStartedChoosing,
+			List<ListeningPoint> expiredListeningPoints) {
+		UserAgent originalBestUserAgent = null;
+		try{
+			originalBestUserAgent = fetchBestAgent(defaultTransport);
+		} catch (SipuadaException noUserAgentAvailable) {
+			if (justStartedChoosing) {
+				throw noUserAgentAvailable;
+			}
+			return originalBestUserAgent;
+		}
 		boolean originalUserAgentWillBeRemoved = false;
 		for (ListeningPoint listeningPoint : expiredListeningPoints) {
 			if (listeningPoint.getIPAddress().equals(originalBestUserAgent.getLocalIp())
@@ -740,8 +756,9 @@ public class Sipuada implements SipuadaApi {
 				originalUserAgentWillBeRemoved = true;
 			}
 		}
+		boolean originalUserAgentIsUnavailable = !checkUserAgentAvailability(originalBestUserAgent);
 		UserAgent nextBestUserAgent = null;
-		if (originalUserAgentWillBeRemoved) {
+		if (originalUserAgentWillBeRemoved || originalUserAgentIsUnavailable) {
 			String rawTransport = originalBestUserAgent.getTransport();
 			Transport transport = Transport.UNKNOWN;
 			try {
@@ -749,9 +766,9 @@ public class Sipuada implements SipuadaApi {
 			} catch (IllegalArgumentException ignore) {}
 			Set<UserAgent> userAgents = transportToUserAgents.get(transport);
 			userAgents.remove(originalBestUserAgent);
-			nextBestUserAgent = chooseBestAgentThatWontBeRemoved(expiredListeningPoints);
+			nextBestUserAgent = chooseBestAgentThatWontBeRemoved(false, expiredListeningPoints);
 			userAgents.add(originalBestUserAgent);
-			return nextBestUserAgent;
+			return nextBestUserAgent != null ? nextBestUserAgent : originalBestUserAgent;
 		}
 		return originalBestUserAgent;
 	}
@@ -822,7 +839,6 @@ public class Sipuada implements SipuadaApi {
 			return originalBestUserAgent;
 		}
 		boolean originalUserAgentIsUnavailable = !checkUserAgentAvailability(originalBestUserAgent);
-		logger.info(originalUserAgentIsUnavailable ? "UNAVAILABLE!" : "AVAILABLE!");
 		UserAgent nextBestUserAgent = null;
 		if (originalUserAgentIsUnavailable) {
 			String rawTransport = originalBestUserAgent.getTransport();
@@ -839,38 +855,31 @@ public class Sipuada implements SipuadaApi {
 		return originalBestUserAgent;
 	}
 
-	private boolean checkUserAgentAvailability(UserAgent userAgent) {
-		String addressIp = userAgent.getLocalIp();
-		int addressPort = userAgent.getLocalPort();
+	public boolean checkUserAgentAvailability(UserAgent userAgent) {
+		String userAgentAddressIp = userAgent.getLocalIp();
 		try {
-			logger.info("Checking UserAgent availability: ({}:{})?", addressIp, addressPort);
-			new Socket(addressIp, addressPort).close();
-			return true;
-//			return InetAddress.getByName(String
-//					.format("%s:%d", addressIp, addressPort)).isReachable(500);
-		} catch (UnknownHostException unknownHost) {
-		} catch (IOException hostUnreachable) {}
+			Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+			if (interfaces == null) {
+				return false;
+			}
+			while (interfaces.hasMoreElements()) {
+				NetworkInterface networkInterface = interfaces.nextElement();
+				if (networkInterface.isUp() && !networkInterface.isLoopback()) {
+					List<InterfaceAddress> addresses = networkInterface.getInterfaceAddresses();
+					Iterator<InterfaceAddress> iterator = addresses.iterator();
+					while (iterator.hasNext()) {
+						InterfaceAddress interfaceAddress = iterator.next();
+						InetAddress inetAddress = interfaceAddress.getAddress();
+						if (inetAddress instanceof Inet4Address) {
+							if (inetAddress.getHostAddress().equals(userAgentAddressIp)) {
+								return true;
+							}
+						}
+					}
+				}
+			}
+		} catch (SocketException ioException) {}
 		return false;
-	}
-
-	@Override
-	public boolean cancelCallInvitation(String callId) {
-		return callIdToActiveUserAgent.get(callId).cancelInviteRequest(callId);
-	}
-
-	@Override
-	public boolean acceptCallInvitation(String callId) {
-		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, true);
-	}
-
-	@Override
-	public boolean declineCallInvitation(String callId) {
-		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, false);
-	}
-
-	@Override
-	public boolean finishCall(String callId) {
-		return callIdToActiveUserAgent.get(callId).finishCall(callId);
 	}
 
 	private UserAgent fetchBestAgent(String rawTransport) {
@@ -921,6 +930,26 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
+	public boolean cancelCallInvitation(String callId) {
+		return callIdToActiveUserAgent.get(callId).cancelInviteRequest(callId);
+	}
+
+	@Override
+	public boolean acceptCallInvitation(String callId) {
+		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, true);
+	}
+
+	@Override
+	public boolean declineCallInvitation(String callId) {
+		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, false);
+	}
+
+	@Override
+	public boolean finishCall(String callId) {
+		return callIdToActiveUserAgent.get(callId).finishCall(callId);
+	}
+
+	@Override
 	public boolean registerPlugin(SipuadaPlugin plugin) {
 		if (registeredPlugins.containsKey(RequestMethod.INVITE)) {
 			return false;
@@ -930,6 +959,7 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	public void destroySipuada() {
+		eventBus.unregister(this);
 		Set<Transport> transports = transportToUserAgents.keySet();
 		synchronized (transports) {
 			for (Transport transport : transports) {
@@ -954,7 +984,6 @@ public class Sipuada implements SipuadaApi {
 			registerOperationsInProgress.put(RequestMethod.REGISTER, false);
 			postponedRegisterOperations.clear();
 		}
-		eventBus.unregister(this);
 	}
 
 }
