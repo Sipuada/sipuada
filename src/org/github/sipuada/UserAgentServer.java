@@ -126,20 +126,20 @@ public class UserAgentServer {
 			logger.warn("{} request is not allowed.", method);
 			//TODO add Allow header with supported methods.
 			List<Header> allowedMethods = new LinkedList<>();
-			try {
-				AllowHeader allowHeader = headerMaker
-						.createAllowHeader(RequestMethod.CANCEL.toString());
-				allowedMethods.add(allowHeader);
-				allowHeader = headerMaker
-						.createAllowHeader(RequestMethod.OPTIONS.toString());
-				allowedMethods.add(allowHeader);
-				allowHeader = headerMaker
-						.createAllowHeader(RequestMethod.INVITE.toString());
-				allowedMethods.add(allowHeader);
-				allowHeader = headerMaker
-						.createAllowHeader(RequestMethod.BYE.toString());
-				allowedMethods.add(allowHeader);
-			} catch (ParseException ignore) {}
+			RequestMethod acceptedMethods[] = {
+					RequestMethod.CANCEL,
+					RequestMethod.OPTIONS,
+					RequestMethod.INVITE,
+					RequestMethod.ACK,
+					RequestMethod.BYE
+			};
+			for (RequestMethod acceptedMethod : acceptedMethods) {
+				try {
+					AllowHeader allowHeader = headerMaker
+							.createAllowHeader(acceptedMethod.toString());
+					allowedMethods.add(allowHeader);
+				} catch (ParseException ignore) {}
+			}
 			if (doSendResponse(Response.METHOD_NOT_ALLOWED, method,
 					request, serverTransaction, allowedMethods
 					.toArray(new Header[allowedMethods.size()])) != null) {
@@ -171,7 +171,7 @@ public class UserAgentServer {
 				return true;
 			}
 	}
-	
+
 	private boolean requestShouldBeAddressed(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
@@ -258,8 +258,22 @@ public class UserAgentServer {
 		//when appropriate, by using identifiers within the SDP session description.
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
-		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING,
-				RequestMethod.INVITE, request, serverTransaction);
+		List<Header> additionalHeaders = new ArrayList<>();
+		RequestMethod acceptedMethods[] = {
+				RequestMethod.CANCEL,
+				RequestMethod.OPTIONS,
+				RequestMethod.INVITE,
+				RequestMethod.ACK,
+				RequestMethod.BYE
+		};
+		for (RequestMethod method : acceptedMethods) {
+			try {
+				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+				additionalHeaders.add(allowHeader);
+			} catch (ParseException ignore) {}
+		}
+		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING, RequestMethod.INVITE,
+				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 		if (newServerTransaction != null) {
 			bus.post(new CallInvitationArrived(callId, newServerTransaction));
 			RequestMethod method = RequestMethod.INVITE;
@@ -308,6 +322,7 @@ public class UserAgentServer {
 
 	public boolean sendAcceptResponse(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
+		List<Header> additionalHeaders = new ArrayList<>();
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
@@ -324,12 +339,23 @@ public class UserAgentServer {
 		try {
 			contactHeader.setExpires(60);
 		} catch (InvalidArgumentException ignore) {}
-		//TODO later, allow for multiple contact headers here too (the ones REGISTERed).
-
-		Header[] additionalHeaders = ((List<ContactHeader>)(Collections
-				.singletonList(contactHeader))).toArray(new ContactHeader[1]);
-		if (doSendResponse(Response.OK, method, request,
-				serverTransaction, additionalHeaders) != null) {
+		additionalHeaders.add(contactHeader);
+		RequestMethod acceptedMethods[] = {
+				RequestMethod.CANCEL,
+				RequestMethod.OPTIONS,
+				RequestMethod.INVITE,
+				RequestMethod.ACK,
+				RequestMethod.BYE
+		};
+		for (RequestMethod acceptedMethod : acceptedMethods) {
+			try {
+				AllowHeader allowHeader = headerMaker
+						.createAllowHeader(acceptedMethod.toString());
+				additionalHeaders.add(allowHeader);
+			} catch (ParseException ignore) {}
+		}
+		if (doSendResponse(Response.OK, method, request, serverTransaction,
+				additionalHeaders.toArray(new Header[additionalHeaders.size()])) != null) {
 			return true;
 		}
 		return false;
@@ -400,6 +426,7 @@ public class UserAgentServer {
 				}
 			}
 			logger.info("Sending {} response to {} request...", statusCode, method);
+			logger.debug("Response Dump:\n{}\n", response);
 			newServerTransaction.sendResponse(response);
 			logger.info("{} response sent.", statusCode);
 			return newServerTransaction;
