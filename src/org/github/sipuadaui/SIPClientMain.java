@@ -66,10 +66,10 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	private void setDefautValues() {
-		registrarDomainTextField.setText("192.168.130.207:5060");
+		registrarDomainTextField.setText("192.168.25.217:5060");
 		registrarUserNameTextField.setText("renan");
 		passwordField.setText("renan");
-		callerDomainTextField.setText("192.168.130.207:5060");
+		callerDomainTextField.setText("192.168.25.217:5060");
 	}
 
 	private void setUPCallButton(final JButton callButton) {
@@ -155,14 +155,6 @@ public class SIPClientMain implements SipuadaListener {
 								optionsButton.setEnabled(true);
 							}
 
-							@Override
-							public void onOptionsQueryingArrived(String callId) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - " + " Ringing ...");
-								currentCallID = callId;
-								optionsButton.setEnabled(true);
-							}
 						});
 			}
 		});
@@ -190,7 +182,7 @@ public class SIPClientMain implements SipuadaListener {
 				sipuada = new Sipuada(SIPClientMain.this,
 						registrarUserNameTextField.getText(),
 						registrarDomainTextField.getText(), passwordField
-								.getText(), "192.168.25.217:55001/TCP");
+								.getText(), "192.168.25.217:55002/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
