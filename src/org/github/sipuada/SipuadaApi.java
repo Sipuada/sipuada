@@ -34,6 +34,8 @@ public interface SipuadaApi {
 
 	boolean includeAddresses(RegistrationCallback callback, String... localAddresses);
 
+	boolean excludeAddresses(RegistrationCallback callback, String... localAddresses);
+
 	boolean overwriteAddresses(RegistrationCallback callback, String... localAddresses);
 
 	public interface CallInvitationCallback {
