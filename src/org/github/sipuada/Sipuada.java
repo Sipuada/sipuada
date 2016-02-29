@@ -24,6 +24,7 @@ import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.Sipuada.RegisterOperation.OperationMethod;
 import org.github.sipuada.SipuadaApi.SendingInformationCallback;
+import org.github.sipuada.SipuadaApi.SendingMessageCallback;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;
@@ -940,9 +941,7 @@ public class Sipuada implements SipuadaApi {
 	@Override
 	public boolean sendMessage(String remoteUser, String remoteDomain, String content,
 			ContentTypeHeader contentTypeHeader, SendingMessageCallback callback) {
-		
-		// TODO Auto-generated method stub
-		return false;
+		return chooseBestAgentThatIsAvailable().sendMessageRequest(remoteUser, remoteDomain, content, contentTypeHeader, callback);
 	}
 	
 	@Override

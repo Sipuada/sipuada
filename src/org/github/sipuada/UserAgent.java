@@ -388,6 +388,38 @@ public class UserAgent implements SipListener {
 		return true;
 	}
 	
+	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content, ContentTypeHeader contentTypeHeader, final SendingMessageCallback callback) {
+		CallIdHeader callIdHeader = provider.getNewCallId();
+		final String callId = callIdHeader.getCallId();
+		logger.debug("UserAgent - sendOptionsRequest - callId:" + callId);
+		final String eventBusSubscriberId = Utils.getInstance().generateTag();
+		Object eventBusSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(SendingMessageSuccess event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onSendingMessageSuccess(callId, event.getContent(), event.getContentTypeHeader());
+				}
+			}
+
+			@Subscribe
+			public void onEvent(SendingMessageFailed event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onSendingMessageFailed(event.getReason());
+				}
+			}
+
+		};
+		internalEventBus.register(eventBusSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
+		boolean expectRemoteAnswer = uac.sendMessageRequest(remoteUser, remoteDomain, content, contentTypeHeader, true);
+		if (!expectRemoteAnswer) {
+			logger.error("MESSAGE request not sent.");
+			internalEventBus.unregister(eventBusSubscriber);
+		}
+		return true;
+	}
+	
 	public boolean sendMessageRequest(final String callId, String content, ContentTypeHeader contentTypeHeader,
 			final SendingMessageCallback callback) {
 		
@@ -433,7 +465,7 @@ public class UserAgent implements SipListener {
 						Dialog dialog = iterator.next();
 						if (dialog.getCallId().getCallId().equals(callId)) {
 							iterator.remove();
-							return uac.sendInfoRequest(dialog, content, contentTypeHeader);
+							return uac.sendMessageRequest(dialog, content, contentTypeHeader);
 						}
 					}
 				} finally {

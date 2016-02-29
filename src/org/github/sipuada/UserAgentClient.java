@@ -292,6 +292,16 @@ public class UserAgentClient {
 				callIdHeader, cseq, null, null, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 	
+	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content,
+			ContentTypeHeader contentTypeHeader, boolean b) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+	
+	public boolean sendMessageRequest(Dialog dialog, String content, ContentTypeHeader contentTypeHeader) {
+		return sendRequest(RequestMethod.MESSAGE, dialog, content, contentTypeHeader);
+	}
+	
 	public boolean sendInfoRequest(Dialog dialog, String content, ContentTypeHeader contentTypeHeader) {
 		return sendRequest(RequestMethod.INFO, dialog, content, contentTypeHeader);
 	}
@@ -1761,6 +1771,5 @@ public class UserAgentClient {
 		//ProxyAuthorization header could be added.
 		return true;
 	}
-
 
 }
