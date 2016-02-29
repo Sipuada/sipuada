@@ -6,7 +6,7 @@ import org.github.sipuada.plugins.SipuadaPlugin;
 
 public interface SipuadaApi {
 
-	public interface SipuadaListener {
+	interface SipuadaListener {
 
 		boolean onCallInvitationArrived(String callId);
 
@@ -22,7 +22,7 @@ public interface SipuadaApi {
 
 	}
 
-	public interface RegistrationCallback {
+	interface RegistrationCallback {
 
 		void onRegistrationSuccess(List<String> registeredContacts);
 
@@ -38,7 +38,7 @@ public interface SipuadaApi {
 
 	boolean overwriteAddresses(RegistrationCallback callback, String... localAddresses);
 
-	public interface CallInvitationCallback {
+	interface CallInvitationCallback {
 
 		void onWaitingForCallInvitationAnswer(String callId);
 
