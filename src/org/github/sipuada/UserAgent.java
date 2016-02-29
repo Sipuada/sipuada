@@ -14,6 +14,8 @@ import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.OptionsQueryingCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
+import org.github.sipuada.SipuadaApi.SendingInformationCallback;
+import org.github.sipuada.SipuadaApi.SendingMessageCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.events.CallInvitationAccepted;
 import org.github.sipuada.events.CallInvitationArrived;
@@ -28,6 +30,10 @@ import org.github.sipuada.events.QueryingOptionsFailed;
 import org.github.sipuada.events.QueryingOptionsSuccess;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.events.SendingInformationFailed;
+import org.github.sipuada.events.SendingInformationSuccess;
+import org.github.sipuada.events.SendingMessageFailed;
+import org.github.sipuada.events.SendingMessageSuccess;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -55,6 +61,7 @@ import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.address.AddressFactory;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.CallIdHeader;
+import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
@@ -380,6 +387,127 @@ public class UserAgent implements SipListener {
 		}
 		return true;
 	}
+	
+	public boolean sendMessageRequest(final String callId, String content, ContentTypeHeader contentTypeHeader,
+			final SendingMessageCallback callback) {
+		
+		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot send info.\nEstablished call with callId " +
+					"'{}' not found.", callId);
+			return false;
+		}
+		
+		final String eventBusSubscriberInfoId = Utils.getInstance().generateTag();
+		Object eventBusInfoSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(SendingMessageSuccess event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onSendingMessageSuccess(callId, event.getContent(), event.getContentTypeHeader());
+				}
+			}
+
+			@Subscribe
+			public void onEvent(SendingMessageFailed event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onSendingMessageFailed(event.getReason());
+				}
+			}
+
+		};
+		internalEventBus.register(eventBusInfoSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberInfoId, eventBusInfoSubscriber);
+				
+		synchronized (establishedCalls) {
+			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+			if (calls == null) {
+				logger.error("Cannot send info.\nEstablished call with callId " +
+						"'{}' not found.", callId);
+				return false;
+			}
+			synchronized (calls) {
+				Iterator<Dialog> iterator = calls.iterator();
+				try {
+					while (iterator.hasNext()) {
+						Dialog dialog = iterator.next();
+						if (dialog.getCallId().getCallId().equals(callId)) {
+							iterator.remove();
+							return uac.sendInfoRequest(dialog, content, contentTypeHeader);
+						}
+					}
+				} finally {
+					if (calls.isEmpty()) {
+						establishedCalls.remove(eventBusSubscriberId);
+					}
+				}
+			}
+		}
+		logger.error("Cannot send info.\nEstablished call with callId " +
+				"'{}' not found.", callId);
+		return false;
+	}
+	
+	public boolean sendInfoRequest(final String callId, String content, ContentTypeHeader contentTypeHeader, final SendingInformationCallback callback) {
+		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot send info.\nEstablished call with callId " +
+					"'{}' not found.", callId);
+			return false;
+		}
+		
+		final String eventBusSubscriberInfoId = Utils.getInstance().generateTag();
+		Object eventBusInfoSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(SendingInformationSuccess event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onSendingInformationSuccess(callId, event.getContent(), event.getContentTypeHeader());
+				}
+			}
+
+			@Subscribe
+			public void onEvent(SendingInformationFailed event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onSendingInformationFailed(event.getReason());
+				}
+			}
+
+		};
+		internalEventBus.register(eventBusInfoSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberInfoId, eventBusInfoSubscriber);
+				
+		synchronized (establishedCalls) {
+			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+			if (calls == null) {
+				logger.error("Cannot send info.\nEstablished call with callId " +
+						"'{}' not found.", callId);
+				return false;
+			}
+			synchronized (calls) {
+				Iterator<Dialog> iterator = calls.iterator();
+				try {
+					while (iterator.hasNext()) {
+						Dialog dialog = iterator.next();
+						if (dialog.getCallId().getCallId().equals(callId)) {
+							iterator.remove();
+							return uac.sendInfoRequest(dialog, content, contentTypeHeader);
+						}
+					}
+				} finally {
+					if (calls.isEmpty()) {
+						establishedCalls.remove(eventBusSubscriberId);
+					}
+				}
+			}
+		}
+		logger.error("Cannot send info.\nEstablished call with callId " +
+				"'{}' not found.", callId);
+		return false;
+	}
+	
+	
+	
 
 	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
 			final CallInvitationCallback callback) {

@@ -23,6 +23,7 @@ import java.util.TimerTask;
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.Sipuada.RegisterOperation.OperationMethod;
+import org.github.sipuada.SipuadaApi.SendingInformationCallback;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;
@@ -45,6 +46,7 @@ import android.javax.sip.SipStack;
 import android.javax.sip.TransportNotSupportedException;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.CallIdHeader;
+import android.javax.sip.header.ContentTypeHeader;
 
 public class Sipuada implements SipuadaApi {
 
@@ -933,6 +935,25 @@ public class Sipuada implements SipuadaApi {
 	public boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback) {
 		return chooseBestAgentThatIsAvailable().sendOptionsRequest(remoteUser,
 				remoteDomain, callback);
+	}
+	
+	@Override
+	public boolean sendMessage(String remoteUser, String remoteDomain, String content,
+			ContentTypeHeader contentTypeHeader, SendingMessageCallback callback) {
+		
+		// TODO Auto-generated method stub
+		return false;
+	}
+	
+	@Override
+	public boolean sendMessage(String callId, String content, ContentTypeHeader contentTypeHeader,
+			SendingMessageCallback callback) {
+		return chooseBestAgentThatIsAvailable().sendMessageRequest(callId, content, contentTypeHeader, callback);
+	}
+	
+	@Override
+	public boolean sendInfo(String callId, String content, ContentTypeHeader contentTypeHeader, SendingInformationCallback callback) {
+		return chooseBestAgentThatIsAvailable().sendInfoRequest(callId, content, contentTypeHeader, callback);
 	}
 
 	@Override

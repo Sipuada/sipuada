@@ -181,7 +181,7 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
-				registerRequestUri, callIdHeader, cseq, contactHeaders
+				registerRequestUri, callIdHeader, cseq, null, null, contactHeaders
 				.toArray(new ContactHeader[contactHeaders.size()]));
 	}
 
@@ -227,7 +227,7 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
-				registerRequestUri, callIdHeader, cseq, additionalHeaders
+				registerRequestUri, callIdHeader, cseq, null, null, additionalHeaders
 				.toArray(new Header[additionalHeaders.size()]));
 	}
 
@@ -289,7 +289,11 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.OPTIONS, remoteUser, remoteHost, requestUri,
-				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+				callIdHeader, cseq, null, null, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+	}
+	
+	public boolean sendInfoRequest(Dialog dialog, String content, ContentTypeHeader contentTypeHeader) {
+		return sendRequest(RequestMethod.INFO, dialog, content, contentTypeHeader);
 	}
 
 	public boolean sendInviteRequest(String remoteUser, String remoteHost,
@@ -342,17 +346,17 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost, requestUri,
-				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+				callIdHeader, cseq, null, null, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
 	private boolean sendRequest(RequestMethod method, String remoteUser,
 			String remoteHost, URI requestUri, CallIdHeader callIdHeader, long cseq,
-			Header... additionalHeaders) {
+			String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
 		try {
 			URI addresserUri = addressMaker.createSipURI(username, primaryHost);
 			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteHost);
 			return sendRequest(method, requestUri, addresserUri, addresseeUri, null,
-					callIdHeader, cseq, additionalHeaders);
+					callIdHeader, cseq, content, contentTypeHeader, additionalHeaders);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create addresser and addressee URIs for " +
 					"this {} request from {} at {} to {} at {}." +
@@ -378,15 +382,15 @@ public class UserAgentClient {
 		//TODO finally, also make sure this RE-INVITE is handled properly in the case
 		//a 491 response is received (given that the transaction layer doesn't already
 		//do this transparently for us, that is).
-		return sendRequest(RequestMethod.INVITE, dialog);
+		return sendRequest(RequestMethod.INVITE, dialog, null, null);
 	}
 
 	public boolean sendByeRequest(Dialog dialog) {
-		return sendRequest(RequestMethod.BYE, dialog);
+		return sendRequest(RequestMethod.BYE, dialog, null, null);
 	}
 
 	private boolean sendRequest(RequestMethod method, Dialog dialog,
-			Header... additionalHeaders) {
+			String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders ) {
 		URI addresserUri = dialog.getLocalParty().getURI();
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
@@ -399,12 +403,12 @@ public class UserAgentClient {
 			localCSeq = cseq;
 		}
 		return sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
-				callIdHeader, cseq, additionalHeaders);
+				callIdHeader, cseq, content, contentTypeHeader, additionalHeaders);
 	}
 
 	private boolean sendRequest(final RequestMethod method, URI requestUri,
 			URI addresserUri, URI addresseeUri, final Dialog dialog,
-			final CallIdHeader callIdHeader, long cseq, Header... additionalHeaders) {
+			final CallIdHeader callIdHeader, long cseq, String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
 				|| method == RequestMethod.UNKNOWN) {
 			//This method is meant for the INVITE request and
@@ -480,6 +484,12 @@ public class UserAgentClient {
 			else {
 				request.removeHeader(RouteHeader.NAME);
 			}
+			
+			if(method.toString().equals(RequestMethod.INFO)) {
+				request.setContent(content, contentTypeHeader);
+				logger.debug("Setting up the {} request content.", method);
+			}
+			
 			for (int i=0; i<additionalHeaders.length; i++) {
 				request.addHeader(additionalHeaders[i]);
 			}
@@ -1751,5 +1761,6 @@ public class UserAgentClient {
 		//ProxyAuthorization header could be added.
 		return true;
 	}
+
 
 }

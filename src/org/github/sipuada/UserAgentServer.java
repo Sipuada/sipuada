@@ -13,6 +13,10 @@ import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.QueryingOptionsFailed;
+import org.github.sipuada.events.SendingInformationFailed;
+import org.github.sipuada.events.SendingInformationSuccess;
+import org.github.sipuada.events.SendingMessageFailed;
+import org.github.sipuada.events.SendingMessageSuccess;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -23,6 +27,7 @@ import com.google.common.eventbus.EventBus;
 import android.javax.sdp.SdpFactory;
 import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
+import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
@@ -38,6 +43,7 @@ import android.javax.sip.address.URI;
 import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
+import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ToHeader;
@@ -99,8 +105,14 @@ public class UserAgentServer {
 					case OPTIONS:
 						handleOptionsRequest(request, serverTransaction);
 						break;
+					case MESSAGE:
+						handleMessageRequest(request, serverTransaction);
+						break;
 					case INVITE:
 						handleInviteRequest(request, serverTransaction);
+						break;
+					case INFO:
+						handleInfoRequest(request, serverTransaction);
 						break;
 					case ACK:
 						handleAckRequest(request, serverTransaction);
@@ -119,6 +131,27 @@ public class UserAgentServer {
 			//TODO do something about this problem, what?
 			logger.error("{} request could not be addressed.", method);
 		}
+	}
+	
+
+	private void handleInfoRequest(Request request, ServerTransaction serverTransaction) {
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		ServerTransaction newServerTransaction = doSendResponse(Response.OK,
+				RequestMethod.INFO, request, serverTransaction);
+		
+		if (newServerTransaction != null) {
+			try {
+				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
+				bus.post(new SendingInformationSuccess(callId, serverTransaction.getDialog(), (String) request.getContent(), contentTypeHeader));
+			} catch (Exception e) {
+				logger.error("Unable to parse Content-Type header");
+			}
+			return;
+		} else {
+			bus.post(new SendingInformationFailed("Unable to retrieve content and Content-Type", callId));
+		}
+		throw new RequestCouldNotBeAddressed();
 	}
 
 	private boolean tryHandlingRequestGenerically(RequestMethod method, Request request,
@@ -264,6 +297,51 @@ public class UserAgentServer {
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
+	}
+	
+	private void handleMessageRequest(Request request, ServerTransaction serverTransaction) {
+		boolean withinDialog = serverTransaction != null;
+		if (withinDialog) {
+			handleReSendMessageRequest(request, serverTransaction);
+			return;
+		}
+		//TODO also consider supporting multicast conferences, by sending silent 2xx responses
+		//when appropriate, by using identifiers within the SDP session description.
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		List<Header> additionalHeaders = new ArrayList<>();
+		RequestMethod acceptedMethods[] = {
+				RequestMethod.CANCEL,
+				RequestMethod.OPTIONS,
+				RequestMethod.INVITE,
+				RequestMethod.ACK,
+				RequestMethod.BYE
+		};
+		for (RequestMethod method : acceptedMethods) {
+			try {
+				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+				additionalHeaders.add(allowHeader);
+			} catch (ParseException ignore) {}
+		}
+		ServerTransaction newServerTransaction = doSendResponse(Response.OK, RequestMethod.MESSAGE,
+				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+		if (newServerTransaction != null) {
+			try {
+				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
+				bus.post(new SendingMessageSuccess(callId, serverTransaction.getDialog(), (String) request.getContent(), contentTypeHeader));
+			} catch (Exception e) {
+				logger.error("Unable to parse Content-Type header");
+			}
+			return;
+		} else {
+			bus.post(new SendingMessageFailed("Unable to retrieve content and Content-Type", callId));
+		}
+		throw new RequestCouldNotBeAddressed();
+	}
+
+	private void handleReSendMessageRequest(Request request, ServerTransaction serverTransaction) {
+		// TODO Auto-generated method stub
+		
 	}
 
 	private void handleInviteRequest(Request request, ServerTransaction serverTransaction) {

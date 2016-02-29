@@ -5,6 +5,7 @@ import java.util.List;
 import org.github.sipuada.plugins.SipuadaPlugin;
 
 import android.javax.sdp.SessionDescription;
+import android.javax.sip.header.ContentTypeHeader;
 
 public interface SipuadaApi {
 
@@ -49,6 +50,27 @@ public interface SipuadaApi {
 	}
 
 	boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback);
+	
+	public interface SendingMessageCallback {
+
+		void onSendingMessageSuccess(String callId, String content, ContentTypeHeader contentTypeHeader);
+
+		void onSendingMessageFailed(String reason);
+
+	}
+	
+	boolean sendMessage(String remoteUser, String remoteDomain, String content, ContentTypeHeader contentTypeHeader, SendingMessageCallback callback);
+	boolean sendMessage(String callId, String content, ContentTypeHeader contentTypeHeader, SendingMessageCallback callback);
+	
+	public interface SendingInformationCallback {
+
+		void onSendingInformationSuccess(String callId, String content, ContentTypeHeader contentTypeHeader);
+
+		void onSendingInformationFailed(String reason);
+
+	}
+	
+	boolean sendInfo(String callId, String content, ContentTypeHeader contentTypeHeader, SendingInformationCallback callback);
 
 	interface CallInvitationCallback {
 
