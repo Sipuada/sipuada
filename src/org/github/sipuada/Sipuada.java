@@ -412,10 +412,10 @@ public class Sipuada implements SipuadaApi {
 		}
 		final List<ListeningPoint> expired = new LinkedList<>();
 		final List<ListeningPoint> renewed = new LinkedList<>();
-		final List<ListeningPoint> newest = new LinkedList<>();
+		final List<ListeningPoint> brandNew = new LinkedList<>();
 		Map<ListeningPoint, SipStack> listeningPointToStack = new HashMap<>();
-		categorizeAddresses(expired, renewed, newest, listeningPointToStack, localAddresses);
-		performUserAgentsCreation(newest, listeningPointToStack);
+		categorizeAddresses(expired, renewed, brandNew, listeningPointToStack, localAddresses);
+		performUserAgentsCreation(brandNew, listeningPointToStack);
 		List<String> registeredAddresses = new LinkedList<>();
 		for (ListeningPoint listeningPoint : renewed) {
 			logger.debug("{}:{}/{} registration will be renewed.", listeningPoint.getIPAddress(),
@@ -423,7 +423,7 @@ public class Sipuada implements SipuadaApi {
 			registeredAddresses.add(String.format("%s:%d",
 					listeningPoint.getIPAddress(), listeningPoint.getPort()));
 		}
-		for (ListeningPoint listeningPoint : newest) {
+		for (ListeningPoint listeningPoint : brandNew) {
 			logger.debug("{}:{}/{} registration will be included.", listeningPoint.getIPAddress(),
 					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
 			registeredAddresses.add(String.format("%s:%d",
@@ -449,6 +449,77 @@ public class Sipuada implements SipuadaApi {
 			}
 
 		}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+		if (couldDispatchOperation) {
+			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
+		}
+		return couldDispatchOperation;
+	}
+
+	@Override
+	public boolean excludeAddresses(final RegistrationCallback callback,
+			String... localAddresses) {
+		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.INCLUDE_ADDRESSES,
+					callback, localAddresses));
+			logger.info("Exclude addresses: operation postponed because another " +
+					"related operation is in progress.");
+			return true;
+		}
+		final List<ListeningPoint> mantained = new LinkedList<>();
+		final List<ListeningPoint> expired = new LinkedList<>();
+		final List<ListeningPoint> brandNew = new LinkedList<>();
+		Map<ListeningPoint, SipStack> listeningPointToStack = new HashMap<>();
+		categorizeAddresses(mantained, expired, brandNew, listeningPointToStack, localAddresses);
+		try {
+			if (preventActiveUserAgentsRemoval(mantained)) {
+				return false;
+			} else {
+				if (mantained.isEmpty()) {
+					logger.error("Exclude addresses: operation invalid as you're not supposed to " +
+							"exclude all local addresses at once.");
+					return false;
+				}
+			}
+		} finally {
+			for (ListeningPoint listeningPoint : brandNew) {
+				SipStack stack = listeningPointToStack.get(listeningPoint);
+				try {
+					stack.deleteListeningPoint(listeningPoint);
+				} catch (ObjectInUseException ignore) {}
+			}
+		}
+		List<String> unregisteredAddresses = new LinkedList<>();
+		for (ListeningPoint listeningPoint : expired) {
+			logger.debug("{}:{}/{} registration will be excluded.", listeningPoint.getIPAddress(),
+					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
+			unregisteredAddresses.add(String.format("%s:%d",
+					listeningPoint.getIPAddress(), listeningPoint.getPort()));
+		}
+		for (ListeningPoint listeningPoint : brandNew) {
+			logger.debug("{}:{}/{} registration will be ignored.", listeningPoint.getIPAddress(),
+					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
+		}
+		for (ListeningPoint listeningPoint : mantained) {
+			logger.debug("{}:{}/{} registration will be left untouched.", listeningPoint.getIPAddress(),
+					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
+		}
+		boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
+				.sendUnregisterRequest(new RegistrationCallback() {
+
+			@Override
+			public void onRegistrationSuccess(List<String> unregisteredContacts) {
+				registerRelatedOperationFinished();
+				callback.onRegistrationSuccess(unregisteredContacts);
+			}
+
+			@Override
+			public void onRegistrationFailed(String reason) {
+				performUserAgentsCleanup(expired);
+				registerRelatedOperationFinished();
+				callback.onRegistrationFailed(reason);
+			}
+
+		}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
 		if (couldDispatchOperation) {
 			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 		}
