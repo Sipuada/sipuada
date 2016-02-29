@@ -8,7 +8,7 @@ import android.javax.sdp.SessionDescription;
 
 public interface SipuadaApi {
 
-	public interface SipuadaListener {
+	interface SipuadaListener {
 
 		boolean onCallInvitationArrived(String callId);
 
@@ -24,7 +24,7 @@ public interface SipuadaApi {
 
 	}
 
-	public interface RegistrationCallback {
+	interface RegistrationCallback {
 
 		void onRegistrationSuccess(List<String> registeredContacts);
 
@@ -50,7 +50,7 @@ public interface SipuadaApi {
 
 	boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback);
 
-	public interface CallInvitationCallback {
+	interface CallInvitationCallback {
 
 		void onWaitingForCallInvitationAnswer(String callId);
 
