@@ -19,6 +19,7 @@ import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.plugins.nop.NoOperationSipuadaPlugin;
 
 import android.javax.sdp.SessionDescription;
+import android.javax.sip.header.ContentTypeHeader;
 import net.miginfocom.swing.MigLayout;
 
 public class SIPClientMain implements SipuadaListener {
@@ -40,6 +41,8 @@ public class SIPClientMain implements SipuadaListener {
 	private JButton btnEndCall;
 	private JButton btCall;
 	private JButton btOptions;
+	private JButton btInfo;
+	private JButton btMessage;
 
 	/**
 	 * Launch the application.
@@ -78,46 +81,39 @@ public class SIPClientMain implements SipuadaListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (sipuada == null) {
-					textArea.setText(textArea.getText()
-							+ System.getProperty("line.separator") + " - "
+					textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
 							+ " Required to register!");
 					btnCancel.setEnabled(false);
 					callButton.setEnabled(true);
 				}
 				callButton.setEnabled(false);
-				sipuada.inviteToCall(callerUserTextField.getText(),
-						callerDomainTextField.getText(),
+				sipuada.inviteToCall(callerUserTextField.getText(), callerDomainTextField.getText(),
 						new CallInvitationCallback() {
-							@Override
-							public void onWaitingForCallInvitationAnswer(
-									String callId) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - "
-										+ " Waiting For Call InvitationAnswer ...");
-								currentCallID = callId;
-								btnCancel.setEnabled(true);
-							}
+					@Override
+					public void onWaitingForCallInvitationAnswer(String callId) {
+						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+								+ " Waiting For Call InvitationAnswer ...");
+						currentCallID = callId;
+						btnCancel.setEnabled(true);
+					}
 
-							@Override
-							public void onCallInvitationRinging(String callId) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - " + " Ringing ...");
-								btnCancel.setEnabled(false);
-								currentCallID = callId;
-								btnCancel.setEnabled(true);
-							}
+					@Override
+					public void onCallInvitationRinging(String callId) {
+						textArea.setText(
+								textArea.getText() + System.getProperty("line.separator") + " - " + " Ringing ...");
+						btnCancel.setEnabled(false);
+						currentCallID = callId;
+						btnCancel.setEnabled(true);
+					}
 
-							@Override
-							public void onCallInvitationDeclined(String reason) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - " + "Invitation Declined.");
-								btnCancel.setEnabled(false);
-								callButton.setEnabled(true);
-							}
-						});
+					@Override
+					public void onCallInvitationDeclined(String reason) {
+						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+								+ "Invitation Declined.");
+						btnCancel.setEnabled(false);
+						callButton.setEnabled(true);
+					}
+				});
 			}
 		});
 	}
@@ -127,39 +123,68 @@ public class SIPClientMain implements SipuadaListener {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (sipuada == null) {
-					textArea.setText(textArea.getText()
-							+ System.getProperty("line.separator") + " - "
+					textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
 							+ " Required to register!");
 					btnCancel.setEnabled(false);
 					optionsButton.setEnabled(true);
 				}
 				optionsButton.setEnabled(false);
-				sipuada.queryOptions(callerUserTextField.getText(),
-						callerDomainTextField.getText(),
+				sipuada.queryOptions(callerUserTextField.getText(), callerDomainTextField.getText(),
 						new OptionsQueryingCallback() {
-							
-							@Override
-							public void onOptionsQueryingSuccess(String callId, SessionDescription sdpContent) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - " + " Querying Success ...");
-								currentCallID = callId;
-								optionsButton.setEnabled(true);
-							}
-														
-							@Override
-							public void onOptionsQueryingFailed(String reason) {
-								textArea.setText(textArea.getText()
-										+ System.getProperty("line.separator")
-										+ " - " + " Querying Failed ...");
-								optionsButton.setEnabled(true);
-							}
 
-						});
+					@Override
+					public void onOptionsQueryingSuccess(String callId, SessionDescription sdpContent) {
+						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+								+ " Querying Success ...");
+						currentCallID = callId;
+						optionsButton.setEnabled(true);
+					}
+
+					@Override
+					public void onOptionsQueryingFailed(String reason) {
+						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+								+ " Querying Failed ...");
+						optionsButton.setEnabled(true);
+					}
+
+				});
 			}
 		});
 	}
 	
+	private void setUPInfoButton(final JButton infoButton) {
+		infoButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (sipuada == null) {
+					textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+							+ " Required to register!");
+					btnCancel.setEnabled(false);
+					infoButton.setEnabled(true);
+				}
+				infoButton.setEnabled(false);
+				sipuada.queryOptions(callerUserTextField.getText(), callerDomainTextField.getText(),
+						new OptionsQueryingCallback() {
+
+					@Override
+					public void onOptionsQueryingSuccess(String callId, SessionDescription sdpContent) {
+						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+								+ " Querying Success ...");
+						currentCallID = callId;
+						infoButton.setEnabled(true);
+					}
+
+					@Override
+					public void onOptionsQueryingFailed(String reason) {
+						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+								+ " Querying Failed ...");
+						infoButton.setEnabled(true);
+					}
+
+				});
+			}
+		});
+	}
 
 	private void setEndCallButton(JButton endCall) {
 		endCall.addActionListener(new ActionListener() {
@@ -182,7 +207,7 @@ public class SIPClientMain implements SipuadaListener {
 				sipuada = new Sipuada(SIPClientMain.this,
 						registrarUserNameTextField.getText(),
 						registrarDomainTextField.getText(), passwordField
-								.getText(), "192.168.25.217:55002/TCP");
+								.getText(), Util.getIPAddress(true) + ":55002/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
@@ -298,6 +323,14 @@ public class SIPClientMain implements SipuadaListener {
 		btOptions = new JButton("Options");
 		setUPOptionsButton(btOptions);
 		frmSipuada.getContentPane().add(btOptions, "cell 4 3");
+		
+		btInfo = new JButton("Info");
+		setUPInfoButton(btInfo);
+		frmSipuada.getContentPane().add(btInfo, "cell 4 3");
+		
+		btMessage = new JButton("Message");
+		setUPMessageButton(btMessage);
+		frmSipuada.getContentPane().add(btMessage, "cell 4 3");
 
 		JLabel lblLog = new JLabel("Log");
 		frmSipuada.getContentPane().add(lblLog, "cell 0 4");
@@ -324,6 +357,11 @@ public class SIPClientMain implements SipuadaListener {
 		setUpCancelButton(btnCancel);
 		btnCancel.setEnabled(false);
 		frmSipuada.getContentPane().add(btnCancel, "cell 4 7");
+	}
+
+	private void setUPMessageButton(JButton btOptions2) {
+		// TODO Auto-generated method stub
+		
 	}
 
 	@Override
@@ -392,5 +430,23 @@ public class SIPClientMain implements SipuadaListener {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Failure: " + reason);
+	}
+
+	@Override
+	public void onMessageReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {
+		textArea.setText(textArea.getText()
+				+ System.getProperty("line.separator") + " - "
+				+ System.getProperty("line.separator") + "Content: " 
+				+ System.getProperty("line.separator") + (null != content ? content : "NULL")
+				+ " Message Received.");	
+	}
+
+	@Override
+	public void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {
+		textArea.setText(textArea.getText()
+				+ System.getProperty("line.separator") + " - "
+				+ System.getProperty("line.separator") + "Content: " 
+				+ System.getProperty("line.separator") + (null != content ? content : "NULL")
+				+ " Info Received.");		
 	}
 }
