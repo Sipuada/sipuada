@@ -35,10 +35,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Properties;
 
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-
-import android.gov.nist.core.LogWriter;
 import android.gov.nist.gnjvx.sip.LogRecord;
 import android.gov.nist.gnjvx.sip.header.CallID;
 import android.gov.nist.gnjvx.sip.message.SIPMessage;
@@ -59,14 +55,12 @@ public class ServerLog {
 
 	private boolean logContent;
 
-	protected LogWriter logWriter;
-
 	/**
 	 * Dont trace
 	 */
 	public static final int TRACE_NONE = 0;
 
-	public static final int TRACE_MESSAGES = LogWriter.TRACE_MESSAGES;
+	public static final int TRACE_MESSAGES = 16;
 
 	/**
 	 * Trace exception processing
@@ -108,7 +102,6 @@ public class ServerLog {
 
 	public ServerLog(SIPTransactionStack sipStack, Properties configurationProperties) {
 		// Debug log file. Whatever gets logged by us also makes its way into debug log.
-		this.logWriter = sipStack.logWriter;
 		this.sipStack = sipStack;
 		this.setProperties(configurationProperties);
 	}
@@ -126,48 +119,25 @@ public class ServerLog {
 		this.logContent = (logContent != null && logContent.equals("true"));
 
 		if (logLevel != null) {
-			if (logLevel.equals("LOG4J")) {
-				// if TRACE_LEVEL property is specified as
-				// "LOG4J" then, set the traceLevel based on
-				// the log4j effective log level.
-
-				// check whether a Log4j logger name has been
-				// specified. if not, use the stack name as the default
-				// logger name.
-				Logger logger = Logger.getLogger(configurationProperties.getProperty(
-						"android.gov.nist.gnjvx.sip.LOG4J_LOGGER_NAME", this.description));
-				Level level = logger.getEffectiveLevel();
-
-				if (level == Level.OFF) {
-					this.setTraceLevel(0);
-				} else if (level.isGreaterOrEqual(Level.DEBUG)) {
-					this.setTraceLevel(TRACE_DEBUG);
-				} else if (level.isGreaterOrEqual(Level.INFO)) {
-					this.setTraceLevel(TRACE_MESSAGES);
-				} else if (level.isGreaterOrEqual(Level.WARN)) {
-					this.setTraceLevel(TRACE_EXCEPTION);
+			try {
+				int ll;
+				if (logLevel.equals("DEBUG")) {
+					ll = TRACE_DEBUG;
+				} else if (logLevel.equals("INFO")) {
+					ll = TRACE_MESSAGES;
+				} else if (logLevel.equals("ERROR")) {
+					ll = TRACE_EXCEPTION;
+				} else if (logLevel.equals("NONE") || logLevel.equals("OFF")) {
+					ll = TRACE_NONE;
+				} else {
+					ll = Integer.parseInt(logLevel);
 				}
-			} else {
-				try {
-					int ll;
-					if (logLevel.equals("DEBUG")) {
-						ll = TRACE_DEBUG;
-					} else if (logLevel.equals("INFO")) {
-						ll = TRACE_MESSAGES;
-					} else if (logLevel.equals("ERROR")) {
-						ll = TRACE_EXCEPTION;
-					} else if (logLevel.equals("NONE") || logLevel.equals("OFF")) {
-						ll = TRACE_NONE;
-					} else {
-						ll = Integer.parseInt(logLevel);
-					}
 
-					this.setTraceLevel(ll);
-				} catch (NumberFormatException ex) {
-					System.out.println("ServerLog: WARNING Bad integer " + logLevel);
-					System.out.println("logging dislabled ");
-					this.setTraceLevel(0);
-				}
+				this.setTraceLevel(ll);
+			} catch (NumberFormatException ex) {
+				System.out.println("ServerLog: WARNING Bad integer " + logLevel);
+				System.out.println("logging dislabled ");
+				this.setTraceLevel(0);
 			}
 		}
 		checkLogFile();
@@ -232,59 +202,6 @@ public class ServerLog {
 						+ "\"\n name=\""
 						+ configurationProperties.getProperty("android.javax.sip.STACK_NAME")
 						+ "\"\n auxInfo=\"" + auxInfo + "\"/>\n ");
-				if (auxInfo != null) {
-
-					if (sipStack.isLoggingEnabled()) {
-						logWriter
-								.logDebug("Here are the stack configuration properties \n"
-										+ "android.javax.sip.IP_ADDRESS= "
-										+ configurationProperties
-												.getProperty("android.javax.sip.IP_ADDRESS")
-										+ "\n"
-										+ "android.javax.sip.ROUTER_PATH= "
-										+ configurationProperties
-												.getProperty("android.javax.sip.ROUTER_PATH")
-										+ "\n"
-										+ "android.javax.sip.OUTBOUND_PROXY= "
-										+ configurationProperties
-												.getProperty("android.javax.sip.OUTBOUND_PROXY")
-										+ "\n"
-										+ "android.gov.nist.gnjvx.sip.CACHE_CLIENT_CONNECTIONS= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.CACHE_CLIENT_CONNECTIONS")
-										+ "\n"
-										+ "android.gov.nist.gnjvx.sip.CACHE_SERVER_CONNECTIONS= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.CACHE_SERVER_CONNECTIONS")
-										+ "\n"
-										+ "android.gov.nist.gnjvx.sip.REENTRANT_LISTENER= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.REENTRANT_LISTENER")
-										+ "android.gov.nist.gnjvx.sip.THREAD_POOL_SIZE= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.THREAD_POOL_SIZE")
-										+ "\n");
-						logWriter.logDebug(" ]]> ");
-						logWriter.logDebug("</debug>");
-						logWriter.logDebug("<description\n logDescription=\"" + description
-								+ "\"\n name=\"" + stackIpAddress + "\"\n auxInfo=\"" + auxInfo
-								+ "\"/>\n ");
-						logWriter.logDebug("<debug>");
-						logWriter.logDebug("<![CDATA[ ");
-					}
-				} else {
-
-					if (sipStack.isLoggingEnabled()) {
-						logWriter.logDebug("Here are the stack configuration properties \n"
-								+ configurationProperties + "\n");
-						logWriter.logDebug(" ]]>");
-						logWriter.logDebug("</debug>");
-						logWriter.logDebug("<description\n logDescription=\"" + description
-								+ "\"\n name=\"" + stackIpAddress + "\" />\n");
-						logWriter.logDebug("<debug>");
-						logWriter.logDebug("<![CDATA[ ");
-					}
-				}
 			}
 		} catch (IOException ex) {
 
@@ -328,10 +245,6 @@ public class ServerLog {
 		String logInfo = message;
 		if (printWriter != null) {
 			printWriter.println(logInfo);
-		}
-		if (sipStack.isLoggingEnabled()) {
-			logWriter.logInfo(logInfo);
-
 		}
 	}
 

@@ -6,10 +6,7 @@
 # Package Files #
 *.jar
 !/lib/guava-19.0.jar
-!/lib/log4j-1.2.16.jar
 !/lib/slf4j-api-1.7.13.jar
-!/lib/mockito-all-1.10.19.jar
-!/lib/slf4j-log4j12-1.7.14.jar
 *.war
 *.ear
 
