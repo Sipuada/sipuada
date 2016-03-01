@@ -211,10 +211,6 @@ public class UDPMessageProcessor extends MessageProcessor {
 			 // TODO -- penalize spammers by looking at the source
 			 // port and IP address.
 			 if ( this.messageQueue.size() >= HIGHWAT) {
-					if (sipStack.logWriter.isLoggingEnabled()) {
-						sipStack.logWriter.logDebug("Dropping message -- queue length exceeded");
-						
-					}
 					//System.out.println("HIGHWAT Drop!");
 					continue;
 				} else if ( this.messageQueue.size() > LOWAT && this .messageQueue.size() < HIGHWAT ) {
@@ -222,10 +218,6 @@ public class UDPMessageProcessor extends MessageProcessor {
 					float threshold = ((float)(messageQueue.size() - LOWAT))/ ((float)(HIGHWAT - LOWAT));
 					boolean decision = Math.random() > 1.0 - threshold;
 					if ( decision ) {
-						if (sipStack.logWriter.isLoggingEnabled()) {
-							sipStack.logWriter.logDebug("Dropping message with probability 	" + (1.0 - threshold));
-							
-						}
 						//System.out.println("RED Drop!");
 						continue;
 					}
@@ -251,9 +243,6 @@ public class UDPMessageProcessor extends MessageProcessor {
 			} catch (SocketTimeoutException ex) {
 			  // This socket timeout alows us to ping the thread auditor periodically
 			} catch (SocketException ex) {
-				if (sipStack.isLoggingEnabled())
-					getSIPStack().logWriter
-							.logDebug("UDPMessageProcessor: Stopping");
 				isRunning = false;
 				// The notifyAll should be in a synchronized block.
 				// ( bug report by Niklas Uhrberg ).
@@ -263,13 +252,7 @@ public class UDPMessageProcessor extends MessageProcessor {
 			} catch (IOException ex) {
 				isRunning = false;
 				ex.printStackTrace();
-				if (sipStack.isLoggingEnabled())
-					getSIPStack().logWriter
-							.logDebug("UDPMessageProcessor: Got an IO Exception");
 			} catch (Exception ex) {
-				if (sipStack.isLoggingEnabled())
-					getSIPStack().logWriter
-							.logDebug("UDPMessageProcessor: Unexpected Exception - quitting");
 				InternalErrorHandler.handleException(ex);
 				return;
 			}

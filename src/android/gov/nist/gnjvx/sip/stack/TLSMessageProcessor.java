@@ -149,8 +149,6 @@ public class TLSMessageProcessor extends MessageProcessor {
                 }
 
                 Socket newsock = sock.accept();
-                if (sipStack.logWriter.isLoggingEnabled())
-                    sipStack.logWriter.logDebug("Accepting new connection!");
 
                 // Note that for an incoming message channel, the
                 // thread is already running
@@ -158,22 +156,22 @@ public class TLSMessageProcessor extends MessageProcessor {
                 incomingTlsMessageChannels.add(new TLSMessageChannel(newsock, sipStack, this));
             } catch (SocketException ex) {
                 if ( this.isRunning ) {
-                  sipStack.logWriter.logError(
-                    "Fatal - SocketException occured while Accepting connection", ex);
                   this.isRunning = false;
                   break;
                 }
             } catch (SSLException ex) {
                 this.isRunning = false;
-                sipStack.logWriter.logError(
-                        "Fatal - SSSLException occured while Accepting connection", ex);
+                System.out.println("Fatal - SSSLException occured while Accepting connection");
+                ex.printStackTrace();
                 break;
             } catch (IOException ex) {
                 // Problem accepting connection.
-                sipStack.logWriter.logError("Problem Accepting Connection", ex);
+                System.out.println("Fatal - Problem Accepting Connection");
+                ex.printStackTrace();
                 continue;
             } catch (Exception ex) {
-                sipStack.logWriter.logError("Unexpected Exception!", ex);
+                System.out.println("Fatal - Unexpected Exception!");
+                ex.printStackTrace();
             }
         }
     }
@@ -218,9 +216,6 @@ public class TLSMessageProcessor extends MessageProcessor {
     protected synchronized void remove(TLSMessageChannel tlsMessageChannel) {
 
         String key = tlsMessageChannel.getKey();
-        if (sipStack.isLoggingEnabled()) {
-            sipStack.logWriter.logDebug(Thread.currentThread() + " removing " + key);
-        }
 
         /** May have been removed already */
         if (tlsMessageChannels.get(key) == tlsMessageChannel)
@@ -239,10 +234,6 @@ public class TLSMessageProcessor extends MessageProcessor {
                     targetHostPort.getPort(), sipStack, this);
             this.tlsMessageChannels.put(key, retval);
             retval.isCached = true;
-            if (sipStack.isLoggingEnabled()) {
-                sipStack.logWriter.logDebug("key " + key);
-                sipStack.logWriter.logDebug("Creating " + retval);
-            }
             return retval;
         }
     }
@@ -251,12 +242,8 @@ public class TLSMessageProcessor extends MessageProcessor {
         String key = messageChannel.getKey();
         TLSMessageChannel currentChannel = (TLSMessageChannel) tlsMessageChannels.get(key);
         if (currentChannel != null) {
-            if (sipStack.isLoggingEnabled())
-                sipStack.logWriter.logDebug("Closing " + key);
             currentChannel.close();
         }
-        if (sipStack.isLoggingEnabled())
-            sipStack.logWriter.logDebug("Caching " + key);
         this.tlsMessageChannels.put(key, messageChannel);
 
     }
@@ -271,10 +258,6 @@ public class TLSMessageProcessor extends MessageProcessor {
                 TLSMessageChannel retval = new TLSMessageChannel(host, port, sipStack, this);
                 this.tlsMessageChannels.put(key, retval);
                 retval.isCached = true;
-                if (sipStack.isLoggingEnabled()) {
-                    sipStack.getLogWriter().logDebug("key " + key);
-                    sipStack.getLogWriter().logDebug("Creating " + retval);
-                }
                 return retval;
             }
         } catch (UnknownHostException ex) {

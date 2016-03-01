@@ -191,9 +191,7 @@ public abstract class MessageChannel {
     public void sendMessage(SIPMessage sipMessage, Hop hop) throws IOException {
         long time = System.currentTimeMillis();
         InetAddress hopAddr = InetAddress.getByName(hop.getHost());
-
         try {
-
             for (MessageProcessor messageProcessor : getSIPStack().getMessageProcessors()) {
                 if (messageProcessor.getIpAddress().equals(hopAddr)
                         && messageProcessor.getPort() == hop.getPort()
@@ -202,7 +200,6 @@ public abstract class MessageChannel {
                             hopAddr, hop.getPort());
                     if (messageChannel instanceof RawMessageChannel) {
                         ((RawMessageChannel) messageChannel).processMessage(sipMessage);
-                        getSIPStack().logWriter.logDebug("Self routing message");
                         return;
                     }
 
@@ -216,10 +213,6 @@ public abstract class MessageChannel {
             throw ioe;
         } catch (Exception ex) {
             throw new IOException("Error self routing message");
-        } finally {
-
-            if (this.getSIPStack().logWriter.isLoggingEnabled(ServerLog.TRACE_MESSAGES))
-                logMessage(sipMessage, hopAddr, hop.getPort(), time);
         }
     }
 
@@ -328,9 +321,6 @@ public abstract class MessageChannel {
      * @param port is the port to which the message is directed.
      */
     protected void logMessage(SIPMessage sipMessage, InetAddress address, int port, long time) {
-        if (!getSIPStack().logWriter.isLoggingEnabled(ServerLog.TRACE_MESSAGES))
-            return;
-
         // Default port.
         if (port == -1)
             port = 5060;

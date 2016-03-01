@@ -164,25 +164,12 @@ public abstract class MessageProcessor implements Runnable {
         }
     }
     public ListeningPointImpl getListeningPoint() {
-    	if ( listeningPoint == null )  {
-    		if ( this.getSIPStack().isLoggingEnabled()) {
-        		this.getSIPStack().getLogWriter().logError("getListeningPoint" + this + 
-        				" returning null listeningpoint");
-        		
-        	}
-    	}
         return listeningPoint;
     }
 
     public void setListeningPoint(ListeningPointImpl lp) {
-    	if ( this.getSIPStack().isLoggingEnabled()) {
-    		this.getSIPStack().getLogWriter().logDebug("setListeningPoint" + this + 
-    				" listeningPoint = " + lp);
-    		
-    	}
     	if ( lp.getPort() != this.getPort())
-			InternalErrorHandler.handleException
-			("lp mismatch with provider",getSIPStack().logWriter);
+			InternalErrorHandler.handleException("lp mismatch with provider");
         this.listeningPoint = lp;
       
     }
