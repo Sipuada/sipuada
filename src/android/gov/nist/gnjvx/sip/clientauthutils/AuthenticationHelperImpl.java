@@ -36,8 +36,6 @@ import android.javax.sip.address.SipURI;
 import android.javax.sip.header.*;
 import android.javax.sip.message.*;
 
-import org.apache.log4j.Logger;
-
 /**
  * The class handles authentication challenges, caches user credentials and takes care (through
  * the SecurityAuthority interface) about retrieving passwords.

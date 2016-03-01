@@ -35,9 +35,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Properties;
 
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-
 import android.gov.nist.gnjvx.sip.LogRecord;
 import android.gov.nist.gnjvx.sip.header.CallID;
 import android.gov.nist.gnjvx.sip.message.SIPMessage;
@@ -122,48 +119,25 @@ public class ServerLog {
 		this.logContent = (logContent != null && logContent.equals("true"));
 
 		if (logLevel != null) {
-			if (logLevel.equals("LOG4J")) {
-				// if TRACE_LEVEL property is specified as
-				// "LOG4J" then, set the traceLevel based on
-				// the log4j effective log level.
-
-				// check whether a Log4j logger name has been
-				// specified. if not, use the stack name as the default
-				// logger name.
-				Logger logger = Logger.getLogger(configurationProperties.getProperty(
-						"android.gov.nist.gnjvx.sip.LOG4J_LOGGER_NAME", this.description));
-				Level level = logger.getEffectiveLevel();
-
-				if (level == Level.OFF) {
-					this.setTraceLevel(0);
-				} else if (level.isGreaterOrEqual(Level.DEBUG)) {
-					this.setTraceLevel(TRACE_DEBUG);
-				} else if (level.isGreaterOrEqual(Level.INFO)) {
-					this.setTraceLevel(TRACE_MESSAGES);
-				} else if (level.isGreaterOrEqual(Level.WARN)) {
-					this.setTraceLevel(TRACE_EXCEPTION);
+			try {
+				int ll;
+				if (logLevel.equals("DEBUG")) {
+					ll = TRACE_DEBUG;
+				} else if (logLevel.equals("INFO")) {
+					ll = TRACE_MESSAGES;
+				} else if (logLevel.equals("ERROR")) {
+					ll = TRACE_EXCEPTION;
+				} else if (logLevel.equals("NONE") || logLevel.equals("OFF")) {
+					ll = TRACE_NONE;
+				} else {
+					ll = Integer.parseInt(logLevel);
 				}
-			} else {
-				try {
-					int ll;
-					if (logLevel.equals("DEBUG")) {
-						ll = TRACE_DEBUG;
-					} else if (logLevel.equals("INFO")) {
-						ll = TRACE_MESSAGES;
-					} else if (logLevel.equals("ERROR")) {
-						ll = TRACE_EXCEPTION;
-					} else if (logLevel.equals("NONE") || logLevel.equals("OFF")) {
-						ll = TRACE_NONE;
-					} else {
-						ll = Integer.parseInt(logLevel);
-					}
 
-					this.setTraceLevel(ll);
-				} catch (NumberFormatException ex) {
-					System.out.println("ServerLog: WARNING Bad integer " + logLevel);
-					System.out.println("logging dislabled ");
-					this.setTraceLevel(0);
-				}
+				this.setTraceLevel(ll);
+			} catch (NumberFormatException ex) {
+				System.out.println("ServerLog: WARNING Bad integer " + logLevel);
+				System.out.println("logging dislabled ");
+				this.setTraceLevel(0);
 			}
 		}
 		checkLogFile();
