@@ -23,8 +23,6 @@ import java.util.TimerTask;
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.Sipuada.RegisterOperation.OperationMethod;
-import org.github.sipuada.SipuadaApi.SendingInformationCallback;
-import org.github.sipuada.SipuadaApi.SendingMessageCallback;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;

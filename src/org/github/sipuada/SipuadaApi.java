@@ -22,9 +22,9 @@ public interface SipuadaApi {
 		void onCallFinished(String callId);
 
 		void onCallFailure(String reason, String callId);
-		
+
 		void onMessageReceived(String callId, ContentTypeHeader contentTypeHeader, String content);
-		
+
 		void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content);
 
 	}
@@ -54,7 +54,7 @@ public interface SipuadaApi {
 	}
 
 	boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback);
-	
+
 	public interface SendingMessageCallback {
 
 		void onSendingMessageSuccess(String callId, String content, ContentTypeHeader contentTypeHeader);
@@ -62,11 +62,11 @@ public interface SipuadaApi {
 		void onSendingMessageFailed(String reason);
 
 	}
-	
+
 	boolean sendMessage(String remoteUser, String remoteDomain, String content, ContentTypeHeader contentTypeHeader, SendingMessageCallback callback);
-	
+
 	boolean sendMessage(String callId, String content, ContentTypeHeader contentTypeHeader, SendingMessageCallback callback);
-	
+
 	public interface SendingInformationCallback {
 
 		void onSendingInformationSuccess(String callId, String content, ContentTypeHeader contentTypeHeader);
@@ -74,7 +74,7 @@ public interface SipuadaApi {
 		void onSendingInformationFailed(String reason);
 
 	}
-	
+
 	boolean sendInfo(String callId, String content, ContentTypeHeader contentTypeHeader, SendingInformationCallback callback);
 
 	interface CallInvitationCallback {

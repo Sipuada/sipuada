@@ -237,13 +237,13 @@ public class UserAgent implements SipListener {
 					answerInviteRequest(callId, false);
 				}
 			}
-			
+
 			@Subscribe
 			public void onEvent(MessageReceived event) {
 				final String callId = event.getCallId();
 							listener.onMessageReceived(callId, event.getContentTypeHeader(), event.getContent());
 			}
-			
+
 			@Subscribe
 			public void onEvent(InfoReceived event) {
 				final String callId = event.getCallId();
