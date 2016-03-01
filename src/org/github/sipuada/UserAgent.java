@@ -26,6 +26,8 @@ import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.InfoReceived;
+import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.events.QueryingOptionsFailed;
 import org.github.sipuada.events.QueryingOptionsSuccess;
 import org.github.sipuada.events.RegistrationFailed;
@@ -235,6 +237,18 @@ public class UserAgent implements SipListener {
 					answerInviteRequest(callId, false);
 				}
 			}
+			
+			@Subscribe
+			public void onEvent(MessageReceived event) {
+				final String callId = event.getCallId();
+							listener.onMessageReceived(callId, event.getContentTypeHeader(), event.getContent());
+			}
+			
+			@Subscribe
+			public void onEvent(InfoReceived event) {
+				final String callId = event.getCallId();
+				listener.onInfoReceived(callId, event.getContentTypeHeader(), event.getContent());
+			}
 
 		};
 		internalEventBus.register(eventBusSubscriber);
@@ -412,7 +426,7 @@ public class UserAgent implements SipListener {
 		};
 		internalEventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendMessageRequest(remoteUser, remoteDomain, content, contentTypeHeader, true);
+		boolean expectRemoteAnswer = uac.sendMessageRequest(remoteUser, remoteDomain, callIdHeader, content, contentTypeHeader);
 		if (!expectRemoteAnswer) {
 			logger.error("MESSAGE request not sent.");
 			internalEventBus.unregister(eventBusSubscriber);
@@ -425,7 +439,7 @@ public class UserAgent implements SipListener {
 		
 		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
 		if (eventBusSubscriberId == null) {
-			logger.error("Cannot send info.\nEstablished call with callId " +
+			logger.error("Cannot send message.\nEstablished call with callId " +
 					"'{}' not found.", callId);
 			return false;
 		}
@@ -454,28 +468,21 @@ public class UserAgent implements SipListener {
 		synchronized (establishedCalls) {
 			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
 			if (calls == null) {
-				logger.error("Cannot send info.\nEstablished call with callId " +
+				logger.error("Cannot send message.\nEstablished call with callId " +
 						"'{}' not found.", callId);
 				return false;
 			}
 			synchronized (calls) {
 				Iterator<Dialog> iterator = calls.iterator();
-				try {
-					while (iterator.hasNext()) {
-						Dialog dialog = iterator.next();
-						if (dialog.getCallId().getCallId().equals(callId)) {
-							iterator.remove();
-							return uac.sendMessageRequest(dialog, content, contentTypeHeader);
-						}
-					}
-				} finally {
-					if (calls.isEmpty()) {
-						establishedCalls.remove(eventBusSubscriberId);
+				while (iterator.hasNext()) {
+					Dialog dialog = iterator.next();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						return uac.sendMessageRequest(dialog, content, contentTypeHeader);
 					}
 				}
 			}
 		}
-		logger.error("Cannot send info.\nEstablished call with callId " +
+		logger.error("Cannot send message.\nEstablished call with callId " +
 				"'{}' not found.", callId);
 		return false;
 	}
@@ -518,17 +525,10 @@ public class UserAgent implements SipListener {
 			}
 			synchronized (calls) {
 				Iterator<Dialog> iterator = calls.iterator();
-				try {
-					while (iterator.hasNext()) {
-						Dialog dialog = iterator.next();
-						if (dialog.getCallId().getCallId().equals(callId)) {
-							iterator.remove();
-							return uac.sendInfoRequest(dialog, content, contentTypeHeader);
-						}
-					}
-				} finally {
-					if (calls.isEmpty()) {
-						establishedCalls.remove(eventBusSubscriberId);
+				while (iterator.hasNext()) {
+					Dialog dialog = iterator.next();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						return uac.sendInfoRequest(dialog, content, contentTypeHeader);
 					}
 				}
 			}

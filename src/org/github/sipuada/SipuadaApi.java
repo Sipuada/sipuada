@@ -22,6 +22,10 @@ public interface SipuadaApi {
 		void onCallFinished(String callId);
 
 		void onCallFailure(String reason, String callId);
+		
+		void onMessageReceived(String callId, ContentTypeHeader contentTypeHeader, String content);
+		
+		void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content);
 
 	}
 

@@ -12,7 +12,10 @@ import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.events.QueryingOptionsFailed;
+import org.github.sipuada.events.ReceivingMessageFailed;
+import org.github.sipuada.events.ReceivingOptionsRequestFailed;
 import org.github.sipuada.events.SendingInformationFailed;
 import org.github.sipuada.events.SendingInformationSuccess;
 import org.github.sipuada.events.SendingMessageFailed;
@@ -291,7 +294,7 @@ public class UserAgentServer {
 			RequestMethod method = RequestMethod.OPTIONS;
 			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
 					Response.UNSUPPORTED_MEDIA_TYPE)) {
-				bus.post(new QueryingOptionsFailed("Unsupported Media Type", callId));
+				bus.post(new ReceivingOptionsRequestFailed("Unsupported Media Type", callId));
 				//FIXME enhance this reason above.
 			}
 			return;
@@ -328,20 +331,20 @@ public class UserAgentServer {
 		if (newServerTransaction != null) {
 			try {
 				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
-				bus.post(new SendingMessageSuccess(callId, serverTransaction.getDialog(), (String) request.getContent(), contentTypeHeader));
+				bus.post(new MessageReceived(callId, serverTransaction.getDialog(), (String) request.getContent(), contentTypeHeader));
 			} catch (Exception e) {
 				logger.error("Unable to parse Content-Type header");
 			}
 			return;
 		} else {
-			bus.post(new SendingMessageFailed("Unable to retrieve content and Content-Type", callId));
+			bus.post(new ReceivingMessageFailed("Unable to retrieve content and Content-Type", callId));
 		}
 		throw new RequestCouldNotBeAddressed();
 	}
 
 	private void handleReSendMessageRequest(Request request, ServerTransaction serverTransaction) {
-		// TODO Auto-generated method stub
-		
+		// //FIXME later implement RESEND MESSAGE as well.
+		throw new RequestCouldNotBeAddressed();
 	}
 
 	private void handleInviteRequest(Request request, ServerTransaction serverTransaction) {

@@ -28,6 +28,7 @@ import org.github.sipuada.events.QueryingOptionsFailed;
 import org.github.sipuada.events.QueryingOptionsSuccess;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.events.SendingInformationSuccess;
 import org.github.sipuada.exceptions.ResponseDiscarded;
 import org.github.sipuada.exceptions.ResponsePostponed;
 import org.github.sipuada.exceptions.SipuadaException;
@@ -292,10 +293,58 @@ public class UserAgentClient {
 				callIdHeader, cseq, null, null, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 	
-	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content,
-			ContentTypeHeader contentTypeHeader, boolean b) {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean sendMessageRequest(String remoteUser, String remoteHost, CallIdHeader callIdHeader, String content,
+			ContentTypeHeader contentTypeHeader) {
+		
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this MESSAGE request " +
+					"to {} at {}.\n[remoteUser] must be a valid id, [remoteHost] " +
+					"must be a valid IP address: {}.", remoteUser, remoteHost,
+					parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		long cseq = ++localCSeq;
+		List<Header> additionalHeaders = new ArrayList<>();
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the contact URI for {} at {}." +
+					"[username] must be a valid id, [localIp] must be a valid " +
+					"IP address.", username, localIp, parseException);
+			//No need for caller to wait for remote responses.
+			return false;
+		}
+		contactUri.setPort(localPort);
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		try {
+			contactHeader.setExpires(60);
+		} catch (InvalidArgumentException ignore) {}
+		additionalHeaders.add(contactHeader);
+		try {
+			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
+			additionalHeaders.add(expiresHeader);
+		} catch (InvalidArgumentException ignore) {}
+		RequestMethod acceptedMethods[] = {
+				RequestMethod.CANCEL,
+				RequestMethod.OPTIONS,
+				RequestMethod.INVITE,
+				RequestMethod.ACK,
+				RequestMethod.BYE
+		};
+		for (RequestMethod method : acceptedMethods) {
+			try {
+				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+				additionalHeaders.add(allowHeader);
+			} catch (ParseException ignore) {}
+		}
+		return sendRequest(RequestMethod.MESSAGE, remoteUser, remoteHost, requestUri,
+				callIdHeader, cseq, null, null, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 	
 	public boolean sendMessageRequest(Dialog dialog, String content, ContentTypeHeader contentTypeHeader) {
@@ -739,6 +788,12 @@ public class UserAgentClient {
 					case OPTIONS:
 						handleOptionsResponse(statusCode, response, clientTransaction);
 						break;
+					case MESSAGE:
+						handleMessageResponse(statusCode, response, clientTransaction);
+						break;
+					case INFO:
+						handleInfoResponse(statusCode, response, clientTransaction);
+						break;
 					case BYE:
 						handleByeResponse(statusCode, clientTransaction);
 					case UNKNOWN:
@@ -753,6 +808,7 @@ public class UserAgentClient {
 		} catch (ResponseDiscarded requestDiscarded) {
 		} catch (ResponsePostponed requestPostponed) {}
 	}
+
 
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
@@ -1419,6 +1475,22 @@ public class UserAgentClient {
 						.format("Could not find session offer within the %s response.",
 								response.getStatusCode()), callId));
 			}
+		}
+	}
+	
+	private void handleInfoResponse(int statusCode, Response response, ClientTransaction clientTransaction) {
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			logger.info("{} response to INFO arrived.", statusCode);
+		} else {
+			logger.info("{} response to INFO arrived. Something was wrong.", statusCode);
+		}
+	}
+
+	private void handleMessageResponse(int statusCode, Response response, ClientTransaction clientTransaction) {
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			logger.info("{} response to MESSAGE arrived.", statusCode);
+		} else {
+			logger.info("{} response to MESSAGE arrived. Something was wrong.", statusCode);
 		}
 	}
 
