@@ -37,10 +37,6 @@ import java.util.LinkedList;
 import java.util.Properties;
 import java.util.StringTokenizer;
 
-import org.apache.log4j.Appender;
-import org.apache.log4j.Logger;
-
-import android.gov.nist.core.LogWriter;
 import android.gov.nist.core.net.AddressResolver;
 import android.gov.nist.core.net.NetworkLayer;
 import android.gov.nist.core.net.SslNetworkLayer;
@@ -393,9 +389,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
         if (name == null)
             throw new PeerUnavailableException("stack name is missing");
         super.setStackName(name);
-        // To log debug messages.
-        this.logWriter = new LogWriter(configurationProperties);
-
         // Server log file.
         this.serverLog = new ServerLog(this, configurationProperties);
 
@@ -422,12 +415,9 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
             Router router = (Router) cons.newInstance(args);
             super.setRouter(router);
         } catch (InvocationTargetException ex1) {
-            getLogWriter().logError("could not instantiate router -- invocation target problem",
-                    (Exception) ex1.getCause());
             throw new PeerUnavailableException(
                     "Cound not instantiate router - check constructor", ex1);
         } catch (Exception ex) {
-            getLogWriter().logError("could not instantiate router", (Exception) ex.getCause());
             throw new PeerUnavailableException("Could not instantiate router", ex);
         }
 
@@ -472,7 +462,8 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                         keyStorePassword.toCharArray(), configurationProperties
                                 .getProperty("android.javax.net.ssl.keyStoreType"));
             } catch (Exception e1) {
-                getLogWriter().logError("could not instantiate SSL networking", e1);
+            	System.out.println("could not instantiate SSL networking");
+            	e1.printStackTrace();
             }
         }
 
@@ -560,7 +551,8 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
             try {
                 this.maxConnections = new Integer(maxConnections).intValue();
             } catch (NumberFormatException ex) {
-                getLogWriter().logError("max connections - bad value " + ex.getMessage());
+            	System.out.println("max connections - bad value");
+            	ex.printStackTrace();
             }
         }
 
@@ -570,7 +562,8 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
             try {
                 this.threadPoolSize = new Integer(threadPoolSize).intValue();
             } catch (NumberFormatException ex) {
-                this.logWriter.logError("thread pool size - bad value " + ex.getMessage());
+            	System.out.println("thread pool size - bad value");
+            	ex.printStackTrace();
             }
         }
 
@@ -583,7 +576,8 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 this.serverTransactionTableLowaterMark = this.serverTransactionTableHighwaterMark * 80 / 100;
                 // Lowater is 80% of highwater
             } catch (NumberFormatException ex) {
-                this.logWriter.logError("transaction table size - bad value " + ex.getMessage());
+            	System.out.println("transaction table size - bad value");
+            	ex.printStackTrace();
             }
         }
 
@@ -596,7 +590,8 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 this.clientTransactionTableLowaterMark = this.clientTransactionTableLowaterMark * 80 / 100;
                 // Lowater is 80% of highwater
             } catch (NumberFormatException ex) {
-                this.logWriter.logError("transaction table size - bad value " + ex.getMessage());
+            	System.out.println("transaction table size - bad value");
+            	ex.printStackTrace();
             }
         } else {
             this.unlimitedClientTransactionTableSize = true;
@@ -630,18 +625,14 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                     System.err.println("Value too low " + readTimeout);
                 }
             } catch (NumberFormatException nfe) {
-                // Ignore.
-                getLogWriter().logError("Bad read timeout " + readTimeout);
+            	System.out.println("Bad read timeout");
+            	nfe.printStackTrace();
             }
         }
 
         // Get the address of the stun server.
 
         String stunAddr = configurationProperties.getProperty("android.gov.nist.gnjvx.sip.STUN_SERVER");
-
-        if (stunAddr != null)
-            this.logWriter.logWarning("Ignoring obsolete property "
-                    + "android.gov.nist.gnjvx.sip.STUN_SERVER");
 
         String maxMsgSize = configurationProperties
                 .getProperty("android.gov.nist.gnjvx.sip.MAX_MESSAGE_SIZE");
@@ -656,7 +647,8 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 super.maxMessageSize = 0;
             }
         } catch (NumberFormatException ex) {
-            getLogWriter().logError("maxMessageSize - bad value " + ex.getMessage());
+            System.out.println("maxMessageSize - bad value");
+            ex.printStackTrace();
         }
 
         String rel = configurationProperties.getProperty("android.gov.nist.gnjvx.sip.REENTRANT_LISTENER");
@@ -672,8 +664,8 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 getThreadAuditor().setPingIntervalInMillisecs(
                         Long.valueOf(interval).longValue() / 2);
             } catch (NumberFormatException ex) {
-                getLogWriter().logError("THREAD_AUDIT_INTERVAL_IN_MILLISECS - bad value [" + interval
-                        + "] " + ex.getMessage());
+            	System.out.println("THREAD_AUDIT_INTERVAL_IN_MILLISECS - bad value [" + interval + "] ");
+            	ex.printStackTrace();
             }
         }
 
@@ -695,7 +687,7 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 Constructor< ? > c = clazz.getConstructor(new Class[0]);
                 this.logRecordFactory = (LogRecordFactory) c.newInstance(new Object[0]);
             } catch (Exception ex) {
-                getLogWriter().logError("Bad configuration value for LOG_FACTORY -- using default logger");
+            	System.out.println("Bad configuration value for LOG_FACTORY -- using default logger");
                 this.logRecordFactory = new DefaultMessageLogFactory();
             }
 
@@ -716,7 +708,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 "true");
         super.logStackTraceOnMessageSend = configurationProperties.getProperty(
                 "android.gov.nist.gnjvx.sip.LOG_STACK_TRACE_ON_MESSAGE_SEND", "false").equalsIgnoreCase("true");
-        logWriter.logDebug("created Sip stack. Properties = " + configurationProperties);
         InputStream in = getClass().getResourceAsStream("/TIMESTAMP");
         if (in != null) {
             BufferedReader streamReader = new BufferedReader(new InputStreamReader(in));
@@ -726,9 +717,9 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 if (in != null) {
                     in.close();
                 }
-                getLogWriter().setBuildTimeStamp(buildTimeStamp);
             } catch (IOException ex) {
-                getLogWriter().logError("Could not open build timestamp.");
+            	System.out.println("Could not open build timestamp.");
+            	ex.printStackTrace();
             }
         }
 
@@ -741,10 +732,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
      */
     public synchronized ListeningPoint createListeningPoint(String address, int port,
             String transport) throws TransportNotSupportedException, InvalidArgumentException {
-        getLogWriter().logDebug(
-                "createListeningPoint : address = " + address + " port = " + port
-                        + " transport = " + transport);
-
         if (address == null)
             throw new NullPointerException("Address for listening point is null!");
         if (transport == null)
@@ -772,11 +759,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 InetAddress inetAddr = InetAddress.getByName(address);
                 MessageProcessor messageProcessor = this.createMessageProcessor(inetAddr, port,
                         transport);
-                if (this.isLoggingEnabled()) {
-                    this.getLogWriter().logDebug(
-                            "Created Message Processor: " + address + " port = " + port
-                                    + " transport = " + transport);
-                }
                 lip = new ListeningPointImpl(this, port, transport);
                 lip.messageProcessor = messageProcessor;
                 messageProcessor.setListeningPoint(lip);
@@ -785,9 +767,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
                 messageProcessor.start();
                 return (ListeningPoint) lip;
             } catch (java.io.IOException ex) {
-                getLogWriter().logError(
-                        "Invalid argument address = " + address + " port = " + port
-                                + " transport = " + transport);
                 throw new InvalidArgumentException(ex.getMessage(), ex);
             }
         }
@@ -802,8 +781,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
             throws ObjectInUseException {
         if (listeningPoint == null)
             throw new NullPointerException("null listeningPoint");
-        if (this.getLogWriter().isLoggingEnabled())
-            this.getLogWriter().logDebug("createSipProvider: " + listeningPoint);
         ListeningPointImpl listeningPointImpl = (ListeningPointImpl) listeningPoint;
         if (listeningPointImpl.sipProvider != null)
             throw new ObjectInUseException("Provider already attached!");
@@ -937,9 +914,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
      * @see android.javax.sip.SipStack#stop()
      */
     public void stop() {
-        if (getLogWriter().isLoggingEnabled()) {
-            getLogWriter().logDebug("stopStack -- stoppping the stack");
-        }
         this.stopStack();
         this.sipProviders = new LinkedList<SipProviderImpl>();
         this.listeningPoints = new Hashtable<String, ListeningPointImpl>();
@@ -985,26 +959,6 @@ public class SipStackImpl extends SIPTransactionStack implements android.javax.s
      */
     public LogRecordFactory getLogRecordFactory() {
         return super.logRecordFactory;
-    }
-
-    /**
-     * Set the log appender ( this is useful if you want to specify a particular log format or log
-     * to something other than a file for example).
-     * 
-     * @param Appender - the log4j appender to add.
-     * 
-     */
-    public void addLogAppender(Appender appender) {
-        this.getLogWriter().addAppender(appender);
-    }
-
-    /**
-     * Get the log4j logger ( for log stream integration ).
-     * 
-     * @return
-     */
-    public Logger getLogger() {
-        return this.getLogWriter().getLogger();
     }
 
     public EventScanner getEventScanner() {
