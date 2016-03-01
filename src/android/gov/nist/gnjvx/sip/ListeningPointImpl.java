@@ -236,7 +236,7 @@ public class ListeningPointImpl implements android.javax.sip.ListeningPoint, and
 			contact.setAddress(address);
 			return contact;
 		} catch (Exception ex) {
-			InternalErrorHandler.handleException("Unexpected exception",sipStack.getLogWriter());
+			InternalErrorHandler.handleException("Unexpected exception");
 			return null;
 		}
 	}
