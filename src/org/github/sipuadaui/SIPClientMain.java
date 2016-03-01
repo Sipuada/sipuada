@@ -15,9 +15,11 @@ import org.github.sipuada.Sipuada;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.OptionsQueryingCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
+import org.github.sipuada.SipuadaApi.SendingMessageCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.plugins.nop.NoOperationSipuadaPlugin;
 
+import android.gov.nist.gnjvx.sip.header.ContentType;
 import android.javax.sdp.SessionDescription;
 import android.javax.sip.header.ContentTypeHeader;
 import net.miginfocom.swing.MigLayout;
@@ -69,10 +71,10 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	private void setDefautValues() {
-		registrarDomainTextField.setText("192.168.25.217:5060");
+		registrarDomainTextField.setText("192.168.130.207:5060");
 		registrarUserNameTextField.setText("renan");
 		passwordField.setText("renan");
-		callerDomainTextField.setText("192.168.25.217:5060");
+		callerDomainTextField.setText("192.168.130.207:5060");
 	}
 
 	private void setUPCallButton(final JButton callButton) {
@@ -152,36 +154,34 @@ public class SIPClientMain implements SipuadaListener {
 		});
 	}
 	
-	private void setUPInfoButton(final JButton infoButton) {
-		infoButton.addActionListener(new ActionListener() {
+	private void setUPMessageButton(final JButton messageButton) {
+		messageButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (sipuada == null) {
 					textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
 							+ " Required to register!");
 					btnCancel.setEnabled(false);
-					infoButton.setEnabled(true);
+					messageButton.setEnabled(true);
 				}
-				infoButton.setEnabled(false);
-				sipuada.queryOptions(callerUserTextField.getText(), callerDomainTextField.getText(),
-						new OptionsQueryingCallback() {
+				messageButton.setEnabled(false);
+				String content = "Hello World Message!";
+				ContentType contentType = new ContentType("text", "plain");
+				sipuada.sendMessage(callerUserTextField.getText(), callerDomainTextField.getText(), content, (ContentTypeHeader) contentType, new SendingMessageCallback() {
 
 					@Override
-					public void onOptionsQueryingSuccess(String callId, SessionDescription sdpContent) {
-						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
-								+ " Querying Success ...");
-						currentCallID = callId;
-						infoButton.setEnabled(true);
+					public void onSendingMessageSuccess(String callId, String content,
+							ContentTypeHeader contentTypeHeader) {
+						System.out.println("onSendingMessageSuccess...");
 					}
 
 					@Override
-					public void onOptionsQueryingFailed(String reason) {
-						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
-								+ " Querying Failed ...");
-						infoButton.setEnabled(true);
+					public void onSendingMessageFailed(String reason) {
+						System.out.println("onSendingMessageFailed...");
 					}
-
+					
 				});
+				
 			}
 		});
 	}
@@ -359,7 +359,7 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(btnCancel, "cell 4 7");
 	}
 
-	private void setUPMessageButton(JButton btOptions2) {
+	private void setUPInfoButton(JButton btInfo) {
 		// TODO Auto-generated method stub
 		
 	}
