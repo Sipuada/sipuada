@@ -80,11 +80,6 @@ class NistSipMessageFactoryImpl implements StackMessageFactory {
                 .getListeningPoint();
         if (retval.listeningPoint == null)
             return null;
-        if (sipStack.isLoggingEnabled())
-            sipStack.getLogWriter().logDebug(
-                    "Returning request interface for "
-                            + sipRequest.getFirstLine() + " " + retval
-                            + " messageChannel = " + messageChannel);
         return retval;
     }
 
@@ -104,9 +99,6 @@ class NistSipMessageFactoryImpl implements StackMessageFactory {
         // Tr is null if a transaction is not mapped.
         SIPTransaction tr = (SIPTransaction) ((SIPTransactionStack) theStack)
                 .findTransaction(sipResponse, false);
-        if (sipStack.isLoggingEnabled())
-            sipStack.getLogWriter().logDebug(
-                    "Found Transaction " + tr + " for " + sipResponse);
 
         if (tr != null) {
             // Prune unhealthy responses early if handling statefully.
@@ -114,17 +106,10 @@ class NistSipMessageFactoryImpl implements StackMessageFactory {
             // spurious response. This was moved up from the transaction
             // layer for efficiency.
             if (tr.getState() == null) {
-                if (sipStack.isLoggingEnabled())
-                    sipStack.getLogWriter().logDebug(
-                            "Dropping response - null transaction state");
                 return null;
                 // Ignore 1xx
             } else if (TransactionState.COMPLETED == tr.getState()
                     && sipResponse.getStatusCode() / 100 == 1) {
-                if (sipStack.isLoggingEnabled())
-                    sipStack.getLogWriter().logDebug(
-                            "Dropping response - late arriving "
-                                    + sipResponse.getStatusCode());
                 return null;
             }
         }
