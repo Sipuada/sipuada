@@ -104,8 +104,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
      */
 
     private void send500Response(SIPRequest sipRequest, SIPServerTransaction transaction) {
-        if (sipStack.isLoggingEnabled())
-            sipStack.getLogWriter().logDebug("Sending 500 response for out of sequence message");
         SIPResponse sipResponse = sipRequest.createResponse(Response.SERVER_INTERNAL_ERROR);
         sipResponse.setReasonPhrase("Request out of order");
 
@@ -129,15 +127,7 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
      */
     public void processRequest(SIPRequest sipRequest, MessageChannel incomingMessageChannel) {
         // Generate the wrapper JAIN-SIP object.
-        if (sipStack.isLoggingEnabled())
-            sipStack.getLogWriter().logDebug(
-                    "PROCESSING INCOMING REQUEST " + sipRequest + " transactionChannel = "
-                            + transactionChannel + " listening point = "
-                            + listeningPoint.getIPAddress() + ":" + listeningPoint.getPort());
         if (listeningPoint == null) {
-            if (sipStack.isLoggingEnabled())
-                sipStack.getLogWriter().logDebug(
-                        "Dropping message: No listening point registered!");
             return;
         }
 
@@ -145,8 +135,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
 
         SipProviderImpl sipProvider = listeningPoint.getProvider();
         if (sipProvider == null) {
-            if (sipStack.isLoggingEnabled())
-                sipStack.getLogWriter().logDebug("No provider - dropping !!");
             return;
         }
 
@@ -157,8 +145,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
 
         SIPServerTransaction transaction = (SIPServerTransaction) this.transactionChannel;
         if (transaction != null) {
-            if (sipStack.isLoggingEnabled())
-                sipStack.getLogWriter().logDebug("transaction state = " + transaction.getState());
         }
         String dialogId = sipRequest.getDialogId(true);
         SIPDialog dialog = sipStack.getDialog(dialogId);
@@ -188,12 +174,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                 if (ipAddress != null
                         && (!ipAddress.equals(listeningPoint.getIPAddress()) || contactPort != listeningPoint
                                 .getPort())) {
-                    if (sipStack.isLoggingEnabled()) {
-                        sipStack.getLogWriter().logDebug(
-                                "nulling dialog -- listening point mismatch!  " + contactPort
-                                        + "  lp port = " + listeningPoint.getPort());
-
-                    }
                     dialog = null;
                 }
 
@@ -218,23 +198,15 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                     sipServerTransaction.getState() != TransactionState.TERMINATED ) {
                 SIPResponse response = sipRequest.createResponse(Response.LOOP_DETECTED);
 
-                if (sipStack.getLogWriter().isLoggingEnabled())
-                    sipStack.getLogWriter().logError("Loop detected while processing request");
                 try {
                     sipProvider.sendResponse(response);
                 } catch (SipException e) {
-                    if (sipStack.getLogWriter().isLoggingEnabled())
-                        sipStack.getLogWriter().logError("Error sending response");
+                	System.out.println("Error sending response");
+                	e.printStackTrace();
                 }
                 return;
             }
         }
-
-        if (sipStack.isLoggingEnabled()) {
-            sipStack.getLogWriter().logDebug("dialogId = " + dialogId);
-            sipStack.getLogWriter().logDebug("dialog = " + dialog);
-        }
-
         /*
          * RFC 3261 Section 16.4 If the first value in the Route header field indicates this
          * proxy,the proxy MUST remove that value from the request .
@@ -281,7 +253,8 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                 try {
                     sipProvider.sendResponse(badRequest);
                 } catch (SipException e) {
-                    sipStack.getLogWriter().logError("error sending response", e);
+                	System.out.println("error sending response");
+                	e.printStackTrace();
                 }
                 if (transaction != null) {
                     sipStack.removeTransaction(transaction);
@@ -302,7 +275,8 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                 try {
                     sipProvider.sendResponse(notExist);
                 } catch (SipException e) {
-                    sipStack.getLogWriter().logError("error sending response", e);
+                	System.out.println("error sending response");
+                	e.printStackTrace();
                 }
                 if (transaction != null) {
                     sipStack.removeTransaction(transaction);
@@ -315,20 +289,8 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
             if (transaction != null && transaction.isInviteTransaction()) {
                 // This is an ack for a 3xx-6xx response. Just let the tx laer
                 // take care of it.
-                if (sipStack.isLoggingEnabled())
-                    sipStack.getLogWriter().logDebug("Processing ACK for INVITE Tx ");
-
             } else {
-                if (sipStack.isLoggingEnabled())
-                    sipStack.getLogWriter().logDebug("Processing ACK for dialog " + dialog);
-
                 if (dialog == null) {
-                    if (sipStack.isLoggingEnabled()) {
-                        sipStack.getLogWriter().logDebug(
-                                "Dialog does not exist " + sipRequest.getFirstLine()
-                                        + " isServerTransaction = " + true);
-
-                    }
                     SIPServerTransaction st = sipStack
                             .getRetransmissionAlertTransaction(dialogId);
                     if (st != null && st.isRetransmissionAlertEnabled()) {
@@ -344,12 +306,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                 } else {
                     if (!dialog.handleAck(transaction)) {
                     	if(sipStack.isLooseDialogValidation()) {
-                            if (sipStack.isLoggingEnabled()) {
-                                sipStack.getLogWriter().logDebug(
-                                        "Dialog exists with loose dialog validation " + sipRequest.getFirstLine()
-                                                + " isServerTransaction = " + true + " dialog = " + dialog.getDialogId());
-
-                            }
                             SIPServerTransaction st = sipStack
                                     .getRetransmissionAlertTransaction(dialogId);
                             if (st != null && st.isRetransmissionAlertEnabled()) {
@@ -400,29 +356,15 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
              * and the sequence number from the RSeq of the reliable provisional response.
              */
 
-            if (sipStack.isLoggingEnabled())
-                sipStack.getLogWriter().logDebug("Processing PRACK for dialog " + dialog);
-
             if (dialog == null && sipProvider.isAutomaticDialogSupportEnabled()) {
-                if (sipStack.isLoggingEnabled()) {
-                    sipStack.getLogWriter().logDebug(
-                            "Dialog does not exist " + sipRequest.getFirstLine()
-                                    + " isServerTransaction = " + true);
-
-                }
-                if (sipStack.isLoggingEnabled()) {
-                    sipStack
-                            .getLogWriter()
-                            .logDebug(
-                                    "Sending 481 for PRACK - automatic dialog support is enabled -- cant find dialog!");
-                }
                 SIPResponse notExist = sipRequest
                         .createResponse(Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
 
                 try {
                     sipProvider.sendResponse(notExist);
                 } catch (SipException e) {
-                    sipStack.getLogWriter().logError("error sending response", e);
+                	System.out.println("error sending response");
+                	e.printStackTrace();
                 }
                 if (transaction != null) {
                     sipStack.removeTransaction(transaction);
@@ -432,7 +374,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
 
             } else if (dialog != null) {
                 if (!dialog.handlePrack(sipRequest)) {
-                    sipStack.getLogWriter().logDebug("Dropping out of sequence PRACK ");
                     if (transaction != null) {
                         sipStack.removeTransaction(transaction);
                         transaction.releaseSem();
@@ -448,18 +389,11 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                         InternalErrorHandler.handleException(ex);
                     }
                 }
-            } else {
-                sipStack.getLogWriter().logDebug(
-                        "Processing PRACK without a DIALOG -- this must be a proxy element");
             }
 
         } else if (sipRequest.getMethod().equals(Request.BYE)) {
             // Check for correct sequence numbering of the BYE
             if (dialog != null && !dialog.isRequestConsumable(sipRequest)) {
-                if (sipStack.isLoggingEnabled())
-                    sipStack.getLogWriter().logDebug(
-                            "Dropping out of sequence BYE " + dialog.getRemoteSeqNumber() + " "
-                                    + sipRequest.getCSeq().getSeqNumber());
 
                 if (dialog.getRemoteSeqNumber() >= sipRequest.getCSeq().getSeqNumber()
                         && transaction.getState() == TransactionState.TRYING) {
@@ -485,14 +419,10 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                 SIPResponse response = sipRequest
                         .createResponse(Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
                 response.setReasonPhrase("Dialog Not Found");
-
-                sipStack.getLogWriter().logDebug(
-                        "dropping request -- automatic dialog "
-                                + "support enabled and dialog does not exist!");
                 try {
                     transaction.sendResponse(response);
                 } catch (SipException ex) {
-                    sipStack.getLogWriter().logError("Error in sending response", ex);
+                	ex.printStackTrace();
                 }
                 // If the stack knows about the tx, then remove it.
                 if (transaction != null) {
@@ -520,23 +450,11 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                     InternalErrorHandler.handleException(ex);
                 }
             }
-            if (sipStack.getLogWriter().isLoggingEnabled()) {
-                sipStack.getLogWriter().logDebug(
-                        "BYE Tx = " + transaction + " isMapped ="
-                                + transaction.isTransactionMapped());
-            }
 
         } else if (sipRequest.getMethod().equals(Request.CANCEL)) {
 
             SIPServerTransaction st = (SIPServerTransaction) sipStack.findCancelTransaction(
                     sipRequest, true);
-            if (sipStack.getLogWriter().isLoggingEnabled()) {
-                sipStack.getLogWriter().logDebug(
-                        "Got a CANCEL, InviteServerTx = " + st + " cancel Server Tx ID = "
-                                + transaction + " isMapped = "
-                                + transaction.isTransactionMapped());
-
-            }
             // Processing incoming CANCEL.
             // Check if we can process the CANCEL request.
             if (sipRequest.getMethod().equals(Request.CANCEL)) {
@@ -547,8 +465,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                     // If transaction already exists but it is
                     // too late to cancel the transaction then
                     // just respond OK to the CANCEL and bail.
-                    if (sipStack.isLoggingEnabled())
-                        sipStack.getLogWriter().logDebug("Too late to cancel Transaction");
                     // send OK and just ignore the CANCEL.
                     try {
 
@@ -560,8 +476,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                     }
                     return;
                 }
-                if (sipStack.isLoggingEnabled())
-                    sipStack.getLogWriter().logDebug("Cancel transaction = " + st);
 
             }
             if (transaction != null && st != null && st.getDialog() != null) {
@@ -578,11 +492,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
 
                 SIPResponse response = sipRequest
                         .createResponse(Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
-                if (sipStack.isLoggingEnabled()) {
-                    sipStack.getLogWriter().logDebug(
-                            "dropping request -- automatic dialog support "
-                                    + "enabled and INVITE ST does not exist!");
-                }
                 try {
                     sipProvider.sendResponse(response);
                 } catch (SipException ex) {
@@ -634,9 +543,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                     && lastTransaction.getState() != TransactionState.TERMINATED
                     && lastTransaction.getState() != TransactionState.CONFIRMED) {
 
-                if (sipStack.isLoggingEnabled())
-                    sipStack.getLogWriter().logDebug(
-                            "Sending 500 response for out of sequence message");
                 SIPResponse sipResponse = sipRequest
                         .createResponse(Response.SERVER_INTERNAL_ERROR);
 
@@ -671,9 +577,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
 
                 if (dialog.getRemoteSeqNumber() + 1 == sipRequest.getCSeq().getSeqNumber()) {
                     dialog.setRemoteSequenceNumber(sipRequest.getCSeq().getSeqNumber());
-                    if (sipStack.isLoggingEnabled())
-                        sipStack.getLogWriter().logDebug(
-                                "Sending 491 response for out of sequence message");
                     SIPResponse sipResponse = sipRequest.createResponse(Response.REQUEST_PENDING);
                     try {
                         transaction.sendMessage(sipResponse);
@@ -681,10 +584,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                         transaction.raiseIOExceptionEvent();
                     }
                     dialog.requestConsumed();
-                } else {
-                    if (sipStack.isLoggingEnabled())
-                        sipStack.getLogWriter().logDebug(
-                                "Dropping message -- sequence number is too high!");
                 }
                 return;
             }
@@ -693,9 +592,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
         // Sequence numbers are supposed to be incremented
         // sequentially within a dialog for RFC 3261
         // Note BYE, CANCEL and ACK is handled above - so no check here.
-
-        sipStack.getLogWriter().logDebug(
-                "CHECK FOR OUT OF SEQ MESSAGE " + dialog + " transaction " + transaction);
 
         if (dialog != null && transaction != null && !sipRequest.getMethod().equals(Request.BYE)
                 && !sipRequest.getMethod().equals(Request.CANCEL)
@@ -710,13 +606,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                  * sequence number, the request is out of order and MUST be rejected with a 500
                  * (Server Internal Error) response.
                  */
-
-                // Drop the request
-                if (sipStack.isLoggingEnabled()) {
-                    sipStack.getLogWriter().logDebug(
-                            "Dropping out of sequence message " + dialog.getRemoteSeqNumber()
-                                    + " " + sipRequest.getCSeq());
-                }
 
                 // send error when stricly higher, ignore when ==
                 // (likely still processing, error would interrupt that)
@@ -749,13 +638,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
 
         RequestEvent sipEvent;
 
-        if (sipStack.getLogWriter().isLoggingEnabled()) {
-
-            sipStack.getLogWriter().logDebug(
-                    sipRequest.getMethod() + " transaction.isMapped = "
-                            + transaction.isTransactionMapped());
-        }
-
         /*
          * RFC 3265: Each event package MUST specify whether forked SUBSCRIBE requests are allowed
          * to install multiple subscriptions. If such behavior is not allowed, the first potential
@@ -774,11 +656,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
             SIPClientTransaction pendingSubscribeClientTx = sipStack.findSubscribeTransaction(
                     sipRequest, listeningPoint);
 
-            if (sipStack.getLogWriter().isLoggingEnabled()) {
-                sipStack.getLogWriter().logDebug(
-                        "PROCESSING NOTIFY  DIALOG == null " + pendingSubscribeClientTx);
-            }
-
             /*
              * RFC 3265: Upon receiving a NOTIFY request, the subscriber should check that it
              * matches at least one of its outstanding subscriptions; if not, it MUST return a
@@ -793,10 +670,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                  * dialog.
                  */
                 try {
-                    if (sipStack.isLoggingEnabled()) {
-                        sipStack.getLogWriter().logDebug(
-                                "Could not find Subscription for Notify Tx.");
-                    }
                     Response errorResponse = sipRequest
                             .createResponse(Response.CALL_OR_TRANSACTION_DOES_NOT_EXIST);
                     errorResponse.setReasonPhrase("Subscription does not exist");
@@ -804,8 +677,8 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                     return;
 
                 } catch (Exception ex) {
-                    sipStack.getLogWriter().logError(
-                            "Exception while sending error response statelessly", ex);
+                	System.out.println("Exception while sending error response statelessly");
+                	ex.printStackTrace();
                     return;
                 }
 
@@ -839,10 +712,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
 
                     } else {
                         subscriptionDialog = pendingSubscribeClientTx.getDialog(dialogId);
-                    }
-                    if (sipStack.getLogWriter().isLoggingEnabled()) {
-                        sipStack.getLogWriter().logDebug(
-                                "PROCESSING NOTIFY Subscribe DIALOG " + subscriptionDialog);
                     }
 
                     // The user could have createed a dialog before sending out
@@ -920,10 +789,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                 }
 
             } else {
-                if (sipStack.getLogWriter().isLoggingEnabled()) {
-                    sipStack.getLogWriter().logDebug("could not find subscribe tx");
-                }
-
                 // Got a notify out of the blue - just pass it up
                 // for stateless handling by the application.
                 sipEvent = new RequestEvent(sipProvider, null, null, (Request) sipRequest);
@@ -953,36 +818,20 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
      */
     public void processResponse(SIPResponse response, MessageChannel incomingMessageChannel,
             SIPDialog dialog) {
-        if (sipStack.isLoggingEnabled()) {
-            sipStack.getLogWriter().logDebug(
-                    "PROCESSING INCOMING RESPONSE" + response.encodeMessage());
-        }
         if (listeningPoint == null) {
-            if (sipStack.isLoggingEnabled())
-                sipStack.getLogWriter().logError(
-                        "Dropping message: No listening point" + " registered!");
             return;
         }
 
         SipProviderImpl sipProvider = listeningPoint.getProvider();
         if (sipProvider == null) {
-            if (sipStack.isLoggingEnabled()) {
-                sipStack.getLogWriter().logError("Dropping message:  no provider");
-            }
             return;
         }
         if (sipProvider.sipListener == null) {
-            if (sipStack.isLoggingEnabled()) {
-                sipStack.getLogWriter().logError("No listener -- dropping response!");
-            }
             return;
         }
 
         SIPClientTransaction transaction = (SIPClientTransaction) this.transactionChannel;
         SipStackImpl sipStackImpl = sipProvider.sipStack;
-
-        if (sipStack.isLoggingEnabled())
-            sipStackImpl.getLogWriter().logDebug("Transaction = " + transaction);
 
         if (transaction == null) {
             // Transaction is null but the dialog is not null. This means that
@@ -991,18 +840,8 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
             // we cannot drop the response.
             if (dialog != null) {
                 if (response.getStatusCode() / 100 != 2) {
-                    if (sipStack.isLoggingEnabled()) {
-                        sipStack
-                                .getLogWriter()
-                                .logDebug(
-                                        "Response is not a final response and dialog is found for response -- dropping response!");
-                    }
                     return;
                 } else if (dialog.getState() == DialogState.TERMINATED) {
-                    if (sipStack.isLoggingEnabled()) {
-                        sipStack.getLogWriter().logDebug(
-                                "Dialog is terminated -- dropping response!");
-                    }
                     return;
                 } else {
                     boolean ackAlreadySent = false;
@@ -1019,24 +858,17 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                         try {
                             // Found the dialog - resend the ACK and
                             // dont pass up the null transaction
-                            if (sipStack.isLoggingEnabled()) {
-                                sipStack.getLogWriter().logDebug(
-                                        "Retransmission of OK detected: Resending last ACK");
-                            }
                             dialog.resendAck();
                             return;
                         } catch (SipException ex) {
                             // What to do here ?? kill the dialog?
-                            sipStack.getLogWriter().logError("could not resend ack", ex);
+                        	System.out.println("could not resend ack");
+                        	ex.printStackTrace();
                         }
                     }
                 }
             }
 
-            if (sipStack.isLoggingEnabled()) {
-                sipStack.getLogWriter().logDebug(
-                        "could not find tx, handling statelessly Dialog = 	" + dialog);
-            }
             // Pass the response up to the application layer to handle
             // statelessly.
 
@@ -1085,30 +917,17 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
         SIPDialog sipDialog = this.sipStack.getDialog(dialogID);
 
         String method = sipResponse.getCSeq().getMethod();
-        if (sipStack.isLoggingEnabled()) {
-            sipStack.getLogWriter().logDebug(
-                    "PROCESSING INCOMING RESPONSE: " + sipResponse.encodeMessage());
-        }
 
         if (listeningPoint == null) {
-            if (sipStack.isLoggingEnabled())
-                sipStack.getLogWriter().logDebug(
-                        "Dropping message: No listening point" + " registered!");
             return;
         }
 
         SipProviderImpl sipProvider = listeningPoint.getProvider();
         if (sipProvider == null) {
-            if (sipStack.isLoggingEnabled()) {
-                sipStack.getLogWriter().logDebug("Dropping message:  no provider");
-            }
             return;
         }
 
         if (sipProvider.sipListener == null) {
-            if (sipStack.isLoggingEnabled()) {
-                sipStack.getLogWriter().logDebug("Dropping message:  no sipListener registered!");
-            }
             return;
         }
 
@@ -1123,20 +942,14 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                 sipDialog = null;
         }
 
-        if (sipStack.isLoggingEnabled())
-            sipStack.getLogWriter().logDebug(
-                    "Transaction = " + transaction + " sipDialog = " + sipDialog);
-
         if (this.transactionChannel != null) {
             String originalFrom = ((SIPRequest) this.transactionChannel.getRequest())
                     .getFromTag();
             if (originalFrom == null ^ sipResponse.getFrom().getTag() == null) {
-                sipStack.getLogWriter().logDebug("From tag mismatch -- dropping response");
                 return;
             }
             if (originalFrom != null
                     && !originalFrom.equalsIgnoreCase(sipResponse.getFrom().getTag())) {
-                sipStack.getLogWriter().logDebug("From tag mismatch -- dropping response");
                 return;
             }
 
@@ -1163,16 +976,8 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
             // Have a dialog but could not find transaction.
             if (sipDialog != null && transaction == null) {
                 if (sipResponse.getStatusCode() / 100 != 2) {
-                    if (sipStack.isLoggingEnabled())
-                        sipStack.getLogWriter().logDebug(
-                                "status code != 200 ; statusCode = "
-                                        + sipResponse.getStatusCode());
                     return;
                 } else if (sipDialog.getState() == DialogState.TERMINATED) {
-                    if (sipStack.isLoggingEnabled()) {
-                        sipStack.getLogWriter().logDebug(
-                                "Dialog is terminated -- dropping response!");
-                    }
                     return;
                 } else {
                     boolean ackAlreadySent = false;
@@ -1191,8 +996,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
                         try {
                             // Found the dialog - resend the ACK and
                             // dont pass up the null transaction
-                            if (sipStack.isLoggingEnabled())
-                                sipStack.getLogWriter().logDebug("resending ACK");
 
                             sipDialog.resendAck();
                             return;
@@ -1206,8 +1009,6 @@ class DialogFilter implements ServerRequestInterface, ServerResponseInterface {
             // statelessly.
 
         }
-        if (sipStack.isLoggingEnabled())
-            sipStack.getLogWriter().logDebug("sending response to TU for processing ");
 
         if (sipDialog != null && sipResponse.getStatusCode() != 100
                 && sipResponse.getTo().getTag() != null) {

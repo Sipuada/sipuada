@@ -38,7 +38,6 @@ import java.util.Properties;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import android.gov.nist.core.LogWriter;
 import android.gov.nist.gnjvx.sip.LogRecord;
 import android.gov.nist.gnjvx.sip.header.CallID;
 import android.gov.nist.gnjvx.sip.message.SIPMessage;
@@ -59,14 +58,12 @@ public class ServerLog {
 
 	private boolean logContent;
 
-	protected LogWriter logWriter;
-
 	/**
 	 * Dont trace
 	 */
 	public static final int TRACE_NONE = 0;
 
-	public static final int TRACE_MESSAGES = LogWriter.TRACE_MESSAGES;
+	public static final int TRACE_MESSAGES = 16;
 
 	/**
 	 * Trace exception processing
@@ -108,7 +105,6 @@ public class ServerLog {
 
 	public ServerLog(SIPTransactionStack sipStack, Properties configurationProperties) {
 		// Debug log file. Whatever gets logged by us also makes its way into debug log.
-		this.logWriter = sipStack.logWriter;
 		this.sipStack = sipStack;
 		this.setProperties(configurationProperties);
 	}
@@ -232,59 +228,6 @@ public class ServerLog {
 						+ "\"\n name=\""
 						+ configurationProperties.getProperty("android.javax.sip.STACK_NAME")
 						+ "\"\n auxInfo=\"" + auxInfo + "\"/>\n ");
-				if (auxInfo != null) {
-
-					if (sipStack.isLoggingEnabled()) {
-						logWriter
-								.logDebug("Here are the stack configuration properties \n"
-										+ "android.javax.sip.IP_ADDRESS= "
-										+ configurationProperties
-												.getProperty("android.javax.sip.IP_ADDRESS")
-										+ "\n"
-										+ "android.javax.sip.ROUTER_PATH= "
-										+ configurationProperties
-												.getProperty("android.javax.sip.ROUTER_PATH")
-										+ "\n"
-										+ "android.javax.sip.OUTBOUND_PROXY= "
-										+ configurationProperties
-												.getProperty("android.javax.sip.OUTBOUND_PROXY")
-										+ "\n"
-										+ "android.gov.nist.gnjvx.sip.CACHE_CLIENT_CONNECTIONS= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.CACHE_CLIENT_CONNECTIONS")
-										+ "\n"
-										+ "android.gov.nist.gnjvx.sip.CACHE_SERVER_CONNECTIONS= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.CACHE_SERVER_CONNECTIONS")
-										+ "\n"
-										+ "android.gov.nist.gnjvx.sip.REENTRANT_LISTENER= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.REENTRANT_LISTENER")
-										+ "android.gov.nist.gnjvx.sip.THREAD_POOL_SIZE= "
-										+ configurationProperties
-												.getProperty("android.gov.nist.gnjvx.sip.THREAD_POOL_SIZE")
-										+ "\n");
-						logWriter.logDebug(" ]]> ");
-						logWriter.logDebug("</debug>");
-						logWriter.logDebug("<description\n logDescription=\"" + description
-								+ "\"\n name=\"" + stackIpAddress + "\"\n auxInfo=\"" + auxInfo
-								+ "\"/>\n ");
-						logWriter.logDebug("<debug>");
-						logWriter.logDebug("<![CDATA[ ");
-					}
-				} else {
-
-					if (sipStack.isLoggingEnabled()) {
-						logWriter.logDebug("Here are the stack configuration properties \n"
-								+ configurationProperties + "\n");
-						logWriter.logDebug(" ]]>");
-						logWriter.logDebug("</debug>");
-						logWriter.logDebug("<description\n logDescription=\"" + description
-								+ "\"\n name=\"" + stackIpAddress + "\" />\n");
-						logWriter.logDebug("<debug>");
-						logWriter.logDebug("<![CDATA[ ");
-					}
-				}
 			}
 		} catch (IOException ex) {
 
@@ -328,10 +271,6 @@ public class ServerLog {
 		String logInfo = message;
 		if (printWriter != null) {
 			printWriter.println(logInfo);
-		}
-		if (sipStack.isLoggingEnabled()) {
-			logWriter.logInfo(logInfo);
-
 		}
 	}
 

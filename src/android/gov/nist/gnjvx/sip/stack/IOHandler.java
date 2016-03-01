@@ -28,16 +28,18 @@
  *******************************************************************************/
 package android.gov.nist.gnjvx.sip.stack;
 
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.gnjvx.sip.SipStackImpl;
-
-import java.io.*;
-import java.net.*;
-import java.util.Hashtable;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.Socket;
 import java.util.Enumeration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import android.gov.nist.gnjvx.sip.SipStackImpl;
 
 /*
  * TLS support Added by Daniel J.Martinez Manzano <dani@dif.um.es>
@@ -136,14 +138,6 @@ class IOHandler {
 		int max_retry = retry ? 2 : 1;
 		// Server uses TCP transport. TCP client sockets are cached
 		int length = bytes.length;
-		if (sipStack.isLoggingEnabled()) {
-			sipStack.logWriter.logDebug("sendBytes " + transport + " inAddr "
-					+ receiverAddress.getHostAddress() + " port = "
-					+ contactPort + " length = " + length);
-		}
-		if ( sipStack.isLoggingEnabled() && sipStack.logStackTraceOnMessageSend ) {
-		    sipStack.logWriter.logStackTrace(LogWriter.TRACE_MESSAGES);
-		}
 		if (transport.compareToIgnoreCase(TCP) == 0) {
 			String key = makeKey(receiverAddress, contactPort);
 			// This should be in a synchronized block ( reported by
@@ -163,12 +157,6 @@ class IOHandler {
 
 				while (retry_count < max_retry) {
 					if (clientSock == null) {
-						if (sipStack.isLoggingEnabled()) {
-							sipStack.logWriter.logDebug("inaddr = "
-									+ receiverAddress);
-							sipStack.logWriter
-									.logDebug("port = " + contactPort);
-						}
 						// note that the IP Address for stack may not be
 						// assigned.
 						// sender address is the address of the listening point.
@@ -189,8 +177,6 @@ class IOHandler {
 							writeChunks(outputStream, bytes, length);
 							break;
 						} catch (IOException ex) {
-							if (sipStack.isLoggingEnabled())
-								sipStack.logWriter.logDebug("IOException occured retryCount " + retry_count);
 							// old connection is bad.
 							// remove from our table.
 							removeSocket(key);
@@ -227,12 +213,6 @@ class IOHandler {
 			try {
 				while (retry_count < max_retry) {
 					if (clientSock == null) {
-						if (sipStack.isLoggingEnabled()) {
-							sipStack.logWriter.logDebug("inaddr = "
-									+ receiverAddress);
-							sipStack.logWriter
-									.logDebug("port = " + contactPort);
-						}
 						if (!sipStack.useTlsAccelerator) {
 							clientSock = sipStack.getNetworkLayer()
 									.createSSLSocket(receiverAddress,
@@ -254,8 +234,6 @@ class IOHandler {
 							writeChunks(outputStream, bytes, length);
 							break;
 						} catch (IOException ex) {
-							if (sipStack.isLoggingEnabled())
-								sipStack.logWriter.logException(ex);
 							// old connection is bad.
 							// remove from our table.
 							removeSocket(key);
