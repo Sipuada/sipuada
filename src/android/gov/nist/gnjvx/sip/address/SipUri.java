@@ -28,22 +28,24 @@
 *******************************************************************************/
 package android.gov.nist.gnjvx.sip.address;
 
+import java.text.ParseException;
+import java.util.Iterator;
+
 /*
  *Bug fix contributions
  *Daniel J. Martinez Manzano <dani@dif.um.es>
  *Stefan Marx.
  */
-import android.gov.nist.core.*;
-import java.util.*;
-import java.text.ParseException;
-
+import android.gov.nist.core.GenericObject;
+import android.gov.nist.core.Host;
+import android.gov.nist.core.HostPort;
+import android.gov.nist.core.NameValue;
+import android.gov.nist.core.NameValueList;
 import android.javax.sip.PeerUnavailableException;
 import android.javax.sip.SipFactory;
 import android.javax.sip.address.SipURI;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
-
-import org.apache.log4j.Logger;
 
 /**
  * Implementation of the SipURI interface.
@@ -57,8 +59,6 @@ import org.apache.log4j.Logger;
  */
 public class SipUri extends GenericURI implements android.javax.sip.address.SipURI , SipURIExt{
 
-	private static Logger logger = Logger.getLogger(SipUri.class);
-	
 	private static final long serialVersionUID = 7749781076218987044L;
 
 	protected String scheme;
@@ -199,7 +199,8 @@ public class SipUri extends GenericURI implements android.javax.sip.address.SipU
 				try {
 					headerFactory = SipFactory.getInstance().createHeaderFactory();
 				} catch (PeerUnavailableException e) {
-					logger.error("Cannot get the header factory to parse the header of the sip uris to compare", e);
+					System.out.println("Cannot get the header factory to parse the header of the sip uris to compare");
+					e.printStackTrace();
 					return false;
 				}
 				for (Iterator i = a.getHeaderNames(); i.hasNext();) {
@@ -216,7 +217,8 @@ public class SipUri extends GenericURI implements android.javax.sip.address.SipU
 						// those present in both must match according to the equals method of the corresponding header
 						if (!header1.equals(header2)) return false;
 					} catch (ParseException e) {
-						logger.error("Cannot parse one of the header of the sip uris to compare " + a + " " + b, e);
+						System.out.println("Cannot parse one of the header of the sip uris to compare " + a + " " + b);
+						e.printStackTrace();
 						return false;
 					}
 				}			
