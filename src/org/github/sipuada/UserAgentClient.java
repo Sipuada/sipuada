@@ -280,7 +280,8 @@ public class UserAgentClient {
 				RequestMethod.OPTIONS,
 				RequestMethod.INVITE,
 				RequestMethod.ACK,
-				RequestMethod.BYE
+				RequestMethod.BYE,
+				RequestMethod.MESSAGE
 		};
 		for (RequestMethod method : acceptedMethods) {
 			try {
@@ -334,7 +335,8 @@ public class UserAgentClient {
 				RequestMethod.OPTIONS,
 				RequestMethod.INVITE,
 				RequestMethod.ACK,
-				RequestMethod.BYE
+				RequestMethod.BYE,
+				RequestMethod.MESSAGE
 		};
 		for (RequestMethod method : acceptedMethods) {
 			try {
@@ -343,7 +345,7 @@ public class UserAgentClient {
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.MESSAGE, remoteUser, remoteHost, requestUri,
-				callIdHeader, cseq, null, null, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+				callIdHeader, cseq, content, contentTypeHeader, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 	
 	public boolean sendMessageRequest(Dialog dialog, String content, ContentTypeHeader contentTypeHeader) {
@@ -542,8 +544,8 @@ public class UserAgentClient {
 			else {
 				request.removeHeader(RouteHeader.NAME);
 			}
-			
-			if(method.toString().equals(RequestMethod.INFO)) {
+		
+			if( method == RequestMethod.INFO || method == RequestMethod.MESSAGE) {
 				request.setContent(content, contentTypeHeader);
 				logger.debug("Setting up the {} request content.", method);
 			}

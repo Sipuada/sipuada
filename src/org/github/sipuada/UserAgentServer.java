@@ -2,6 +2,7 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,8 @@ public class UserAgentServer {
 	public void processRequest(RequestEvent requestEvent) {
 		ServerTransaction serverTransaction = requestEvent.getServerTransaction();
 		Request request = requestEvent.getRequest();
+		logger.debug("processRequest - Content:{}", request.getRawContent());
+		
 		RequestMethod method = RequestMethod.UNKNOWN;
 		try {
 			method = RequestMethod.valueOf(request.getMethod());
@@ -201,6 +204,7 @@ public class UserAgentServer {
 			case INVITE:
 			case ACK:
 			case BYE:
+			case MESSAGE:
 				return true;
 			}
 	}
@@ -314,7 +318,8 @@ public class UserAgentServer {
 				RequestMethod.OPTIONS,
 				RequestMethod.INVITE,
 				RequestMethod.ACK,
-				RequestMethod.BYE
+				RequestMethod.BYE,
+				RequestMethod.MESSAGE
 		};
 		for (RequestMethod method : acceptedMethods) {
 			try {
@@ -327,8 +332,27 @@ public class UserAgentServer {
 		if (newServerTransaction != null) {
 			try {
 				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
-				bus.post(new MessageReceived(callId, serverTransaction.getDialog(), (String) request.getContent(), contentTypeHeader));
+				if (null != contentTypeHeader) {
+					try {
+						logger.info("CONTENT: {}", new String(request.getRawContent()));
+						if (null != request.getRawContent()) {
+							bus.post(new MessageReceived(callId,
+									(null != serverTransaction ? serverTransaction.getDialog() : null),
+									new String(request.getRawContent()), contentTypeHeader));
+						}
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				} else {
+					logger.info("CONTENT: {}", new String(request.getRawContent()));
+					Iterator it = request.getHeaderNames();
+					while (it.hasNext()) {
+						logger.info("HEADER: {}", it.next());
+					}
+					logger.error("Unable to parse Content-Type header");
+				}
 			} catch (Exception e) {
+				e.printStackTrace();
 				logger.error("Unable to parse Content-Type header");
 			}
 			return;
