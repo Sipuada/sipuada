@@ -592,7 +592,7 @@ public class UserAgentServer {
 			}
 			SessionDescription offer = null;
 			try {
-				offer = sessionPlugin.generateOffer(callId, method);
+				offer = sessionPlugin.generateOffer(callId, method, localIp);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate offer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);
@@ -638,7 +638,7 @@ public class UserAgentServer {
 			}
 			SessionDescription answer = null;
 			try {
-				answer = sessionPlugin.generateAnswer(callId, method, offer);
+				answer = sessionPlugin.generateAnswer(callId, method, offer, localIp);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate answer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);
