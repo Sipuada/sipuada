@@ -497,7 +497,7 @@ public class UserAgentClient {
 		}
 		SessionDescription offer = null;
 		try {
-			offer = sessionPlugin.generateOffer(callId, method);
+			offer = sessionPlugin.generateOffer(callId, method, localIp);
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate offer " +
 					"to be inserted into {} request.", method, unexpectedException);
@@ -1435,7 +1435,7 @@ public class UserAgentClient {
 		}
 		SessionDescription answer = null;
 		try {
-			answer = sessionPlugin.generateAnswer(callId, method, offer);
+			answer = sessionPlugin.generateAnswer(callId, method, offer, localIp);
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate answer " +
 					"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
