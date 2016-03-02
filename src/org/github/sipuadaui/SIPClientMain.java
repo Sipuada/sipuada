@@ -15,6 +15,7 @@ import org.github.sipuada.Sipuada;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.OptionsQueryingCallback;
 import org.github.sipuada.SipuadaApi.RegistrationCallback;
+import org.github.sipuada.SipuadaApi.SendingInformationCallback;
 import org.github.sipuada.SipuadaApi.SendingMessageCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.plugins.nop.NoOperationSipuadaPlugin;
@@ -207,7 +208,7 @@ public class SIPClientMain implements SipuadaListener {
 				sipuada = new Sipuada(SIPClientMain.this,
 						registrarUserNameTextField.getText(),
 						registrarDomainTextField.getText(), passwordField
-								.getText(), Util.getIPAddress(true) + ":55002/TCP");
+								.getText(), "192.168.131.224" + ":55002/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
@@ -359,9 +360,39 @@ public class SIPClientMain implements SipuadaListener {
 		frmSipuada.getContentPane().add(btnCancel, "cell 4 7");
 	}
 
-	private void setUPInfoButton(JButton btInfo) {
-		// TODO Auto-generated method stub
-		
+	private void setUPInfoButton(final JButton btInfo) {
+		btInfo.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (sipuada == null) {
+					textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+							+ " Required to register!");
+					btnCancel.setEnabled(false);
+					btInfo.setEnabled(true);
+				}
+				btInfo.setEnabled(false);
+				String content = "Hello World Info!";
+				ContentType contentType = new ContentType("text", "plain");
+				if (null != currentCallID) {
+					sipuada.sendInfo(currentCallID, content, (ContentTypeHeader) contentType,
+							new SendingInformationCallback() {
+
+								@Override
+								public void onSendingInformationSuccess(String callId, String content,
+										ContentTypeHeader contentTypeHeader) {
+									System.out.println("onSendingInformationSuccess...");
+								}
+
+								@Override
+								public void onSendingInformationFailed(String reason) {
+									System.out.println("onSendingInformationFailed...");
+								}
+
+							});
+				}
+				
+			}
+		});
 	}
 
 	@Override
@@ -436,17 +467,19 @@ public class SIPClientMain implements SipuadaListener {
 	public void onMessageReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
+				+ System.getProperty("line.separator") + "Message Received."
 				+ System.getProperty("line.separator") + "Content: " 
 				+ System.getProperty("line.separator") + (null != content ? content : "NULL")
-				+ " Message Received.");	
+				+ System.getProperty("line.separator"));	
 	}
 
 	@Override
 	public void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
+				+ System.getProperty("line.separator") + "Info Received."
 				+ System.getProperty("line.separator") + "Content: " 
 				+ System.getProperty("line.separator") + (null != content ? content : "NULL")
-				+ " Info Received.");		
+				+ System.getProperty("line.separator"));
 	}
 }
