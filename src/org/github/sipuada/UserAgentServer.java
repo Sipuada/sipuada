@@ -13,13 +13,10 @@ import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.MessageReceived;
-import org.github.sipuada.events.QueryingOptionsFailed;
 import org.github.sipuada.events.ReceivingMessageFailed;
 import org.github.sipuada.events.ReceivingOptionsRequestFailed;
 import org.github.sipuada.events.SendingInformationFailed;
 import org.github.sipuada.events.SendingInformationSuccess;
-import org.github.sipuada.events.SendingMessageFailed;
-import org.github.sipuada.events.SendingMessageSuccess;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -30,7 +27,6 @@ import com.google.common.eventbus.EventBus;
 import android.javax.sdp.SdpFactory;
 import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
-import android.javax.sip.Dialog;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
@@ -570,7 +566,7 @@ public class UserAgentServer {
 			}
 			SessionDescription offer = null;
 			try {
-				offer = sessionPlugin.generateOffer(callId, method);
+				offer = sessionPlugin.generateOffer(callId, method, localIp);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate offer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);
@@ -616,7 +612,7 @@ public class UserAgentServer {
 			}
 			SessionDescription answer = null;
 			try {
-				answer = sessionPlugin.generateAnswer(callId, method, offer);
+				answer = sessionPlugin.generateAnswer(callId, method, offer, localIp);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate answer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);

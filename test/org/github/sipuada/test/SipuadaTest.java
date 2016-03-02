@@ -9,6 +9,8 @@ import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import android.javax.sip.header.ContentTypeHeader;
+
 public class SipuadaTest {
 
 	private static final Logger logger = LoggerFactory.getLogger(SipuadaTest.class);
@@ -45,6 +47,18 @@ public class SipuadaTest {
 			@Override
 			public void onCallFailure(String reason, String callId) {
 				logger.debug("onCallFailure: [reason={{}}; callId={{}}].", reason, callId);
+			}
+
+			@Override
+			public void onMessageReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {
+				logger.debug("onMessageReceived: [callId={{}}; contentTypeHeader={{}}; content={{}}].",
+						callId, contentTypeHeader, content);
+			}
+
+			@Override
+			public void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {
+				logger.debug("onInfoReceived: [callId={{}}; contentTypeHeader={{}}; content={{}}].",
+						callId, contentTypeHeader, content);
 			}
 
 		};

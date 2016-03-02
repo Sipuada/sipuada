@@ -13,7 +13,7 @@ public interface SipuadaPlugin {
 	 * @return a SessionDescription representing an offer or null if the plug-in
 	 * wishes to propose no offer to a request of given method.
 	 */
-	SessionDescription generateOffer(String callId, RequestMethod method);
+	SessionDescription generateOffer(String callId, RequestMethod method, String localAddress);
 
 	/**
 	 * Feeds the accepted answer to a given offer back to the plug-in that generated
@@ -35,7 +35,7 @@ public interface SipuadaPlugin {
 	 * @return a SessionDescription representing the answer to an offer
 	 * or null if the plug-in could not elaborate a valid answer to it.
 	 */
-	SessionDescription generateAnswer(String callId, RequestMethod method, SessionDescription offer);
+	SessionDescription generateAnswer(String callId, RequestMethod method, SessionDescription offer, String localAddress);
 
 	/**
 	 * Perform session setup since offer/answer sent alongside
