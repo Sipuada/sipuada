@@ -208,7 +208,7 @@ public class SIPClientMain implements SipuadaListener {
 				sipuada = new Sipuada(SIPClientMain.this,
 						registrarUserNameTextField.getText(),
 						registrarDomainTextField.getText(), passwordField
-								.getText(), "192.168.131.224" + ":55002/TCP");
+								.getText(), Util.getIPAddress(true) + ":55002/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
