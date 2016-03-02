@@ -145,7 +145,7 @@ public class UserAgentServer {
 		if (newServerTransaction != null) {
 			try {
 				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
-				bus.post(new SendingInformationSuccess(callId, serverTransaction.getDialog(), (String) request.getContent(), contentTypeHeader));
+				bus.post(new SendingInformationSuccess(callId, serverTransaction.getDialog(), new String(request.getRawContent()), contentTypeHeader));
 			} catch (Exception e) {
 				logger.error("Unable to parse Content-Type header");
 			}
