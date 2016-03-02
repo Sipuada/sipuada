@@ -205,6 +205,7 @@ public class UserAgentServer {
 			case ACK:
 			case BYE:
 			case MESSAGE:
+			case INFO:
 				return true;
 			}
 	}
@@ -319,7 +320,8 @@ public class UserAgentServer {
 				RequestMethod.INVITE,
 				RequestMethod.ACK,
 				RequestMethod.BYE,
-				RequestMethod.MESSAGE
+				RequestMethod.MESSAGE,
+				RequestMethod.INFO
 		};
 		for (RequestMethod method : acceptedMethods) {
 			try {
