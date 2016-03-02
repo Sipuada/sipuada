@@ -13,6 +13,7 @@ import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.InfoReceived;
 import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.events.ReceivingMessageFailed;
 import org.github.sipuada.events.ReceivingOptionsRequestFailed;
@@ -145,7 +146,7 @@ public class UserAgentServer {
 		if (newServerTransaction != null) {
 			try {
 				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
-				bus.post(new SendingInformationSuccess(callId, serverTransaction.getDialog(), new String(request.getRawContent()), contentTypeHeader));
+				bus.post(new InfoReceived(callId, serverTransaction.getDialog(), new String(request.getRawContent()), contentTypeHeader));
 			} catch (Exception e) {
 				logger.error("Unable to parse Content-Type header");
 			}
