@@ -19,6 +19,7 @@ import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.plugins.nop.NoOperationSipuadaPlugin;
 
 import android.javax.sdp.SessionDescription;
+import android.javax.sip.header.ContentTypeHeader;
 import net.miginfocom.swing.MigLayout;
 
 public class SIPClientMain implements SipuadaListener {
@@ -66,10 +67,10 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	private void setDefautValues() {
-		registrarDomainTextField.setText("192.168.25.217:5060");
-		registrarUserNameTextField.setText("renan");
-		passwordField.setText("renan");
-		callerDomainTextField.setText("192.168.25.217:5060");
+		registrarDomainTextField.setText("192.168.130.207:5060");
+		registrarUserNameTextField.setText("xibaca");
+		passwordField.setText("xibaca");
+		callerDomainTextField.setText("192.168.130.207:5060");
 	}
 
 	private void setUPCallButton(final JButton callButton) {
@@ -181,8 +182,10 @@ public class SIPClientMain implements SipuadaListener {
 				}
 				sipuada = new Sipuada(SIPClientMain.this,
 						registrarUserNameTextField.getText(),
-						registrarDomainTextField.getText(), passwordField
-								.getText(), "192.168.25.217:55002/TCP");
+						registrarDomainTextField.getText(),
+						passwordField.getText(),
+//						"192.168.130.49:55002/TCP",
+						"192.168.130.207:55003/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
@@ -393,4 +396,11 @@ public class SIPClientMain implements SipuadaListener {
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Failure: " + reason);
 	}
+
+	@Override
+	public void onMessageReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {}
+
+	@Override
+	public void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {}
+
 }
