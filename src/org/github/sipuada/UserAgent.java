@@ -68,7 +68,16 @@ import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
 
-public class UserAgent implements SipListener {                                           
+public class UserAgent implements SipListener {
+	
+	protected static final RequestMethod sAcceptedMethods[] = {
+	        RequestMethod.CANCEL,
+	        RequestMethod.OPTIONS,
+	        RequestMethod.MESSAGE,
+	        RequestMethod.INVITE,
+	        RequestMethod.INFO,
+	        RequestMethod.ACK,
+	        RequestMethod.BYE };
 
 	private final Logger logger = LoggerFactory.getLogger(UserAgent.class);
 

@@ -163,14 +163,8 @@ public class UserAgentServer {
 			logger.warn("{} request is not allowed.", method);
 			//TODO add Allow header with supported methods.
 			List<Header> allowedMethods = new LinkedList<>();
-			RequestMethod acceptedMethods[] = {
-					RequestMethod.CANCEL,
-					RequestMethod.OPTIONS,
-					RequestMethod.INVITE,
-					RequestMethod.ACK,
-					RequestMethod.BYE
-			};
-			for (RequestMethod acceptedMethod : acceptedMethods) {
+			
+			for (RequestMethod acceptedMethod : UserAgent.sAcceptedMethods) {
 				try {
 					AllowHeader allowHeader = headerMaker
 							.createAllowHeader(acceptedMethod.toString());
@@ -202,10 +196,10 @@ public class UserAgentServer {
 				return false;
 			case CANCEL:
 			case OPTIONS:
+			case MESSAGE:
 			case INVITE:
 			case ACK:
 			case BYE:
-			case MESSAGE:
 			case INFO:
 				return true;
 			}
@@ -315,16 +309,8 @@ public class UserAgentServer {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
 		List<Header> additionalHeaders = new ArrayList<>();
-		RequestMethod acceptedMethods[] = {
-				RequestMethod.CANCEL,
-				RequestMethod.OPTIONS,
-				RequestMethod.INVITE,
-				RequestMethod.ACK,
-				RequestMethod.BYE,
-				RequestMethod.MESSAGE,
-				RequestMethod.INFO
-		};
-		for (RequestMethod method : acceptedMethods) {
+		
+		for (RequestMethod method : UserAgent.sAcceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -381,14 +367,8 @@ public class UserAgentServer {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
 		List<Header> additionalHeaders = new ArrayList<>();
-		RequestMethod acceptedMethods[] = {
-				RequestMethod.CANCEL,
-				RequestMethod.OPTIONS,
-				RequestMethod.INVITE,
-				RequestMethod.ACK,
-				RequestMethod.BYE
-		};
-		for (RequestMethod method : acceptedMethods) {
+		
+		for (RequestMethod method : UserAgent.sAcceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -462,14 +442,8 @@ public class UserAgentServer {
 			contactHeader.setExpires(60);
 		} catch (InvalidArgumentException ignore) {}
 		additionalHeaders.add(contactHeader);
-		RequestMethod acceptedMethods[] = {
-				RequestMethod.CANCEL,
-				RequestMethod.OPTIONS,
-				RequestMethod.INVITE,
-				RequestMethod.ACK,
-				RequestMethod.BYE
-		};
-		for (RequestMethod acceptedMethod : acceptedMethods) {
+		
+		for (RequestMethod acceptedMethod : UserAgent.sAcceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker
 						.createAllowHeader(acceptedMethod.toString());
