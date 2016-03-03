@@ -484,5 +484,4 @@ public class SIPClientMain implements SipuadaListener {
 				+ System.getProperty("line.separator") + (null != content ? content : "NULL")
 				+ System.getProperty("line.separator"));
 	}
->>>>>>> abe63ef1f3f6a70aef5f6b9204a972bd9846203d
 }
