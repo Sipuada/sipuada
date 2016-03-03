@@ -189,20 +189,11 @@ public class UserAgentServer {
 		return true;
 	}
 
-	private boolean methodIsAllowed(RequestMethod method) {
-		switch (method) {
-			case UNKNOWN:
-			default:
-				return false;
-			case CANCEL:
-			case OPTIONS:
-			case MESSAGE:
-			case INVITE:
-			case ACK:
-			case BYE:
-			case INFO:
-				return true;
-			}
+	private boolean methodIsAllowed(final RequestMethod method) {
+		for(RequestMethod requestMethod : UserAgent.sAcceptedMethods) {
+			if(requestMethod == method) return true;
+		}
+		return false;
 	}
 
 	private boolean requestShouldBeAddressed(RequestMethod method, Request request,
