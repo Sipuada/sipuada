@@ -210,7 +210,7 @@ public class SIPClientMain implements SipuadaListener {
 						registrarDomainTextField.getText(),
 						passwordField.getText(),
 //						"192.168.130.49:55002/TCP",
-						"192.168.130.207:55003/TCP");
+						"192.168.130.207:55002/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
@@ -398,10 +398,10 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public boolean onCallInvitationArrived(String callId) {
+	public boolean onCallInvitationArrived(String callId, String remoteUsername, String remoteHost) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
-				+ " Call Invitation Arrived.");
+				+ " Call Invitation from " + remoteUsername + "@" + remoteHost + " Arrived.");
 		btAcceptCall.setEnabled(true);
 		btRejectCall.setEnabled(true);
 		this.currentInviteCallID = callId;
