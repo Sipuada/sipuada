@@ -19,8 +19,10 @@ public class SipuadaTest {
 		SipuadaListener sipuadaListener = new SipuadaListener() {
 
 			@Override
-			public boolean onCallInvitationArrived(String callId) {
-				logger.debug("onCallInvitationArrived: [callId={{}}].", callId);
+			public boolean onCallInvitationArrived(String callId,
+					String remoteUsername, String remoteHost) {
+				logger.debug("onCallInvitationArrived: [callId={{}};" +
+					" remoteUsername={{}}; remoteHost={{}}].", callId, remoteUsername, remoteHost);
 				return false;
 			}
 

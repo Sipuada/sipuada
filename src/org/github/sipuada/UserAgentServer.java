@@ -1,7 +1,7 @@
 package org.github.sipuada;
 
 import java.text.ParseException;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +37,7 @@ import android.javax.sip.address.URI;
 import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
+import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ToHeader;
@@ -126,14 +127,7 @@ public class UserAgentServer {
 			logger.warn("{} request is not allowed.", method);
 			//TODO add Allow header with supported methods.
 			List<Header> allowedMethods = new LinkedList<>();
-			RequestMethod acceptedMethods[] = {
-					RequestMethod.CANCEL,
-					RequestMethod.OPTIONS,
-					RequestMethod.INVITE,
-					RequestMethod.ACK,
-					RequestMethod.BYE
-			};
-			for (RequestMethod acceptedMethod : acceptedMethods) {
+			for (RequestMethod acceptedMethod : UserAgent.acceptedMethods) {
 				try {
 					AllowHeader allowHeader = headerMaker
 							.createAllowHeader(acceptedMethod.toString());
@@ -158,18 +152,13 @@ public class UserAgentServer {
 		return true;
 	}
 
-	private boolean methodIsAllowed(RequestMethod method) {
-		switch (method) {
-			case UNKNOWN:
-			default:
-				return false;
-			case CANCEL:
-			case OPTIONS:
-			case INVITE:
-			case ACK:
-			case BYE:
+	private boolean methodIsAllowed(final RequestMethod method) {
+		for (RequestMethod allowedMethod : UserAgent.acceptedMethods) {
+			if (allowedMethod == method) {
 				return true;
 			}
+		}
+		return false;
 	}
 
 	private boolean requestShouldBeAddressed(RequestMethod method, Request request,
@@ -259,14 +248,7 @@ public class UserAgentServer {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
 		List<Header> additionalHeaders = new ArrayList<>();
-		RequestMethod acceptedMethods[] = {
-				RequestMethod.CANCEL,
-				RequestMethod.OPTIONS,
-				RequestMethod.INVITE,
-				RequestMethod.ACK,
-				RequestMethod.BYE
-		};
-		for (RequestMethod method : acceptedMethods) {
+		for (RequestMethod method : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -274,8 +256,11 @@ public class UserAgentServer {
 		}
 		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING, RequestMethod.INVITE,
 				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+		FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
+		String remoteUsername = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
+		String remoteHost = fromHeader.getAddress().getURI().toString().split("@")[1];
 		if (newServerTransaction != null) {
-			bus.post(new CallInvitationArrived(callId, newServerTransaction));
+			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUsername, remoteHost));
 			RequestMethod method = RequestMethod.INVITE;
 			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
 					Response.UNSUPPORTED_MEDIA_TYPE)) {
@@ -340,14 +325,7 @@ public class UserAgentServer {
 			contactHeader.setExpires(60);
 		} catch (InvalidArgumentException ignore) {}
 		additionalHeaders.add(contactHeader);
-		RequestMethod acceptedMethods[] = {
-				RequestMethod.CANCEL,
-				RequestMethod.OPTIONS,
-				RequestMethod.INVITE,
-				RequestMethod.ACK,
-				RequestMethod.BYE
-		};
-		for (RequestMethod acceptedMethod : acceptedMethods) {
+		for (RequestMethod acceptedMethod : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker
 						.createAllowHeader(acceptedMethod.toString());

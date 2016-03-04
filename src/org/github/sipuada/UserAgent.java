@@ -56,7 +56,16 @@ import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
 
-public class UserAgent implements SipListener {                                           
+public class UserAgent implements SipListener {
+	
+	protected static final RequestMethod acceptedMethods[] = {
+	        RequestMethod.CANCEL,
+	        RequestMethod.OPTIONS,
+	        RequestMethod.MESSAGE,
+	        RequestMethod.INVITE,
+	        RequestMethod.INFO,
+	        RequestMethod.ACK,
+	        RequestMethod.BYE };
 
 	private final Logger logger = LoggerFactory.getLogger(UserAgent.class);
 
@@ -219,7 +228,8 @@ public class UserAgent implements SipListener {
 
 				};
 				internalEventBus.register(inviteCancelerEventBusSubscriber);
-				boolean currentlyBusy = listener.onCallInvitationArrived(callId);
+				boolean currentlyBusy = listener.onCallInvitationArrived(callId,
+						event.getRemoteUsername(), event.getRemoteHost());
 				if (currentlyBusy) {
 					logger.info("Callee is currently busy.");
 					answerInviteRequest(callId, false);

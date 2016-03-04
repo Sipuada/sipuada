@@ -271,14 +271,7 @@ public class UserAgentClient {
 			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
-		RequestMethod acceptedMethods[] = {
-				RequestMethod.CANCEL,
-				RequestMethod.OPTIONS,
-				RequestMethod.INVITE,
-				RequestMethod.ACK,
-				RequestMethod.BYE
-		};
-		for (RequestMethod method : acceptedMethods) {
+		for (RequestMethod method : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
