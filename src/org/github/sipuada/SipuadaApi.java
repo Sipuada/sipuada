@@ -8,7 +8,7 @@ public interface SipuadaApi {
 
 	interface SipuadaListener {
 
-		boolean onCallInvitationArrived(String callId);
+		boolean onCallInvitationArrived(String callId, String remoteUser, String remoteDomain);
 
 		void onCallInvitationCanceled(String reason, String callId);
 
