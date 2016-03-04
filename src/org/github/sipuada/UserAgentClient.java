@@ -276,7 +276,7 @@ public class UserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 
-		for (RequestMethod method : UserAgent.sAcceptedMethods) {
+		for (RequestMethod method : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -324,7 +324,7 @@ public class UserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 		
-		for (RequestMethod method : UserAgent.sAcceptedMethods) {
+		for (RequestMethod method : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -379,7 +379,7 @@ public class UserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 		
-		for (RequestMethod method : UserAgent.sAcceptedMethods) {
+		for (RequestMethod method : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);

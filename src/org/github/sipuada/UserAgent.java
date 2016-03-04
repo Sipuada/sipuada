@@ -70,7 +70,7 @@ import android.javax.sip.message.Request;
 
 public class UserAgent implements SipListener {
 	
-	protected static final RequestMethod sAcceptedMethods[] = {
+	protected static final RequestMethod acceptedMethods[] = {
 	        RequestMethod.CANCEL,
 	        RequestMethod.OPTIONS,
 	        RequestMethod.MESSAGE,
@@ -240,7 +240,8 @@ public class UserAgent implements SipListener {
 
 				};
 				internalEventBus.register(inviteCancelerEventBusSubscriber);
-				boolean currentlyBusy = listener.onCallInvitationArrived(callId);
+				boolean currentlyBusy = listener.onCallInvitationArrived(callId,
+						event.getRemoteUsername(), event.getRemoteHost());
 				if (currentlyBusy) {
 					logger.info("Callee is currently busy.");
 					answerInviteRequest(callId, false);

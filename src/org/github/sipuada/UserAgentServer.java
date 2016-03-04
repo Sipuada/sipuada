@@ -2,7 +2,6 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -15,10 +14,7 @@ import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.InfoReceived;
 import org.github.sipuada.events.MessageReceived;
-import org.github.sipuada.events.ReceivingMessageFailed;
 import org.github.sipuada.events.ReceivingOptionsRequestFailed;
-import org.github.sipuada.events.SendingInformationFailed;
-import org.github.sipuada.events.SendingInformationSuccess;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -45,6 +41,7 @@ import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ToHeader;
@@ -142,17 +139,12 @@ public class UserAgentServer {
 		String callId = callIdHeader.getCallId();
 		ServerTransaction newServerTransaction = doSendResponse(Response.OK,
 				RequestMethod.INFO, request, serverTransaction);
-		
 		if (newServerTransaction != null) {
-			try {
-				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
-				bus.post(new InfoReceived(callId, serverTransaction.getDialog(), new String(request.getRawContent()), contentTypeHeader));
-			} catch (Exception e) {
-				logger.error("Unable to parse Content-Type header");
-			}
+			ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request
+					.getHeader(ContentTypeHeader.NAME);
+			bus.post(new InfoReceived(callId, serverTransaction.getDialog(),
+					new String(request.getRawContent()), contentTypeHeader));
 			return;
-		} else {
-			bus.post(new SendingInformationFailed("Unable to retrieve content and Content-Type", callId));
 		}
 		throw new RequestCouldNotBeAddressed();
 	}
@@ -164,7 +156,7 @@ public class UserAgentServer {
 			//TODO add Allow header with supported methods.
 			List<Header> allowedMethods = new LinkedList<>();
 			
-			for (RequestMethod acceptedMethod : UserAgent.sAcceptedMethods) {
+			for (RequestMethod acceptedMethod : UserAgent.acceptedMethods) {
 				try {
 					AllowHeader allowHeader = headerMaker
 							.createAllowHeader(acceptedMethod.toString());
@@ -190,7 +182,7 @@ public class UserAgentServer {
 	}
 
 	private boolean methodIsAllowed(final RequestMethod method) {
-		for(RequestMethod requestMethod : UserAgent.sAcceptedMethods) {
+		for(RequestMethod requestMethod : UserAgent.acceptedMethods) {
 			if(requestMethod == method) return true;
 		}
 		return false;
@@ -301,7 +293,7 @@ public class UserAgentServer {
 		String callId = callIdHeader.getCallId();
 		List<Header> additionalHeaders = new ArrayList<>();
 		
-		for (RequestMethod method : UserAgent.sAcceptedMethods) {
+		for (RequestMethod method : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -310,34 +302,15 @@ public class UserAgentServer {
 		ServerTransaction newServerTransaction = doSendResponse(Response.OK, RequestMethod.MESSAGE,
 				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 		if (newServerTransaction != null) {
-			try {
-				ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader("Content-Type");
-				if (null != contentTypeHeader) {
-					try {
-						logger.info("CONTENT: {}", new String(request.getRawContent()));
-						if (null != request.getRawContent()) {
-							bus.post(new MessageReceived(callId,
-									(null != serverTransaction ? serverTransaction.getDialog() : null),
-									new String(request.getRawContent()), contentTypeHeader));
-						}
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-				} else {
-					logger.info("CONTENT: {}", new String(request.getRawContent()));
-					Iterator it = request.getHeaderNames();
-					while (it.hasNext()) {
-						logger.info("HEADER: {}", it.next());
-					}
-					logger.error("Unable to parse Content-Type header");
+			ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader(ContentTypeHeader.NAME);
+			if (contentTypeHeader != null) {
+				if (request.getRawContent() != null) {
+					bus.post(new MessageReceived(callId,
+							(null != serverTransaction ? serverTransaction.getDialog() : null),
+							new String(request.getRawContent()), contentTypeHeader));
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
-				logger.error("Unable to parse Content-Type header");
 			}
 			return;
-		} else {
-			bus.post(new ReceivingMessageFailed("Unable to retrieve content and Content-Type", callId));
 		}
 		throw new RequestCouldNotBeAddressed();
 	}
@@ -359,7 +332,7 @@ public class UserAgentServer {
 		String callId = callIdHeader.getCallId();
 		List<Header> additionalHeaders = new ArrayList<>();
 		
-		for (RequestMethod method : UserAgent.sAcceptedMethods) {
+		for (RequestMethod method : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -367,8 +340,11 @@ public class UserAgentServer {
 		}
 		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING, RequestMethod.INVITE,
 				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+		FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
+		String remoteUsername = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
+		String remoteHost = fromHeader.getAddress().getURI().toString().split("@")[1];
 		if (newServerTransaction != null) {
-			bus.post(new CallInvitationArrived(callId, newServerTransaction));
+			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUsername, remoteHost));
 			RequestMethod method = RequestMethod.INVITE;
 			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
 					Response.UNSUPPORTED_MEDIA_TYPE)) {
@@ -434,7 +410,7 @@ public class UserAgentServer {
 		} catch (InvalidArgumentException ignore) {}
 		additionalHeaders.add(contactHeader);
 		
-		for (RequestMethod acceptedMethod : UserAgent.sAcceptedMethods) {
+		for (RequestMethod acceptedMethod : UserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker
 						.createAllowHeader(acceptedMethod.toString());
