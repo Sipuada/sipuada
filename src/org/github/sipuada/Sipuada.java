@@ -1049,22 +1049,38 @@ public class Sipuada implements SipuadaApi {
 
 	@Override
 	public boolean cancelCallInvitation(String callId) {
-		return callIdToActiveUserAgent.get(callId).cancelInviteRequest(callId);
+		UserAgent userAgent = callIdToActiveUserAgent.get(callId);
+		if (userAgent == null) {
+			return false;
+		}
+		return userAgent.cancelInviteRequest(callId);
 	}
 
 	@Override
 	public boolean acceptCallInvitation(String callId) {
-		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, true);
+		UserAgent userAgent = callIdToActiveUserAgent.get(callId);
+		if (userAgent == null) {
+			return false;
+		}
+		return userAgent.answerInviteRequest(callId, true);
 	}
 
 	@Override
 	public boolean declineCallInvitation(String callId) {
-		return callIdToActiveUserAgent.get(callId).answerInviteRequest(callId, false);
+		UserAgent userAgent = callIdToActiveUserAgent.get(callId);
+		if (userAgent == null) {
+			return false;
+		}
+		return userAgent.answerInviteRequest(callId, false);
 	}
 
 	@Override
 	public boolean finishCall(String callId) {
-		return callIdToActiveUserAgent.get(callId).finishCall(callId);
+		UserAgent userAgent = callIdToActiveUserAgent.get(callId);
+		if (userAgent == null) {
+			return false;
+		}
+		return userAgent.finishCall(callId);
 	}
 
 	@Override
