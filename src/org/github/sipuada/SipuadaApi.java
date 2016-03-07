@@ -48,7 +48,7 @@ public interface SipuadaApi {
 
 	}
 
-	boolean inviteToCall(String remoteUser, String remoteDomain, CallInvitationCallback callback);
+	String inviteToCall(String remoteUser, String remoteDomain, CallInvitationCallback callback);
 
 	boolean cancelCallInvitation(String callId);
 
