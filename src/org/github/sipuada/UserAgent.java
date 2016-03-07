@@ -357,7 +357,7 @@ public class UserAgent implements SipListener {
 		return expectRemoteAnswer;
 	}
 
-	public boolean sendInviteRequest(String remoteUser, String remoteDomain,
+	public String sendInviteRequest(String remoteUser, String remoteDomain,
 			final CallInvitationCallback callback) {
 		CallIdHeader callIdHeader = provider.getNewCallId();
 		final String callId = callIdHeader.getCallId();
@@ -421,7 +421,7 @@ public class UserAgent implements SipListener {
 			logger.error("INVITE request not sent.");
 			internalEventBus.unregister(eventBusSubscriber);
 		}
-		return expectRemoteAnswer;
+		return expectRemoteAnswer ? callId : null;
 	}
 
 	private void inviteOperationIsCancelable(String eventBusSubscriberId,

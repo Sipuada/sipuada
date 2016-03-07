@@ -930,7 +930,7 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean inviteToCall(String remoteUser, String remoteDomain,
+	public String inviteToCall(String remoteUser, String remoteDomain,
 			CallInvitationCallback callback) {
 		return chooseBestAgentThatIsAvailable().sendInviteRequest(remoteUser,
 				remoteDomain, callback);
