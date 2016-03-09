@@ -408,7 +408,7 @@ public class UserAgentServer {
 			logger.debug("Response Dump:\n{}\n", response);
 			try {
 				newServerTransaction.sendResponse(response);
-			} catch (NullPointerException lowLevelStackFailed) {
+			} catch (RuntimeException lowLevelStackFailed) {
 				logger.error("{} response to {} request could not be sent due to a " +
 						"JAINSIP-level failure.", statusCode, method, lowLevelStackFailed);
 				throw new InternalJainSipException("Severe JAINSIP-level failure!",
