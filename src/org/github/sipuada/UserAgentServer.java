@@ -15,6 +15,7 @@ import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.InfoReceived;
 import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.events.ReceivingOptionsRequestFailed;
+import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -490,7 +491,14 @@ public class UserAgentServer {
 			}
 			logger.info("Sending {} response to {} request...", statusCode, method);
 			logger.debug("Response Dump:\n{}\n", response);
-			newServerTransaction.sendResponse(response);
+			try {
+				newServerTransaction.sendResponse(response);
+			} catch (NullPointerException lowLevelStackFailed) {
+				logger.error("{} response to {} request could not be sent due to a " +
+						"JAINSIP-level failure.", statusCode, method, lowLevelStackFailed);
+				throw new InternalJainSipException("Severe JAINSIP-level failure!",
+						lowLevelStackFailed);
+			}
 			logger.info("{} response sent.", statusCode);
 			return newServerTransaction;
 		} catch (ParseException ignore) {

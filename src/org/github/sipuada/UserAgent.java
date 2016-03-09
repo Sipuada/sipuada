@@ -411,8 +411,9 @@ public class UserAgent implements SipListener {
 		}
 		return true;
 	}
-	
-	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content, ContentTypeHeader contentTypeHeader, final SendingMessageCallback callback) {
+
+	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content,
+			ContentTypeHeader contentTypeHeader, final SendingMessageCallback callback) {
 		CallIdHeader callIdHeader = provider.getNewCallId();
 		final String callId = callIdHeader.getCallId();
 		logger.debug("UserAgent - sendOptionsRequest - callId:" + callId);
@@ -436,14 +437,15 @@ public class UserAgent implements SipListener {
 		};
 		internalEventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendMessageRequest(remoteUser, remoteDomain, callIdHeader, content, contentTypeHeader);
+		boolean expectRemoteAnswer = uac.sendMessageRequest(remoteUser, remoteDomain, callIdHeader,
+				content, contentTypeHeader);
 		if (!expectRemoteAnswer) {
 			logger.error("MESSAGE request not sent.");
 			internalEventBus.unregister(eventBusSubscriber);
 		}
 		return true;
 	}
-	
+
 	public boolean sendMessageRequest(final String callId, String content, ContentTypeHeader contentTypeHeader,
 			final SendingMessageCallback callback) {
 		
@@ -496,8 +498,9 @@ public class UserAgent implements SipListener {
 				"'{}' not found.", callId);
 		return false;
 	}
-	
-	public boolean sendInfoRequest(final String callId, String content, ContentTypeHeader contentTypeHeader, final SendingInformationCallback callback) {
+
+	public boolean sendInfoRequest(final String callId, String content,
+			ContentTypeHeader contentTypeHeader, final SendingInformationCallback callback) {
 		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
 		if (eventBusSubscriberId == null) {
 			logger.error("Cannot send info.\nEstablished call with callId " +
@@ -511,7 +514,8 @@ public class UserAgent implements SipListener {
 			@Subscribe
 			public void onEvent(SendingInformationSuccess event) {
 				if (event.getCallId().equals(callId)) {
-					callback.onSendingInformationSuccess(callId, event.getContent(), event.getContentTypeHeader());
+					callback.onSendingInformationSuccess(callId,
+							event.getContent(), event.getContentTypeHeader());
 				}
 			}
 
@@ -547,9 +551,6 @@ public class UserAgent implements SipListener {
 				"'{}' not found.", callId);
 		return false;
 	}
-	
-	
-	
 
 	public String sendInviteRequest(String remoteUser, String remoteDomain,
 			final CallInvitationCallback callback) {
