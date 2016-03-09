@@ -24,6 +24,7 @@ import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.Transport;
 import org.github.sipuada.Sipuada.RegisterOperation.OperationMethod;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
+import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.slf4j.Logger;
@@ -262,7 +263,7 @@ public class Sipuada implements SipuadaApi {
 			logger.info("Sipuada created. Default transport: {}. UA: {}",
 					defaultTransport, userAgentsDump.toString());
 		}
-		registerOperationsInProgress.put(RequestMethod.REGISTER, true);
+		/*registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 		wipeAddresses(new RegistrationCallback() {
 
 			@Override
@@ -279,7 +280,7 @@ public class Sipuada implements SipuadaApi {
 				registerRelatedOperationFinished();
 			}
 
-		});
+		});*/
 	}
 
 	private SipStack generateSipStack() {
@@ -297,9 +298,9 @@ public class Sipuada implements SipuadaApi {
 		}
 	}
 
-	private boolean wipeAddresses(final RegistrationCallback callback) {
+/*	private boolean wipeAddresses(final RegistrationCallback callback) {
 		return chooseBestAgentThatIsAvailable().sendUnregisterRequest(callback);
-	}
+	}*/
 
 	@Subscribe
 	public synchronized void electBestUserAgentForIncomingRequest(UserAgentNominatedForIncomingRequest event) {
@@ -373,26 +374,30 @@ public class Sipuada implements SipuadaApi {
 				}
 			}
 		}
-		boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-				.sendRegisterRequest(new RegistrationCallback() {
-
-			@Override
-			public void onRegistrationSuccess(List<String> registeredContacts) {
-				registerRelatedOperationFinished();
-				callback.onRegistrationSuccess(registeredContacts);
+		try {
+			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
+					.sendRegisterRequest(new RegistrationCallback() {
+						
+						@Override
+						public void onRegistrationSuccess(List<String> registeredContacts) {
+							registerRelatedOperationFinished();
+							callback.onRegistrationSuccess(registeredContacts);
+						}
+						
+						@Override
+						public void onRegistrationFailed(String reason) {
+							registerRelatedOperationFinished();
+							callback.onRegistrationFailed(reason);
+						}
+						
+					}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+			if (couldDispatchOperation) {
+				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
-
-			@Override
-			public void onRegistrationFailed(String reason) {
-				registerRelatedOperationFinished();
-				callback.onRegistrationFailed(reason);
-			}
-
-		}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
-		if (couldDispatchOperation) {
-			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
+			return couldDispatchOperation;
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
 		}
-		return couldDispatchOperation;
 	}
 
 	@Override
@@ -433,26 +438,30 @@ public class Sipuada implements SipuadaApi {
 			logger.debug("{}:{}/{} registration will be left untouched.", listeningPoint.getIPAddress(),
 					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
 		}
-		boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-				.sendRegisterRequest(new RegistrationCallback() {
-
-			@Override
-			public void onRegistrationSuccess(List<String> registeredContacts) {
-				registerRelatedOperationFinished();
-				callback.onRegistrationSuccess(registeredContacts);
+		try {
+			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
+					.sendRegisterRequest(new RegistrationCallback() {
+						
+						@Override
+						public void onRegistrationSuccess(List<String> registeredContacts) {
+							registerRelatedOperationFinished();
+							callback.onRegistrationSuccess(registeredContacts);
+						}
+						
+						@Override
+						public void onRegistrationFailed(String reason) {
+							registerRelatedOperationFinished();
+							callback.onRegistrationFailed(reason);
+						}
+						
+					}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+			if (couldDispatchOperation) {
+				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
-
-			@Override
-			public void onRegistrationFailed(String reason) {
-				registerRelatedOperationFinished();
-				callback.onRegistrationFailed(reason);
-			}
-
-		}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
-		if (couldDispatchOperation) {
-			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
+			return couldDispatchOperation;
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
 		}
-		return couldDispatchOperation;
 	}
 
 	@Override
@@ -503,27 +512,31 @@ public class Sipuada implements SipuadaApi {
 			logger.debug("{}:{}/{} registration will be left untouched.", listeningPoint.getIPAddress(),
 					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
 		}
-		boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-				.sendUnregisterRequest(new RegistrationCallback() {
-
-			@Override
-			public void onRegistrationSuccess(List<String> unregisteredContacts) {
-				registerRelatedOperationFinished();
-				callback.onRegistrationSuccess(unregisteredContacts);
+		try {
+			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
+					.sendUnregisterRequest(new RegistrationCallback() {
+						
+						@Override
+						public void onRegistrationSuccess(List<String> unregisteredContacts) {
+							registerRelatedOperationFinished();
+							callback.onRegistrationSuccess(unregisteredContacts);
+						}
+						
+						@Override
+						public void onRegistrationFailed(String reason) {
+							performUserAgentsCleanup(expired);
+							registerRelatedOperationFinished();
+							callback.onRegistrationFailed(reason);
+						}
+						
+					}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
+			if (couldDispatchOperation) {
+				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
-
-			@Override
-			public void onRegistrationFailed(String reason) {
-				performUserAgentsCleanup(expired);
-				registerRelatedOperationFinished();
-				callback.onRegistrationFailed(reason);
-			}
-
-		}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
-		if (couldDispatchOperation) {
-			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
+			return couldDispatchOperation;
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
 		}
-		return couldDispatchOperation;
 	}
 
 	@Override
@@ -579,66 +592,78 @@ public class Sipuada implements SipuadaApi {
 		final UserAgent chosenUserAgent = chooseBestAgentThatWontBeRemoved(expired);
 		boolean couldDispatchOperation = true;
 		if (!registeredAddresses.isEmpty()) {
-			couldDispatchOperation = chosenUserAgent.sendRegisterRequest(new RegistrationCallback() {
-
-				@Override
-				public void onRegistrationSuccess(List<String> registeredContacts) {
-					if (!unregisteredAddresses.isEmpty()) {
-						boolean couldSendRequest = chosenUserAgent
-								.sendUnregisterRequest(new RegistrationCallback() {
-
+			try {
+				couldDispatchOperation = chosenUserAgent.sendRegisterRequest(new RegistrationCallback() {
+					
+					@Override
+					public void onRegistrationSuccess(List<String> registeredContacts) {
+						if (!unregisteredAddresses.isEmpty()) {
+							boolean couldSendRequest;
+							try {
+								couldSendRequest = chosenUserAgent
+										.sendUnregisterRequest(new RegistrationCallback() {
+											
+											@Override
+											public void onRegistrationSuccess(List<String> unregisteredContacts) {
+												performUserAgentsCleanup(expired);
+												registerRelatedOperationFinished();
+												callback.onRegistrationSuccess(unregisteredContacts);
+											}
+											
+											@Override
+											public void onRegistrationFailed(String reason) {
+												registerRelatedOperationFinished();
+												callback.onRegistrationFailed(reason);
+											}
+											
+										}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
+							} catch (InternalJainSipException internalJainSipError) {
+								couldSendRequest = false;
+							}
+							if (!couldSendRequest) {
+								registerRelatedOperationFinished();
+								callback.onRegistrationFailed(String.format("Could register some contacts " +
+										"(%s) but could not unregister others (%s).", registeredAddresses,
+										unregisteredAddresses));
+							}
+						} else {
+							registerRelatedOperationFinished();
+							callback.onRegistrationSuccess(registeredContacts);
+						}
+					}
+					
+					@Override
+					public void onRegistrationFailed(String reason) {
+						registerRelatedOperationFinished();
+						callback.onRegistrationFailed(reason);
+					}
+					
+				}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+			} catch (InternalJainSipException internalJainSipError) {
+				couldDispatchOperation = false;
+			}
+		} else if (!unregisteredAddresses.isEmpty()) {
+			try {
+				couldDispatchOperation = chosenUserAgent
+						.sendUnregisterRequest(new RegistrationCallback() {
+							
 							@Override
-							public void onRegistrationSuccess(List<String> unregisteredContacts) {
+							public void onRegistrationSuccess(List<String> registeredContacts) {
 								performUserAgentsCleanup(expired);
 								registerRelatedOperationFinished();
-								callback.onRegistrationSuccess(unregisteredContacts);
+								callback.onRegistrationSuccess(new LinkedList<String>());
 							}
-
+							
 							@Override
 							public void onRegistrationFailed(String reason) {
 								registerRelatedOperationFinished();
 								callback.onRegistrationFailed(reason);
 							}
-
+							
 						}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
-						if (!couldSendRequest) {
-							registerRelatedOperationFinished();
-							callback.onRegistrationFailed(String.format("Could register some contacts " +
-									"(%s) but could not unregister others (%s).", registeredAddresses,
-									unregisteredAddresses));
-						}
-					} else {
-						registerRelatedOperationFinished();
-						callback.onRegistrationSuccess(registeredContacts);
-					}
-				}
-
-				@Override
-				public void onRegistrationFailed(String reason) {
-					registerRelatedOperationFinished();
-					callback.onRegistrationFailed(reason);
-				}
-
-			}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
-
-		} else if (!unregisteredAddresses.isEmpty()) {
-			couldDispatchOperation = chosenUserAgent
-					.sendUnregisterRequest(new RegistrationCallback() {
-
-				@Override
-				public void onRegistrationSuccess(List<String> registeredContacts) {
-					performUserAgentsCleanup(expired);
-					registerRelatedOperationFinished();
-					callback.onRegistrationSuccess(new LinkedList<String>());
-				}
-
-				@Override
-				public void onRegistrationFailed(String reason) {
-					registerRelatedOperationFinished();
-					callback.onRegistrationFailed(reason);
-				}
-
-			}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
+			} catch (InternalJainSipException internalJainSipError) {
+				couldDispatchOperation = false;
+			}
 		}
 		if (couldDispatchOperation) {
 			registerOperationsInProgress.put(RequestMethod.REGISTER, true);
@@ -930,16 +955,25 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean queryOptions(String remoteUser, String remoteDomain, OptionsQueryingCallback callback) {
-		return chooseBestAgentThatIsAvailable().sendOptionsRequest(remoteUser,
-				remoteDomain, callback);
+	public boolean queryOptions(String remoteUser, String remoteDomain,
+			OptionsQueryingCallback callback) {
+		try {
+			return chooseBestAgentThatIsAvailable().sendOptionsRequest(remoteUser,
+					remoteDomain, callback);
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
+		}
 	}
 
 	@Override
 	public String inviteToCall(String remoteUser, String remoteDomain,
 			CallInvitationCallback callback) {
-		return chooseBestAgentThatIsAvailable().sendInviteRequest(remoteUser,
-				remoteDomain, callback);
+		try {
+			return chooseBestAgentThatIsAvailable()
+					.sendInviteRequest(remoteUser, remoteDomain, callback);
+		} catch (InternalJainSipException internalJainSipError) {
+			return null;
+		}
 	}
 
 	private UserAgent chooseBestAgentThatIsAvailable() {
@@ -1053,7 +1087,11 @@ public class Sipuada implements SipuadaApi {
 		if (userAgent == null) {
 			return false;
 		}
-		return userAgent.cancelInviteRequest(callId);
+		try {
+			return userAgent.cancelInviteRequest(callId);
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
+		}
 	}
 
 	@Override
@@ -1062,7 +1100,11 @@ public class Sipuada implements SipuadaApi {
 		if (userAgent == null) {
 			return false;
 		}
-		return userAgent.answerInviteRequest(callId, true);
+		try {
+			return userAgent.answerInviteRequest(callId, true);
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
+		}
 	}
 
 	@Override
@@ -1071,7 +1113,11 @@ public class Sipuada implements SipuadaApi {
 		if (userAgent == null) {
 			return false;
 		}
-		return userAgent.answerInviteRequest(callId, false);
+		try {
+			return userAgent.answerInviteRequest(callId, false);
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
+		}
 	}
 
 	@Override
@@ -1080,7 +1126,11 @@ public class Sipuada implements SipuadaApi {
 		if (userAgent == null) {
 			return false;
 		}
-		return userAgent.finishCall(callId);
+		try {
+			return userAgent.finishCall(callId);
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
+		}
 	}
 
 	@Override
@@ -1100,17 +1150,7 @@ public class Sipuada implements SipuadaApi {
 				Set<UserAgent> userAgents = transportToUserAgents.get(transport);
 				synchronized (userAgents) {
 					for (UserAgent userAgent : userAgents) {
-						SipProvider provider = userAgent.getProvider();
-						SipStack stack = provider.getSipStack();
-						for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
-							try {
-								stack.deleteListeningPoint(listeningPoint);
-							} catch (ObjectInUseException ignore) {}
-						}
-						try {
-							stack.deleteSipProvider(provider);
-						} catch (ObjectInUseException ignore) {}
-						stack.stop();
+						destroyUserAgent(userAgent);
 					}
 				}
 			}
@@ -1119,6 +1159,26 @@ public class Sipuada implements SipuadaApi {
 			activeUserAgentCallIds.clear();
 			registerOperationsInProgress.put(RequestMethod.REGISTER, false);
 			postponedRegisterOperations.clear();
+		}
+	}
+
+	private void destroyUserAgent(UserAgent userAgent) {
+		SipProvider provider = userAgent.getProvider();
+		if (provider != null) {
+			SipStack stack = provider.getSipStack();
+			if (stack != null) {
+				for (ListeningPoint listeningPoint : provider.getListeningPoints()) {
+					try {
+						if (listeningPoint != null) {
+							stack.deleteListeningPoint(listeningPoint);
+						}
+					} catch (ObjectInUseException ignore) {}
+				}
+				try {
+					stack.deleteSipProvider(provider);
+				} catch (ObjectInUseException ignore) {}
+				stack.stop();
+			}
 		}
 	}
 

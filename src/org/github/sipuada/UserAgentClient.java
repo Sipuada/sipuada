@@ -25,6 +25,7 @@ import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.ResponseDiscarded;
 import org.github.sipuada.exceptions.ResponsePostponed;
 import org.github.sipuada.exceptions.SipuadaException;
@@ -1351,7 +1352,16 @@ public class UserAgentClient {
 					logger.info("Sending {} to {} response to {} request...",
 							RequestMethod.ACK, response.getStatusCode(), request.getMethod());
 					logger.debug("Request Dump:\n{}\n", ackRequest);
-					dialog.sendAck(ackRequest);
+					try {
+						dialog.sendAck(ackRequest);
+					} catch (NullPointerException lowLevelStackFailed) {
+						logger.error("{} to {} response to {} request could not be sent " +
+								"due to a JAINSIP-level failure.", RequestMethod.ACK,
+								response.getStatusCode(), request.getMethod(),
+								lowLevelStackFailed);
+						throw new InternalJainSipException("Severe JAINSIP-level failure!",
+								lowLevelStackFailed);
+					}
 					logger.info("{} response to {} arrived, so {} sent.", statusCode,
 							RequestMethod.INVITE, RequestMethod.ACK);
 					logger.info("New call established: {}.", callId);
@@ -1607,7 +1617,15 @@ public class UserAgentClient {
 			try {
 				logger.info("Sending {} request...", request.getMethod());
 				logger.debug("Request Dump:\n{}\n", request);
-				dialog.sendRequest(newClientTransaction);
+				try {
+					dialog.sendRequest(newClientTransaction);
+				} catch (NullPointerException lowLevelStackFailed) {
+					logger.error("{} request could not be sent due to a " +
+							"JAINSIP-level failure.", request.getMethod(),
+							lowLevelStackFailed);
+					throw new InternalJainSipException("Severe JAINSIP-level failure!",
+							lowLevelStackFailed);
+				}
 				//Caller must expect remote responses.
 				return true;
 			}
@@ -1623,7 +1641,15 @@ public class UserAgentClient {
 		else {
 			logger.info("Sending {} request...", request.getMethod());
 			logger.debug("Request Dump:\n{}\n", request);
-			newClientTransaction.sendRequest();
+			try {
+				newClientTransaction.sendRequest();
+			} catch (NullPointerException lowLevelStackFailed) {
+				logger.error("{} request could not be sent due to a " +
+						"JAINSIP-level failure.", request.getMethod(),
+						lowLevelStackFailed);
+				throw new InternalJainSipException("Severe JAINSIP-level failure!",
+						lowLevelStackFailed);
+			}
 			//Caller must expect remote responses.
 			return true;
 		}
