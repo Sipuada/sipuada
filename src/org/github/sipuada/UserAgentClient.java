@@ -1354,7 +1354,7 @@ public class UserAgentClient {
 					logger.debug("Request Dump:\n{}\n", ackRequest);
 					try {
 						dialog.sendAck(ackRequest);
-					} catch (NullPointerException lowLevelStackFailed) {
+					} catch (RuntimeException lowLevelStackFailed) {
 						logger.error("{} to {} response to {} request could not be sent " +
 								"due to a JAINSIP-level failure.", RequestMethod.ACK,
 								response.getStatusCode(), request.getMethod(),
@@ -1619,7 +1619,7 @@ public class UserAgentClient {
 				logger.debug("Request Dump:\n{}\n", request);
 				try {
 					dialog.sendRequest(newClientTransaction);
-				} catch (NullPointerException lowLevelStackFailed) {
+				} catch (RuntimeException lowLevelStackFailed) {
 					logger.error("{} request could not be sent due to a " +
 							"JAINSIP-level failure.", request.getMethod(),
 							lowLevelStackFailed);
@@ -1643,7 +1643,7 @@ public class UserAgentClient {
 			logger.debug("Request Dump:\n{}\n", request);
 			try {
 				newClientTransaction.sendRequest();
-			} catch (NullPointerException lowLevelStackFailed) {
+			} catch (RuntimeException lowLevelStackFailed) {
 				logger.error("{} request could not be sent due to a " +
 						"JAINSIP-level failure.", request.getMethod(),
 						lowLevelStackFailed);
