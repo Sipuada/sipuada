@@ -25,6 +25,13 @@
  */
 package android.gov.nist.gnjvx.sip.stack;
 
+import java.io.IOException;
+import java.text.ParseException;
+import java.util.ListIterator;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
+
 import android.gov.nist.core.InternalErrorHandler;
 import android.gov.nist.core.NameValueList;
 import android.gov.nist.gnjvx.sip.SIPConstants;
@@ -42,13 +49,6 @@ import android.gov.nist.gnjvx.sip.header.ViaList;
 import android.gov.nist.gnjvx.sip.message.SIPMessage;
 import android.gov.nist.gnjvx.sip.message.SIPRequest;
 import android.gov.nist.gnjvx.sip.message.SIPResponse;
-
-import java.io.IOException;
-import java.text.ParseException;
-import java.util.ListIterator;
-import java.util.TimerTask;
-import java.util.concurrent.ConcurrentHashMap;
-
 import android.javax.sip.Dialog;
 import android.javax.sip.DialogState;
 import android.javax.sip.InvalidArgumentException;
@@ -1227,9 +1227,12 @@ public class SIPClientTransaction extends SIPTransaction implements ServerRespon
     protected synchronized void startTransactionTimer() {
         if (this.transactionTimerStarted)
             return;
-        TimerTask myTimer = new TransactionTimer();
-        this.transactionTimerStarted = true;
-        sipStack.getTimer().schedule(myTimer, BASE_TIMER_INTERVAL, BASE_TIMER_INTERVAL);
+        Timer stackTimer = sipStack.getTimer();
+        if (stackTimer != null) {
+            TimerTask myTimer = new TransactionTimer();
+            this.transactionTimerStarted = true;
+            sipStack.getTimer().schedule(myTimer, BASE_TIMER_INTERVAL, BASE_TIMER_INTERVAL);
+        }
     }
 
     /*
