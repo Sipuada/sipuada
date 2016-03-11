@@ -1,7 +1,7 @@
 package org.github.sipuada.plugins;
 
 import org.github.sipuada.Constants.RequestMethod;
-import org.github.sipuada.UserAgent;
+import org.github.sipuada.SipUserAgent;
 
 import android.javax.sdp.SessionDescription;
 
@@ -45,7 +45,7 @@ public interface SipuadaPlugin {
 	 * it to perform session modification requests in the future.
 	 * @return true if the plug-in could setup the session, false otherwise.
 	 */
-	boolean performSessionSetup(String callId, UserAgent userAgent);
+	boolean performSessionSetup(String callId, SipUserAgent userAgent);
 
 	/**
 	 * Perform session termination since offer/answer sent alongside

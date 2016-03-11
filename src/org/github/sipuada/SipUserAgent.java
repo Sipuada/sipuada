@@ -56,7 +56,7 @@ import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
 
-public class UserAgent implements SipListener {
+public class SipUserAgent implements SipListener {
 	
 	protected static final RequestMethod acceptedMethods[] = {
 	        RequestMethod.CANCEL,
@@ -67,7 +67,7 @@ public class UserAgent implements SipListener {
 	        RequestMethod.ACK,
 	        RequestMethod.BYE };
 
-	private final Logger logger = LoggerFactory.getLogger(UserAgent.class);
+	private final Logger logger = LoggerFactory.getLogger(SipUserAgent.class);
 
 	private final EventBus sipuadaEventBus;
 	private final EventBus internalEventBus = new EventBus();
@@ -84,21 +84,21 @@ public class UserAgent implements SipListener {
 
 	private final SipProvider provider;
 	private final SipuadaListener listener;
-	private UserAgentClient uac;
-	private UserAgentServer uas;
+	private SipUserAgentClient uac;
+	private SipUserAgentServer uas;
 
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins;
 	private final String localIp;
 	private final int localPort;
 	private final String transport;
 
-	private final Map<String, UserAgent> callIdToActiveUserAgent;
-	private final Map<UserAgent, Set<String>> activeUserAgentCallIds;
+	private final Map<String, SipUserAgent> callIdToActiveUserAgent;
+	private final Map<SipUserAgent, Set<String>> activeUserAgentCallIds;
 
-	public UserAgent(EventBus eventBus, SipProvider sipProvider, SipuadaListener sipuadaListener,
+	public SipUserAgent(EventBus eventBus, SipProvider sipProvider, SipuadaListener sipuadaListener,
 			Map<RequestMethod, SipuadaPlugin> plugins, String username, String primaryHost, String password,
-			String localIp, String localPort, String transport, Map<String, UserAgent> callIdToActiveUserAgent,
-			Map<UserAgent, Set<String>> activeUserAgentCallIds, Map<URI, CallIdHeader> globalRegisterCallIds,
+			String localIp, String localPort, String transport, Map<String, SipUserAgent> callIdToActiveUserAgent,
+			Map<SipUserAgent, Set<String>> activeUserAgentCallIds, Map<URI, CallIdHeader> globalRegisterCallIds,
 			Map<URI, Long> globalRegisterCSeqs) {
 		sipuadaEventBus = eventBus;
 		provider = sipProvider;
@@ -109,10 +109,10 @@ public class UserAgent implements SipListener {
 			MessageFactory messenger = factory.createMessageFactory();
 			HeaderFactory headerMaker = factory.createHeaderFactory();
 			AddressFactory addressMaker = factory.createAddressFactory();
-			uac = new UserAgentClient(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
+			uac = new SipUserAgentClient(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					globalRegisterCallIds, globalRegisterCSeqs, username, primaryHost, password,
 					localIp, localPort, transport);
-			uas = new UserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
+			uas = new SipUserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					username, localIp, localPort);
 		} catch (PeerUnavailableException ignore){}
 		try {
