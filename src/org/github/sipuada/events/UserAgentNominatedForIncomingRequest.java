@@ -1,23 +1,23 @@
 package org.github.sipuada.events;
 
-import org.github.sipuada.UserAgent;
+import org.github.sipuada.SipUserAgent;
 
 import android.javax.sip.RequestEvent;
 
 public class UserAgentNominatedForIncomingRequest {
 
-	private final UserAgent candidateUserAgent;
+	private final SipUserAgent candidateUserAgent;
 	private final String callId;
 	private final RequestEvent requestEvent;
 
-	public UserAgentNominatedForIncomingRequest(UserAgent candidateUserAgent,
+	public UserAgentNominatedForIncomingRequest(SipUserAgent candidateUserAgent,
 			String callId, RequestEvent requestEvent) {
 		this.candidateUserAgent = candidateUserAgent;
 		this.callId = callId;
 		this.requestEvent = requestEvent;
 	}
 
-	public UserAgent getCandidateUserAgent() {
+	public SipUserAgent getCandidateUserAgent() {
 		return candidateUserAgent;
 	}
 

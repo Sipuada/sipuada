@@ -81,9 +81,9 @@ import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
 
-public class UserAgentClient {
+public class SipUserAgentClient {
 
-	private final Logger logger = LoggerFactory.getLogger(UserAgentClient.class);
+	private final Logger logger = LoggerFactory.getLogger(SipUserAgentClient.class);
 
 	private final EventBus bus;
 	private final SipProvider provider;
@@ -108,7 +108,7 @@ public class UserAgentClient {
 
 	private final URI registerRequestUri;
 
-	public UserAgentClient(EventBus eventBus, SipProvider sipProvider,
+	public SipUserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			Map<RequestMethod, SipuadaPlugin> plugins, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
 			Map<URI, CallIdHeader> globalRegisterCallIds, Map<URI, Long> globalRegisterCSeqs,
@@ -273,7 +273,7 @@ public class UserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 
-		for (RequestMethod method : UserAgent.acceptedMethods) {
+		for (RequestMethod method : SipUserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -1349,8 +1349,9 @@ public class UserAgentClient {
 							callId, request, response, ackRequest)) {
 						sendByeRightAway = true;
 					}
-					logger.info("Sending {} to {} response to {} request...",
-							RequestMethod.ACK, response.getStatusCode(), request.getMethod());
+					logger.info("Sending {} to {} response to {} request (from {}:{})...",
+							RequestMethod.ACK, response.getStatusCode(), request.getMethod(),
+							localIp, localPort);
 					logger.debug("Request Dump:\n{}\n", ackRequest);
 					try {
 						dialog.sendAck(ackRequest);
@@ -1615,7 +1616,8 @@ public class UserAgentClient {
 		}
 		if (dialog != null) {
 			try {
-				logger.info("Sending {} request...", request.getMethod());
+				logger.info("Sending {} request (from {}:{})...", request.getMethod(),
+						localIp, localPort);
 				logger.debug("Request Dump:\n{}\n", request);
 				try {
 					dialog.sendRequest(newClientTransaction);
@@ -1639,7 +1641,8 @@ public class UserAgentClient {
 			}
 		}
 		else {
-			logger.info("Sending {} request...", request.getMethod());
+			logger.info("Sending {} request (from {}:{})...", request.getMethod(),
+					localIp, localPort);
 			logger.debug("Request Dump:\n{}\n", request);
 			try {
 				newClientTransaction.sendRequest();

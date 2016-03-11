@@ -46,9 +46,9 @@ import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
 
-public class UserAgentServer {
+public class SipUserAgentServer {
 
-	private final Logger logger = LoggerFactory.getLogger(UserAgentServer.class);
+	private final Logger logger = LoggerFactory.getLogger(SipUserAgentServer.class);
 
 	private final EventBus bus;
 	private final SipProvider provider;
@@ -61,7 +61,7 @@ public class UserAgentServer {
 	private final String localIp;
 	private final int localPort;
 
-	public UserAgentServer(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
+	public SipUserAgentServer(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
 			MessageFactory messageFactory, HeaderFactory headerFactory, AddressFactory addressFactory,
 			String... credentialsAndAddress) {
 		bus = eventBus;
@@ -129,7 +129,7 @@ public class UserAgentServer {
 			//TODO add Allow header with supported methods.
 			List<Header> allowedMethods = new LinkedList<>();
 
-			for (RequestMethod acceptedMethod : UserAgent.acceptedMethods) {
+			for (RequestMethod acceptedMethod : SipUserAgent.acceptedMethods) {
 				try {
 					AllowHeader allowHeader = headerMaker
 							.createAllowHeader(acceptedMethod.toString());
@@ -155,7 +155,7 @@ public class UserAgentServer {
 	}
 
 	private boolean methodIsAllowed(final RequestMethod method) {
-		for (RequestMethod requestMethod : UserAgent.acceptedMethods) {
+		for (RequestMethod requestMethod : SipUserAgent.acceptedMethods) {
 			if (requestMethod == method) {
 				return true;
 			}
@@ -251,7 +251,7 @@ public class UserAgentServer {
 		String callId = callIdHeader.getCallId();
 		List<Header> additionalHeaders = new ArrayList<>();
 
-		for (RequestMethod method : UserAgent.acceptedMethods) {
+		for (RequestMethod method : SipUserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -329,7 +329,7 @@ public class UserAgentServer {
 		} catch (InvalidArgumentException ignore) {}
 		additionalHeaders.add(contactHeader);
 
-		for (RequestMethod acceptedMethod : UserAgent.acceptedMethods) {
+		for (RequestMethod acceptedMethod : SipUserAgent.acceptedMethods) {
 			try {
 				AllowHeader allowHeader = headerMaker
 						.createAllowHeader(acceptedMethod.toString());
@@ -407,7 +407,8 @@ public class UserAgentServer {
 					return null;
 				}
 			}
-			logger.info("Sending {} response to {} request...", statusCode, method);
+			logger.info("Sending {} response to {} request (from {}:{})...", statusCode, method,
+					localIp, localPort);
 			logger.debug("Response Dump:\n{}\n", response);
 			try {
 				newServerTransaction.sendResponse(response);
