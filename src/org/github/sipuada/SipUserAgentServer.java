@@ -534,9 +534,14 @@ public class SipUserAgentServer {
 
 	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
 			Request request, int statusCode, Response response) {
+		
+		logger.debug("putOfferOrAnswerIntoResponseIfApplicable - BEGIN");
+		
 		if (request.getContent() == null) {
+			logger.debug("putOfferOrAnswerIntoResponseIfApplicable - request.getContent() == null");
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
+				logger.debug("putOfferOrAnswerIntoResponseIfApplicable - sessionPlugin == null");
 				return true;
 			}
 			SessionDescription offer = null;
@@ -563,6 +568,7 @@ public class SipUserAgentServer {
 						"{} request.", offer.toString(), sessionPlugin.getClass().getName(),
 						statusCode, method, parseException);
 			}
+			logger.debug("putOfferOrAnswerIntoResponseIfApplicable - return true");
 			return true;
 		}
 		else {
