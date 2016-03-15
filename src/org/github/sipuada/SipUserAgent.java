@@ -178,9 +178,15 @@ public class SipUserAgent implements SipListener {
 
 	@Override
 	public void processResponse(ResponseEvent responseEvent) {
-		logger.debug("{}:{}/{}'s UAC about to process an incoming {} response to a {} request...",
-				localIp, localPort, transport, responseEvent.getResponse().getStatusCode(),
-				responseEvent.getClientTransaction().getRequest().getMethod());
+		ClientTransaction clientTransaction = responseEvent.getClientTransaction();
+		if (clientTransaction != null) {
+			logger.debug("{}:{}/{}'s UAC about to process an incoming {} response to a {} request...",
+					localIp, localPort, transport, responseEvent.getResponse().getStatusCode(),
+					clientTransaction.getRequest().getMethod());
+		} else {
+			logger.debug("{}:{}/{}'s UAC about to process an incoming {} response...",
+					localIp, localPort, transport, responseEvent.getResponse().getStatusCode());
+		}
 		uac.processResponse(responseEvent);
 	}
 
