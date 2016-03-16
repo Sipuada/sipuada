@@ -1441,10 +1441,14 @@ public class SipUserAgentClient {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			SessionDescription responseSdp = null;
 			if (response.getContent() != null) {
+				logger.debug("handleOptionsResponse \n response.getContent() != null");
 				try {
 					responseSdp = SdpFactory.getInstance()
 							.createSessionDescriptionFromString(new String(response.getRawContent()));
+					logger.debug("handleOptionsResponse \n response.getContent() != null - responseSdp != null");
 				} catch (SdpParseException ignore) {}
+			} else {
+				logger.debug("handleOptionsResponse \n response.getContent() == null");
 			}
 			if (request.getContent() != null && responseSdp != null) {
 				bus.post(new QueryingOptionsSuccess(callId, dialog, responseSdp));
