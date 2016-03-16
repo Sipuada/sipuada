@@ -1173,6 +1173,7 @@ public class Sipuada implements SipuadaApi {
 			return false;
 		}
 		registeredPlugins.put(RequestMethod.INVITE, plugin);
+		registeredPlugins.put(RequestMethod.OPTIONS, plugin);
 		return true;
 	}
 

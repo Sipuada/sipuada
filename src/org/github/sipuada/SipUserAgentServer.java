@@ -102,6 +102,7 @@ public class SipUserAgentServer {
 						handleCancelRequest(request, serverTransaction);
 						break;
 					case OPTIONS:
+						logger.debug("HANDLE OPTIONS REQUEST");
 						handleOptionsRequest(request, serverTransaction);
 						break;
 					case MESSAGE:
