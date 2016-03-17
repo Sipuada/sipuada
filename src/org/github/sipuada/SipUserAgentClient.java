@@ -22,6 +22,7 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
@@ -65,6 +66,7 @@ import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.ContentEncodingHeader;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.ExpiresHeader;
+import android.javax.sip.header.ExtensionHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ProxyAuthenticateHeader;
@@ -273,7 +275,7 @@ public class SipUserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 
-		for (RequestMethod method : SipUserAgent.acceptedMethods) {
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -320,7 +322,19 @@ public class SipUserAgentClient {
 	}
 
 	public boolean sendByeRequest(Dialog dialog) {
-		return sendRequest(RequestMethod.BYE, dialog);
+		return sendByeRequest(dialog, false, null);
+	}
+
+	public boolean sendByeRequest(Dialog dialog, boolean shouldReportCallFailed, String reason) {
+		List<Header> additionalHeaders = new LinkedList<>();
+		if (shouldReportCallFailed) {
+			try {
+				additionalHeaders.add(headerMaker
+						.createHeader(SipUserAgent.X_FAILURE_REASON_HEADER, reason));
+			} catch (ParseException ignore) {}
+		}
+		return sendRequest(RequestMethod.BYE, dialog, null, null,
+				additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
 	private boolean sendRequest(RequestMethod method, Dialog dialog,
@@ -655,7 +669,7 @@ public class SipUserAgentClient {
 						handleInviteResponse(statusCode, response, clientTransaction);
 						break;
 					case BYE:
-						handleByeResponse(statusCode, clientTransaction);
+						handleByeResponse(statusCode, response, clientTransaction);
 					case UNKNOWN:
 					default:
 						break;
@@ -834,6 +848,15 @@ public class SipUserAgentClient {
 				bus.post(new CallInvitationFailed(codeAndReason, callId));
 				break;
 			case BYE:
+				ExtensionHeader extensionHeader = (ExtensionHeader) request
+				    .getHeader(SipUserAgent.X_FAILURE_REASON_HEADER);
+				if (extensionHeader != null) {
+					String reason = extensionHeader.getValue();
+					if (reason != null) {
+						bus.post(new EstablishedCallFailed(reason, callId));
+						break;
+					}
+				}
 				bus.post(new EstablishedCallFinished(callId));
 				break;
 			default:
@@ -948,9 +971,8 @@ public class SipUserAgentClient {
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would authenticate could not be sent.
 				logger.error("Could not resend this {} request with authentication " +
-						"credentials: {} ({}).", request.getMethod(),
-						requestCouldNotBeSent.getMessage(),
-						requestCouldNotBeSent.getCause().getMessage());
+						"credentials: {}.", request.getMethod(),
+						requestCouldNotBeSent.getMessage(), requestCouldNotBeSent.getCause());
 			}
 		}
 		else {
@@ -1296,7 +1318,7 @@ public class SipUserAgentClient {
 		Dialog dialog = clientTransaction.getDialog();
 		if (dialog != null && !(dialog.getState() == DialogState.EARLY ||
 				dialog.getState() == DialogState.TERMINATED)) {
-			sendByeRequest(dialog);
+			sendByeRequest(dialog, true, "There's no call associated to this request.");
 		}
 	}
 
@@ -1367,7 +1389,7 @@ public class SipUserAgentClient {
 							RequestMethod.INVITE, RequestMethod.ACK);
 					logger.info("New call established: {}.", callId);
 					if (sendByeRightAway) {
-						sendByeRequest(dialog);
+						sendByeRequest(dialog, true, "Media types negotiation failed.");
 					}
 					bus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
@@ -1467,13 +1489,26 @@ public class SipUserAgentClient {
 		return true;
 	}
 
-	private void handleByeResponse(int statusCode, ClientTransaction clientTransaction) {
+	private void handleByeResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to BYE arrived.", statusCode);
 			handleThisRequestTerminated(clientTransaction);
 			String callId = null; Dialog dialog = clientTransaction.getDialog();
 			if (dialog != null) {
 				callId = dialog.getCallId().getCallId();
+			}
+			Request request = clientTransaction.getRequest();
+			if (request != null) {
+				ExtensionHeader extensionHeader = (ExtensionHeader) request
+						.getHeader(SipUserAgent.X_FAILURE_REASON_HEADER);
+				if (extensionHeader != null) {
+					String reason = extensionHeader.getValue();
+					if (reason != null) {
+						bus.post(new EstablishedCallFailed(reason, callId));
+						return;
+					}
+				}
 			}
 			bus.post(new EstablishedCallFinished(callId));
 		}

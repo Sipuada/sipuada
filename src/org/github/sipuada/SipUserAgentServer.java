@@ -10,6 +10,7 @@ import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
 import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
+import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.exceptions.InternalJainSipException;
@@ -38,6 +39,7 @@ import android.javax.sip.address.URI;
 import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
+import android.javax.sip.header.ExtensionHeader;
 import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
@@ -129,7 +131,7 @@ public class SipUserAgentServer {
 			//TODO add Allow header with supported methods.
 			List<Header> allowedMethods = new LinkedList<>();
 
-			for (RequestMethod acceptedMethod : SipUserAgent.acceptedMethods) {
+			for (RequestMethod acceptedMethod : SipUserAgent.ACCEPTED_METHODS) {
 				try {
 					AllowHeader allowHeader = headerMaker
 							.createAllowHeader(acceptedMethod.toString());
@@ -155,7 +157,7 @@ public class SipUserAgentServer {
 	}
 
 	private boolean methodIsAllowed(final RequestMethod method) {
-		for (RequestMethod requestMethod : SipUserAgent.acceptedMethods) {
+		for (RequestMethod requestMethod : SipUserAgent.ACCEPTED_METHODS) {
 			if (requestMethod == method) {
 				return true;
 			}
@@ -251,7 +253,7 @@ public class SipUserAgentServer {
 		String callId = callIdHeader.getCallId();
 		List<Header> additionalHeaders = new ArrayList<>();
 
-		for (RequestMethod method : SipUserAgent.acceptedMethods) {
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -294,6 +296,15 @@ public class SipUserAgentServer {
 		String callId = callIdHeader.getCallId();
 		if (doSendResponse(Response.OK, RequestMethod.BYE,
 				request, serverTransaction) != null) {
+			ExtensionHeader extensionHeader = (ExtensionHeader) request
+					.getHeader(SipUserAgent.X_FAILURE_REASON_HEADER);
+			if (extensionHeader != null) {
+				String reason = extensionHeader.getValue();
+				if (reason != null) {
+					bus.post(new EstablishedCallFailed(reason, callId));
+					return;
+				}
+			}
 			bus.post(new EstablishedCallFinished(callId));
 			return;
 		}
@@ -329,7 +340,7 @@ public class SipUserAgentServer {
 		} catch (InvalidArgumentException ignore) {}
 		additionalHeaders.add(contactHeader);
 
-		for (RequestMethod acceptedMethod : SipUserAgent.acceptedMethods) {
+		for (RequestMethod acceptedMethod : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker
 						.createAllowHeader(acceptedMethod.toString());
