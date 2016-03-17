@@ -1635,7 +1635,7 @@ public class SipUserAgentClient {
 				//original INVITE request.
 				logger.info("If a CANCEL was issued, it succeded in canceling " +
 						"a call invitation.");
-				bus.post(new CallInvitationCanceled("Callee canceled " +
+				bus.post(new CallInvitationCanceled("Caller canceled " +
 						"outgoing INVITE.", callId, false));
 				return true;
 			case BYE:
