@@ -909,16 +909,6 @@ public class SipUserAgentClient {
 					(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
 			String realm = wwwAuthenticateHeader.getRealm();
 			String nonce = wwwAuthenticateHeader.getNonce();
-			if (authNoncesCache.containsKey(toHeaderValue)
-					&& authNoncesCache.get(toHeaderValue).containsKey(realm)) {
-				String oldNonce = authNoncesCache.get(toHeaderValue).get(realm);
-				if (possiblyFailedAuthRealms.containsKey(realm)) {
-					if (oldNonce.equals(possiblyFailedAuthRealms.get(realm))) {
-						authNoncesCache.get(toHeaderValue).remove(realm);
-						continue;
-					}
-				}
-			}
 			worthAuthenticating = addAuthorizationHeader(request, hostUri,
 					toHeaderValue, username, password, realm, nonce);
 			if (!authNoncesCache.containsKey(toHeaderValue)) {
@@ -933,17 +923,6 @@ public class SipUserAgentClient {
 					(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
 			String realm = proxyAuthenticateHeader.getRealm();
 			String nonce = proxyAuthenticateHeader.getNonce();
-			if (proxyAuthNoncesCache.containsKey(toHeaderValue)
-					&& proxyAuthNoncesCache.get(toHeaderValue).containsKey(realm)) {
-				String oldNonce = proxyAuthNoncesCache.get(toHeaderValue).get(realm);
-				if (possiblyFailedProxyAuthRealms.containsKey(realm)) {
-					if (oldNonce.equals(possiblyFailedProxyAuthRealms.get(realm))) {
-						proxyAuthNoncesCache.get(toHeaderValue).remove(realm);
-						proxyAuthCallIdCache.get(toHeaderValue).remove(realm);
-						continue;
-					}
-				}
-			}
 			worthAuthenticating = addProxyAuthorizationHeader(request, hostUri,
 					toHeaderValue, username, password, realm, nonce);
 			if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
@@ -956,9 +935,13 @@ public class SipUserAgentClient {
 			String callId = callIdHeader.getCallId();
 			proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
 		}
+		int attempt = (Integer) clientTransaction.getApplicationData();
+		if (attempt >= 3) {
+			worthAuthenticating = false;
+		}
 		if (worthAuthenticating) {
 			try {
-				if (doSendRequest(request, null, clientTransaction.getDialog(), false)) {
+				if (doSendRequest(request, null, clientTransaction.getDialog(), false, ++attempt)) {
 					logger.info("{} request sent (with auth credentials).",
 							request.getMethod());
 					throw new ResponsePostponed();
@@ -1580,6 +1563,12 @@ public class SipUserAgentClient {
 
 	private boolean doSendRequest(Request request, ClientTransaction clientTransaction,
 			Dialog dialog, boolean tryAddingAuthorizationHeaders)
+					throws TransactionUnavailableException, SipException {
+		return doSendRequest(request, clientTransaction, dialog, tryAddingAuthorizationHeaders, 1);
+	}
+
+	private boolean doSendRequest(Request request, ClientTransaction clientTransaction,
+			Dialog dialog, boolean tryAddingAuthorizationHeaders, int attempt)
 			throws TransactionUnavailableException, SipException {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String toHeaderValue = toHeader.getAddress().getURI().toString();
@@ -1649,6 +1638,7 @@ public class SipUserAgentClient {
 			} catch (ParseException ignore) {
 			} catch (InvalidArgumentException ignore) {}
 		}
+		newClientTransaction.setApplicationData(attempt);
 		if (dialog != null) {
 			try {
 				logger.info("Sending {} request (from {}:{})...", request.getMethod(),
@@ -1714,6 +1704,7 @@ public class SipUserAgentClient {
 			//Authorization header could not be added.
 			return false;
 		}
+		request.removeHeader(AuthorizationHeader.NAME);
 		request.addHeader(authorizationHeader);
 		//Authorization header could be added.
 		return true;
@@ -1742,6 +1733,7 @@ public class SipUserAgentClient {
 			//ProxyAuthorization header could not be added.
 			return false;
 		}
+		request.removeHeader(ProxyAuthorizationHeader.NAME);
 		request.addHeader(proxyAuthorizationHeader);
 		//ProxyAuthorization header could be added.
 		return true;
