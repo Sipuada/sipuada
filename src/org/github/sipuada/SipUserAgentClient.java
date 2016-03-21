@@ -23,6 +23,7 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.QueryingOptionsFailed;
 import org.github.sipuada.events.QueryingOptionsSuccess;
@@ -72,6 +73,7 @@ import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.ContentEncodingHeader;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.ExpiresHeader;
+import android.javax.sip.header.ExtensionHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ProxyAuthenticateHeader;
@@ -280,7 +282,7 @@ public class SipUserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 
-		for (RequestMethod method : SipUserAgent.acceptedMethods) {
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -328,7 +330,7 @@ public class SipUserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 		
-		for (RequestMethod method : SipUserAgent.acceptedMethods) {
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -383,7 +385,7 @@ public class SipUserAgentClient {
 			additionalHeaders.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 		
-		for (RequestMethod method : SipUserAgent.acceptedMethods) {
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
@@ -430,7 +432,19 @@ public class SipUserAgentClient {
 	}
 
 	public boolean sendByeRequest(Dialog dialog) {
-		return sendRequest(RequestMethod.BYE, dialog, null, null);
+		return sendByeRequest(dialog, false, null);
+	}
+
+	public boolean sendByeRequest(Dialog dialog, boolean shouldReportCallFailed, String reason) {
+		List<Header> additionalHeaders = new LinkedList<>();
+		if (shouldReportCallFailed) {
+			try {
+				additionalHeaders.add(headerMaker
+						.createHeader(SipUserAgent.X_FAILURE_REASON_HEADER, reason));
+			} catch (ParseException ignore) {}
+		}
+		return sendRequest(RequestMethod.BYE, dialog, null, null,
+				additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
 	private boolean sendRequest(RequestMethod method, Dialog dialog,
@@ -780,7 +794,7 @@ public class SipUserAgentClient {
 						handleInfoResponse(statusCode, response, clientTransaction);
 						break;
 					case BYE:
-						handleByeResponse(statusCode, clientTransaction);
+						handleByeResponse(statusCode, response, clientTransaction);
 					case UNKNOWN:
 					default:
 						break;
@@ -963,6 +977,15 @@ public class SipUserAgentClient {
 				bus.post(new CallInvitationFailed(codeAndReason, callId));
 				break;
 			case BYE:
+				ExtensionHeader extensionHeader = (ExtensionHeader) request
+				    .getHeader(SipUserAgent.X_FAILURE_REASON_HEADER);
+				if (extensionHeader != null) {
+					String reason = extensionHeader.getValue();
+					if (reason != null) {
+						bus.post(new EstablishedCallFailed(reason, callId));
+						break;
+					}
+				}
 				bus.post(new EstablishedCallFinished(callId));
 				break;
 			default:
@@ -1015,16 +1038,6 @@ public class SipUserAgentClient {
 					(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
 			String realm = wwwAuthenticateHeader.getRealm();
 			String nonce = wwwAuthenticateHeader.getNonce();
-			if (authNoncesCache.containsKey(toHeaderValue)
-					&& authNoncesCache.get(toHeaderValue).containsKey(realm)) {
-				String oldNonce = authNoncesCache.get(toHeaderValue).get(realm);
-				if (possiblyFailedAuthRealms.containsKey(realm)) {
-					if (oldNonce.equals(possiblyFailedAuthRealms.get(realm))) {
-						authNoncesCache.get(toHeaderValue).remove(realm);
-						continue;
-					}
-				}
-			}
 			worthAuthenticating = addAuthorizationHeader(request, hostUri,
 					toHeaderValue, username, password, realm, nonce);
 			if (!authNoncesCache.containsKey(toHeaderValue)) {
@@ -1039,17 +1052,6 @@ public class SipUserAgentClient {
 					(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
 			String realm = proxyAuthenticateHeader.getRealm();
 			String nonce = proxyAuthenticateHeader.getNonce();
-			if (proxyAuthNoncesCache.containsKey(toHeaderValue)
-					&& proxyAuthNoncesCache.get(toHeaderValue).containsKey(realm)) {
-				String oldNonce = proxyAuthNoncesCache.get(toHeaderValue).get(realm);
-				if (possiblyFailedProxyAuthRealms.containsKey(realm)) {
-					if (oldNonce.equals(possiblyFailedProxyAuthRealms.get(realm))) {
-						proxyAuthNoncesCache.get(toHeaderValue).remove(realm);
-						proxyAuthCallIdCache.get(toHeaderValue).remove(realm);
-						continue;
-					}
-				}
-			}
 			worthAuthenticating = addProxyAuthorizationHeader(request, hostUri,
 					toHeaderValue, username, password, realm, nonce);
 			if (!proxyAuthNoncesCache.containsKey(toHeaderValue)) {
@@ -1062,9 +1064,13 @@ public class SipUserAgentClient {
 			String callId = callIdHeader.getCallId();
 			proxyAuthCallIdCache.get(toHeaderValue).put(realm, callId);
 		}
+		int attempt = (Integer) clientTransaction.getApplicationData();
+		if (attempt >= 3) {
+			worthAuthenticating = false;
+		}
 		if (worthAuthenticating) {
 			try {
-				if (doSendRequest(request, null, clientTransaction.getDialog(), false)) {
+				if (doSendRequest(request, null, clientTransaction.getDialog(), false, ++attempt)) {
 					logger.info("{} request sent (with auth credentials).",
 							request.getMethod());
 					throw new ResponsePostponed();
@@ -1077,9 +1083,8 @@ public class SipUserAgentClient {
 			} catch (SipException requestCouldNotBeSent) {
 				//Request that would authenticate could not be sent.
 				logger.error("Could not resend this {} request with authentication " +
-						"credentials: {} ({}).", request.getMethod(),
-						requestCouldNotBeSent.getMessage(),
-						requestCouldNotBeSent.getCause().getMessage());
+						"credentials: {}.", request.getMethod(),
+						requestCouldNotBeSent.getMessage(), requestCouldNotBeSent.getCause());
 			}
 		}
 		else {
@@ -1425,7 +1430,7 @@ public class SipUserAgentClient {
 		Dialog dialog = clientTransaction.getDialog();
 		if (dialog != null && !(dialog.getState() == DialogState.EARLY ||
 				dialog.getState() == DialogState.TERMINATED)) {
-			sendByeRequest(dialog);
+			sendByeRequest(dialog, true, "There's no call associated to this request.");
 		}
 	}
 
@@ -1522,7 +1527,7 @@ public class SipUserAgentClient {
 							RequestMethod.INVITE, RequestMethod.ACK);
 					logger.info("New call established: {}.", callId);
 					if (sendByeRightAway) {
-						sendByeRequest(dialog);
+						sendByeRequest(dialog, true, "Media types negotiation failed.");
 					}
 					bus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
@@ -1622,13 +1627,26 @@ public class SipUserAgentClient {
 		return true;
 	}
 
-	private void handleByeResponse(int statusCode, ClientTransaction clientTransaction) {
+	private void handleByeResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to BYE arrived.", statusCode);
 			handleThisRequestTerminated(clientTransaction);
 			String callId = null; Dialog dialog = clientTransaction.getDialog();
 			if (dialog != null) {
 				callId = dialog.getCallId().getCallId();
+			}
+			Request request = clientTransaction.getRequest();
+			if (request != null) {
+				ExtensionHeader extensionHeader = (ExtensionHeader) request
+						.getHeader(SipUserAgent.X_FAILURE_REASON_HEADER);
+				if (extensionHeader != null) {
+					String reason = extensionHeader.getValue();
+					if (reason != null) {
+						bus.post(new EstablishedCallFailed(reason, callId));
+						return;
+					}
+				}
 			}
 			bus.post(new EstablishedCallFinished(callId));
 		}
@@ -1644,7 +1662,7 @@ public class SipUserAgentClient {
 				//original INVITE request.
 				logger.info("If a CANCEL was issued, it succeded in canceling " +
 						"a call invitation.");
-				bus.post(new CallInvitationCanceled("Callee canceled " +
+				bus.post(new CallInvitationCanceled("Caller canceled " +
 						"outgoing INVITE.", callId, false));
 				return true;
 			case BYE:
@@ -1700,6 +1718,12 @@ public class SipUserAgentClient {
 
 	private boolean doSendRequest(Request request, ClientTransaction clientTransaction,
 			Dialog dialog, boolean tryAddingAuthorizationHeaders)
+					throws TransactionUnavailableException, SipException {
+		return doSendRequest(request, clientTransaction, dialog, tryAddingAuthorizationHeaders, 1);
+	}
+
+	private boolean doSendRequest(Request request, ClientTransaction clientTransaction,
+			Dialog dialog, boolean tryAddingAuthorizationHeaders, int attempt)
 			throws TransactionUnavailableException, SipException {
 		ToHeader toHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 		String toHeaderValue = toHeader.getAddress().getURI().toString();
@@ -1769,6 +1793,7 @@ public class SipUserAgentClient {
 			} catch (ParseException ignore) {
 			} catch (InvalidArgumentException ignore) {}
 		}
+		newClientTransaction.setApplicationData(attempt);
 		if (dialog != null) {
 			try {
 				logger.info("Sending {} request (from {}:{})...", request.getMethod(),
@@ -1834,6 +1859,7 @@ public class SipUserAgentClient {
 			//Authorization header could not be added.
 			return false;
 		}
+		request.removeHeader(AuthorizationHeader.NAME);
 		request.addHeader(authorizationHeader);
 		//Authorization header could be added.
 		return true;
@@ -1862,6 +1888,7 @@ public class SipUserAgentClient {
 			//ProxyAuthorization header could not be added.
 			return false;
 		}
+		request.removeHeader(ProxyAuthorizationHeader.NAME);
 		request.addHeader(proxyAuthorizationHeader);
 		//ProxyAuthorization header could be added.
 		return true;

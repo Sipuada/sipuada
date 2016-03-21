@@ -24,6 +24,7 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.InfoReceived;
@@ -70,7 +71,7 @@ import android.javax.sip.message.Request;
 
 public class SipUserAgent implements SipListener {
 	
-	protected static final RequestMethod acceptedMethods[] = {
+	protected static final RequestMethod ACCEPTED_METHODS[] = {
 	        RequestMethod.CANCEL,
 	        RequestMethod.OPTIONS,
 	        RequestMethod.MESSAGE,
@@ -78,6 +79,7 @@ public class SipUserAgent implements SipListener {
 	        RequestMethod.INFO,
 	        RequestMethod.ACK,
 	        RequestMethod.BYE };
+	protected static final String X_FAILURE_REASON_HEADER = "XFailureReason";
 
 	private final Logger logger = LoggerFactory.getLogger(SipUserAgent.class);
 
@@ -600,8 +602,8 @@ public class SipUserAgent implements SipListener {
 				if (event.getCallId().equals(callId)) {
 					inviteOperationFinished(eventBusSubscriberId, callId);
 					wipeCancelableInviteOperation(callId, eventBusSubscriberId);
-					callEstablished(eventBusSubscriberId, callId, dialog);
 					listener.onCallEstablished(callId);
+					callEstablished(eventBusSubscriberId, callId, dialog);
 				}
 			}
 
@@ -801,10 +803,10 @@ public class SipUserAgent implements SipListener {
 								public void onEvent(EstablishedCallStarted event) {
 									if (acceptCallInvitation &&
 											event.getCallId().equals(callId)) {
-										callEstablished(eventBusSubscriberId, callId,
-												event.getDialog());
 										internalEventBus.unregister(this);
 										listener.onCallEstablished(callId);
+										callEstablished(eventBusSubscriberId, callId,
+												event.getDialog());
 									}
 								}
 
@@ -863,7 +865,30 @@ public class SipUserAgent implements SipListener {
 		establishedCalls.get(eventBusSubscriberId).add(dialog);
 		final SipuadaPlugin sessionPlugin = registeredPlugins.get(RequestMethod.INVITE);
 		Object eventBusSubscriber = new Object() {
-			
+
+			@Subscribe
+			public void onEvent(EstablishedCallFailed event) {
+				if (event.getCallId().equals(callId)) {
+					wipeEstablishedCall(callId, eventBusSubscriberId);
+					internalEventBus.unregister(this);
+					if (sessionPlugin != null) {
+						try {
+							boolean sessionProperlyTerminated = sessionPlugin
+									.performSessionTermination(callId);
+							if (!sessionProperlyTerminated) {
+								logger.error("Plug-in signaled session termination failure " +
+										"in context of call {}.", callId);
+							}
+						} catch (Throwable unexpectedException) {
+							logger.error("Bad plug-in crashed while trying " +
+									"to perform session termination in context of call {}.",
+									callId, unexpectedException);
+						}
+					}
+					listener.onCallFailure(event.getReason(), callId);
+				}
+			}
+
 			@Subscribe
 			public void onEvent(EstablishedCallFinished event) {
 				if (event.getCallId().equals(callId)) {
@@ -874,8 +899,8 @@ public class SipUserAgent implements SipListener {
 							boolean sessionProperlyTerminated = sessionPlugin
 									.performSessionTermination(callId);
 							if (!sessionProperlyTerminated) {
-								logger.error("Bad plug-in crashed while trying to perform session " +
-										"termination in context of call {}.", callId);
+								logger.error("Plug-in signaled session termination failure " +
+										"in context of call {}.", callId);
 							}
 						} catch (Throwable unexpectedException) {
 							logger.error("Bad plug-in crashed while trying " +
@@ -893,7 +918,7 @@ public class SipUserAgent implements SipListener {
 			try {
 				boolean sessionProperlySetup = sessionPlugin.performSessionSetup(callId, this);
 				if (!sessionProperlySetup) {
-					String error = "Plug-in could not perform session setup in context of call";
+					String error = "Plug-in signaled session setup failure in context of call";
 					logger.error(String.format("%s {}.", error), callId);
 					listener.onCallFailure(String.format("%s %s.", error, callId), callId);
 				}
