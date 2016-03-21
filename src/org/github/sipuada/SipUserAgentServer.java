@@ -106,6 +106,7 @@ public class SipUserAgentServer {
 						handleOptionsRequest(request, serverTransaction);
 						break;
 					case MESSAGE:
+						logger.debug("HANDLE MESSAGE REQUEST");
 						handleMessageRequest(request, serverTransaction);
 						break;
 					case INVITE:
@@ -284,6 +285,7 @@ public class SipUserAgentServer {
 	private void handleMessageRequest(Request request, ServerTransaction serverTransaction) {
 		boolean withinDialog = serverTransaction != null;
 		if (withinDialog) {
+			logger.debug("handleMessageRequest - within a dialog");
 			handleReSendMessageRequest(request, serverTransaction);
 			return;
 		}
@@ -302,9 +304,11 @@ public class SipUserAgentServer {
 		ServerTransaction newServerTransaction = doSendResponse(Response.OK, RequestMethod.MESSAGE,
 				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 		if (newServerTransaction != null) {
+			logger.debug("handleMessageRequest - newServerTransaction != null");
 			ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader(ContentTypeHeader.NAME);
 			if (contentTypeHeader != null) {
 				if (request.getRawContent() != null) {
+					logger.debug("handleMessageRequest - request.getRawContent != null");
 					bus.post(new MessageReceived(callId,
 							(null != serverTransaction ? serverTransaction.getDialog() : null),
 							new String(request.getRawContent()), contentTypeHeader));

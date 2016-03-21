@@ -28,6 +28,8 @@ import org.github.sipuada.events.QueryingOptionsFailed;
 import org.github.sipuada.events.QueryingOptionsSuccess;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.events.SendingMessageFailed;
+import org.github.sipuada.events.SendingMessageSuccess;
 import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.ResponseDiscarded;
 import org.github.sipuada.exceptions.ResponsePostponed;
@@ -40,6 +42,7 @@ import com.google.common.eventbus.EventBus;
 
 import android.gov.nist.gnjvx.sip.Utils;
 import android.gov.nist.gnjvx.sip.address.SipUri;
+import android.gov.nist.gnjvx.sip.header.ContentType;
 import android.javax.sdp.SdpFactory;
 import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
@@ -1467,16 +1470,22 @@ public class SipUserAgentClient {
 	private void handleInfoResponse(int statusCode, Response response, ClientTransaction clientTransaction) {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to INFO arrived.", statusCode);
+			//TODO post success event on bus
 		} else {
 			logger.info("{} response to INFO arrived. Something was wrong.", statusCode);
+			//TODO post failed event on bus
 		}
 	}
 
 	private void handleMessageResponse(int statusCode, Response response, ClientTransaction clientTransaction) {
+		String callId = ((CallIdHeader) response.getHeader(CallIdHeader.NAME)).getCallId();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to MESSAGE arrived.", statusCode);
+			ContentType contentType = new ContentType("text", "plain");
+			bus.post(new SendingMessageSuccess(callId, null, (null != response.getContent() ? new String(response.getRawContent()) : null), contentType));
 		} else {
 			logger.info("{} response to MESSAGE arrived. Something was wrong.", statusCode);
+			bus.post(new SendingMessageFailed("Status Code:" + statusCode, callId));
 		}
 	}
 
