@@ -311,8 +311,11 @@ public class SipUserAgentServer {
 			if (contentTypeHeader != null) {
 				if (request.getRawContent() != null) {
 					logger.debug("handleMessageRequest - request.getRawContent != null");
+					FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
+					String remoteUsername = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
+					String remoteHost = fromHeader.getAddress().getURI().toString().split("@")[1];
 					bus.post(new MessageReceived(callId,
-							(null != serverTransaction ? serverTransaction.getDialog() : null),
+							(null != serverTransaction ? serverTransaction.getDialog() : null), remoteUsername, remoteHost,
 							new String(request.getRawContent()), contentTypeHeader));
 				}
 			}
