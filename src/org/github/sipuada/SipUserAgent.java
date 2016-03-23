@@ -259,7 +259,7 @@ public class SipUserAgent implements SipListener {
 			@Subscribe
 			public void onEvent(MessageReceived event) {
 				final String callId = event.getCallId();
-							listener.onMessageReceived(callId, event.getContentTypeHeader(), event.getContent());
+							listener.onMessageReceived(callId, event.getRemoteUsername(), event.getRemoteHost(), event.getContentTypeHeader(), event.getContent());
 			}
 
 			@Subscribe
