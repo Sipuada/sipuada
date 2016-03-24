@@ -89,7 +89,8 @@ public class Sipuada implements SipuadaApi {
 	protected static class RegisterOperation {
 
 		public enum OperationMethod {
-			REGISTER_ADDRESSES, UNREGISTER_ADDRESSES, INCLUDE_ADDRESSES, OVERWRITE_ADDRESSES
+			REGISTER_ADDRESSES, UNREGISTER_ADDRESSES, CLEAR_ADDRESSES,
+			INCLUDE_USER_AGENTS, EXCLUDE_USER_AGENTS, OVERWRITE_USER_AGENTS
 		}
 
 		public final OperationMethod method;
@@ -406,8 +407,13 @@ public class Sipuada implements SipuadaApi {
 					listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
 		}
 		if (unregisteredAddresses.isEmpty()) {
-			logger.debug("All existing registrations will be excluded " +
-					"(but Sipuada instances bound to them will be kept).");
+			for (ListeningPoint listeningPoint : mantained) {
+				logger.debug("{}:{}/{} registration will be excluded " +
+					"(but Sipuada instance bound to it will be kept).", listeningPoint.getIPAddress(),
+						listeningPoint.getPort(), listeningPoint.getTransport().toUpperCase());
+				unregisteredAddresses.add(String.format("%s:%d",
+						listeningPoint.getIPAddress(), listeningPoint.getPort()));
+			}
 		} else {
 			for (ListeningPoint listeningPoint : mantained) {
 				logger.debug("{}:{}/{} registration will be left untouched.", listeningPoint.getIPAddress(),
@@ -441,7 +447,44 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean includeAddresses(final RegistrationCallback callback,
+	public boolean clearAddresses(final RegistrationCallback callback) {
+		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.CLEAR_ADDRESSES,
+					callback));
+			logger.info("Unregister addresses: operation postponed because another " +
+					"related operation is in progress.");
+			return true;
+		}
+		logger.debug("All existing registrations will be excluded" +
+				" (but Sipuada instances bound to them will be kept).");
+		try {
+			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
+					.sendUnregisterRequest(new RegistrationCallback() {
+
+						@Override
+						public void onRegistrationSuccess(List<String> unregisteredContacts) {
+							registerRelatedOperationFinished();
+							callback.onRegistrationSuccess(unregisteredContacts);
+						}
+
+						@Override
+						public void onRegistrationFailed(String reason) {
+							registerRelatedOperationFinished();
+							callback.onRegistrationFailed(reason);
+						}
+
+					});
+			if (couldDispatchOperation) {
+				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
+			}
+			return couldDispatchOperation;
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
+		}
+	}
+
+	@Override
+	public boolean includeUserAgents(final RegistrationCallback callback,
 			String... localAddresses) {
 		if (localAddresses.length == 0) {
 			logger.error("Include addresses: operation invalid as no local addresses " +
@@ -449,7 +492,7 @@ public class Sipuada implements SipuadaApi {
 			return false;
 		}
 		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
-			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.INCLUDE_ADDRESSES,
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.INCLUDE_USER_AGENTS,
 					callback, localAddresses));
 			logger.info("Include addresses: operation postponed because another " +
 					"related operation is in progress.");
@@ -505,10 +548,10 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean excludeAddresses(final RegistrationCallback callback,
+	public boolean excludeUserAgents(final RegistrationCallback callback,
 			String... localAddresses) {
 		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
-			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.INCLUDE_ADDRESSES,
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.EXCLUDE_USER_AGENTS,
 					callback, localAddresses));
 			logger.info("Exclude addresses: operation postponed because another " +
 					"related operation is in progress.");
@@ -571,7 +614,7 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean overwriteAddresses(final RegistrationCallback callback,
+	public boolean overwriteUserAgents(final RegistrationCallback callback,
 			String... localAddresses) {
 		if (localAddresses.length == 0) {
 			logger.error("Overwrite addresses: operation invalid as no local addresses " +
@@ -579,7 +622,7 @@ public class Sipuada implements SipuadaApi {
 			return false;
 		}
 		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
-			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.OVERWRITE_ADDRESSES,
+			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.OVERWRITE_USER_AGENTS,
 					callback, localAddresses));
 			logger.info("Overwrite addresses: operation postponed because another " +
 					"related operation is in progress.");
@@ -809,12 +852,20 @@ public class Sipuada implements SipuadaApi {
 						couldDispatchOperation = unregisterAddresses
 							(operation.callback, operation.arguments);
 						break;
-					case INCLUDE_ADDRESSES:
-						couldDispatchOperation = includeAddresses
+					case CLEAR_ADDRESSES:
+						couldDispatchOperation = clearAddresses
+							(operation.callback);
+						break;
+					case INCLUDE_USER_AGENTS:
+						couldDispatchOperation = includeUserAgents
 							(operation.callback, operation.arguments);
 						break;
-					case OVERWRITE_ADDRESSES:
-						couldDispatchOperation = overwriteAddresses
+					case EXCLUDE_USER_AGENTS:
+						couldDispatchOperation = excludeUserAgents
+						(operation.callback, operation.arguments);
+					break;
+					case OVERWRITE_USER_AGENTS:
+						couldDispatchOperation = overwriteUserAgents
 							(operation.callback, operation.arguments);
 						break;
 				}
