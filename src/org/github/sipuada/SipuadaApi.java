@@ -39,6 +39,8 @@ public interface SipuadaApi {
 
 	boolean registerAddresses(RegistrationCallback callback);
 
+	boolean unregisterAddresses(RegistrationCallback callback, String... localAddresses);
+
 	boolean includeAddresses(RegistrationCallback callback, String... localAddresses);
 
 	boolean excludeAddresses(RegistrationCallback callback, String... localAddresses);
