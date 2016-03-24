@@ -90,7 +90,7 @@ public class SipuadaTest {
 		sipuada.unregisterAddresses(registrationCallback,
 				"192.168.130.207:55502/TCP");
 
-		sipuada.overwriteAddresses(registrationCallback,
+		sipuada.overwriteUserAgents(registrationCallback,
 				"192.168.130.207:55503/TCP");
 
 		CallInvitationCallback callInvitationCallback = new CallInvitationCallback() {
@@ -114,20 +114,22 @@ public class SipuadaTest {
 
 		sipuada.inviteToCall("larson", "192.168.130.207:5060", callInvitationCallback);
 
-		sipuada.includeAddresses(registrationCallback,
+		sipuada.includeUserAgents(registrationCallback,
 				"192.168.130.207:55504/TCP",
 				"192.168.130.207:55505/TCP");
 
-		sipuada.overwriteAddresses(registrationCallback);
+		sipuada.overwriteUserAgents(registrationCallback);
 
 		sipuada.registerAddresses(registrationCallback);
 
-		sipuada.overwriteAddresses(registrationCallback,
+		sipuada.overwriteUserAgents(registrationCallback,
 				"192.168.130.207:55506/UDP",
 				"192.168.130.207:55507/UDP",
 				"192.168.130.207:55508/UDP");
 
-		sipuada.overwriteAddresses(registrationCallback,
+		sipuada.clearAddresses(registrationCallback);
+
+		sipuada.overwriteUserAgents(registrationCallback,
 				"192.168.130.207:55507/UDP");
 
 		try {
@@ -135,8 +137,7 @@ public class SipuadaTest {
 		} catch (InterruptedException ignore) {}
 		sipuada.inviteToCall("larson", "192.168.130.207:5060", callInvitationCallback);
 
-		sipuada.unregisterAddresses(registrationCallback,
-				"192.168.130.207:55507/TCP");
+		sipuada.unregisterAddresses(registrationCallback);
 	}
 
 }

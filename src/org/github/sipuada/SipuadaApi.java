@@ -41,11 +41,13 @@ public interface SipuadaApi {
 
 	boolean unregisterAddresses(RegistrationCallback callback, String... localAddresses);
 
-	boolean includeAddresses(RegistrationCallback callback, String... localAddresses);
+	boolean clearAddresses(RegistrationCallback callback);
 
-	boolean excludeAddresses(RegistrationCallback callback, String... localAddresses);
+	boolean includeUserAgents(RegistrationCallback callback, String... localAddresses);
 
-	boolean overwriteAddresses(RegistrationCallback callback, String... localAddresses);
+	boolean excludeUserAgents(RegistrationCallback callback, String... localAddresses);
+
+	boolean overwriteUserAgents(RegistrationCallback callback, String... localAddresses);
 
 	public interface OptionsQueryingCallback {
 
