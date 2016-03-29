@@ -65,6 +65,7 @@ import android.javax.sip.address.AddressFactory;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
@@ -422,6 +423,12 @@ public class SipUserAgent implements SipListener {
 
 	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content,
 			ContentTypeHeader contentTypeHeader, final SendingMessageCallback callback) {
+		return sendMessageRequest(remoteUser, remoteDomain, content,
+				contentTypeHeader, callback, null);
+	}
+	
+	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content,
+			ContentTypeHeader contentTypeHeader, final SendingMessageCallback callback, Header[] additionalHeaders) {
 		CallIdHeader callIdHeader = provider.getNewCallId();
 		final String callId = callIdHeader.getCallId();
 		logger.debug("UserAgent - sendOptionsRequest - callId:" + callId);
@@ -446,7 +453,7 @@ public class SipUserAgent implements SipListener {
 		internalEventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = uac.sendMessageRequest(remoteUser, remoteDomain, callIdHeader,
-				content, contentTypeHeader);
+				content, contentTypeHeader, additionalHeaders);
 		if (!expectRemoteAnswer) {
 			logger.error("MESSAGE request not sent.");
 			internalEventBus.unregister(eventBusSubscriber);

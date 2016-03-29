@@ -2,6 +2,7 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -294,6 +295,12 @@ public class SipUserAgentClient {
 	
 	public boolean sendMessageRequest(String remoteUser, String remoteHost, CallIdHeader callIdHeader, String content,
 			ContentTypeHeader contentTypeHeader) {
+		return sendMessageRequest(remoteUser, remoteHost, callIdHeader, content,
+				contentTypeHeader, null);
+	}
+	
+	public boolean sendMessageRequest(String remoteUser, String remoteHost, CallIdHeader callIdHeader, String content,
+			ContentTypeHeader contentTypeHeader, Header[] additionalHeaders) {
 		
 		URI requestUri;
 		try {
@@ -307,7 +314,8 @@ public class SipUserAgentClient {
 			return false;
 		}
 		long cseq = ++localCSeq;
-		List<Header> additionalHeaders = new ArrayList<>();
+		List<Header> additionalHeaderList = (null != additionalHeaders ? new ArrayList<Header>(Arrays.asList(additionalHeaders)) : new ArrayList<Header>());
+		
 		SipURI contactUri;
 		try {
 			contactUri = addressMaker.createSipURI(username, localIp);
@@ -324,20 +332,20 @@ public class SipUserAgentClient {
 		try {
 			contactHeader.setExpires(60);
 		} catch (InvalidArgumentException ignore) {}
-		additionalHeaders.add(contactHeader);
+		additionalHeaderList.add(contactHeader);
 		try {
 			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
-			additionalHeaders.add(expiresHeader);
+			additionalHeaderList.add(expiresHeader);
 		} catch (InvalidArgumentException ignore) {}
 		
 		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
-				additionalHeaders.add(allowHeader);
+				additionalHeaderList.add(allowHeader);
 			} catch (ParseException ignore) {}
 		}
 		return sendRequest(RequestMethod.MESSAGE, remoteUser, remoteHost, requestUri,
-				callIdHeader, cseq, content, contentTypeHeader, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+				callIdHeader, cseq, content, contentTypeHeader, additionalHeaderList.toArray(new Header[additionalHeaderList.size()]));
 	}
 	
 	public boolean sendMessageRequest(Dialog dialog, String content, ContentTypeHeader contentTypeHeader) {

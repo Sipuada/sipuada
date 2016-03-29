@@ -47,6 +47,7 @@ import android.javax.sip.TransportNotSupportedException;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.Header;
 
 public class Sipuada implements SipuadaApi {
 
@@ -972,6 +973,17 @@ public class Sipuada implements SipuadaApi {
 		try {
 			return chooseBestAgentThatIsAvailable().sendMessageRequest(remoteUser,
 					remoteDomain, content, contentTypeHeader, callback);
+		} catch (InternalJainSipException internalJainSipError) {
+			return false;
+		}
+	}
+	
+	@Override
+	public boolean sendMessage(String remoteUser, String remoteDomain, String content,
+			ContentTypeHeader contentTypeHeader, SendingMessageCallback callback, Header[] additionalHeaders) {
+		try {
+			return chooseBestAgentThatIsAvailable().sendMessageRequest(remoteUser,
+					remoteDomain, content, contentTypeHeader, callback, additionalHeaders);
 		} catch (InternalJainSipException internalJainSipError) {
 			return false;
 		}
