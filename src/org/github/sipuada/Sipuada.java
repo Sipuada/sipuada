@@ -376,7 +376,7 @@ public class Sipuada implements SipuadaApi {
 							callback.onRegistrationFailed(reason);
 						}
 						
-					}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+					}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
 			if (couldDispatchOperation) {
 				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
@@ -496,7 +496,7 @@ public class Sipuada implements SipuadaApi {
 	}
 	@Override
 	public boolean includeUserAgents(final RegistrationCallback callback,
-			int timeout, String... localAddresses) {
+			int expires, String... localAddresses) {
 		if (localAddresses.length == 0) {
 			logger.error("Include addresses: operation invalid as no local addresses " +
 					"were provided.");
@@ -548,7 +548,7 @@ public class Sipuada implements SipuadaApi {
 							callback.onRegistrationFailed(reason);
 						}
 						
-					}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+					}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
 			if (couldDispatchOperation) {
 				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
