@@ -38,8 +38,6 @@ public interface SipuadaApi {
 
 	boolean clearAddresses(RegistrationCallback callback);
 
-	boolean includeUserAgents(RegistrationCallback callback, String... localAddresses);
-
 	boolean includeUserAgents(RegistrationCallback callback, int expires, String... localAddresses);
 
 	boolean excludeUserAgents(RegistrationCallback callback, String... localAddresses);
