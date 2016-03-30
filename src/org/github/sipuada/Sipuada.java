@@ -53,7 +53,8 @@ public class Sipuada implements SipuadaApi {
 
 	private final Logger logger = LoggerFactory.getLogger(Sipuada.class);
 	private final String STACK_NAME_PREFIX = "SipuadaUserAgentv0";
-
+	private final int REGISTER_DEFAULT_EXPIRES = 3600;
+	
 	private final EventBus eventBus = new EventBus();
 	private final SipuadaListener listener;
 	private final String username, primaryHost, password;
@@ -333,6 +334,11 @@ public class Sipuada implements SipuadaApi {
 
 	@Override
 	public boolean registerAddresses(final RegistrationCallback callback) {
+		return registerAddresses(callback, REGISTER_DEFAULT_EXPIRES);
+	}
+	
+	@Override
+	public boolean registerAddresses(final RegistrationCallback callback, int expires) {
 		if (registerOperationsInProgress.get(RequestMethod.REGISTER)) {
 			postponedRegisterOperations.add(new RegisterOperation(OperationMethod.REGISTER_ADDRESSES,
 					callback));
@@ -484,10 +490,15 @@ public class Sipuada implements SipuadaApi {
 			return false;
 		}
 	}
-
+	
 	@Override
 	public boolean includeUserAgents(final RegistrationCallback callback,
 			String... localAddresses) {
+			return includeUserAgents(callback, REGISTER_DEFAULT_EXPIRES, localAddresses);
+	}
+	@Override
+	public boolean includeUserAgents(final RegistrationCallback callback,
+			int timeout, String... localAddresses) {
 		if (localAddresses.length == 0) {
 			logger.error("Include addresses: operation invalid as no local addresses " +
 					"were provided.");
@@ -618,6 +629,12 @@ public class Sipuada implements SipuadaApi {
 	@Override
 	public boolean overwriteUserAgents(final RegistrationCallback callback,
 			String... localAddresses) {
+		return overwriteUserAgents(callback, REGISTER_DEFAULT_EXPIRES, localAddresses);
+	}
+	
+	@Override
+	public boolean overwriteUserAgents(final RegistrationCallback callback,
+			int expires, String... localAddresses) {
 		if (localAddresses.length == 0) {
 			logger.error("Overwrite addresses: operation invalid as no local addresses " +
 					"were provided.");
@@ -714,7 +731,7 @@ public class Sipuada implements SipuadaApi {
 						callback.onRegistrationFailed(reason);
 					}
 					
-				}, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+				}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
 			} catch (InternalJainSipException internalJainSipError) {
 				couldDispatchOperation = false;
 			}
