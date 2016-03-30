@@ -32,7 +32,7 @@ public interface SipuadaApi {
 
     boolean registerAddresses(RegistrationCallback callback);
 
-    boolean registerAddresses(RegistrationCallback callback, int timeout);
+    boolean registerAddresses(RegistrationCallback callback, int expires);
 
     boolean unregisterAddresses(RegistrationCallback callback, String... localAddresses);
 
@@ -40,13 +40,13 @@ public interface SipuadaApi {
 
     boolean includeUserAgents(RegistrationCallback callback, String... localAddresses);
 
-    boolean includeUserAgents(RegistrationCallback callback, int timeout, String... localAddresses);
+    boolean includeUserAgents(RegistrationCallback callback, int expires, String... localAddresses);
 
     boolean excludeUserAgents(RegistrationCallback callback, String... localAddresses);
 
     boolean overwriteUserAgents(RegistrationCallback callback, String... localAddresses);
 
-    boolean overwriteUserAgents(RegistrationCallback callback, int timeout, String... localAddresses);
+    boolean overwriteUserAgents(RegistrationCallback callback, int expires, String... localAddresses);
 
 	interface CallInvitationCallback {
 
