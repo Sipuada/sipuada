@@ -146,7 +146,7 @@ public class SipUserAgentClient {
 		}
 	}
 
-	public boolean sendRegisterRequest(String... addresses) {
+	public boolean sendRegisterRequest(int expires, String... addresses) {
 		if (addresses.length == 0) {
 			logger.error("Cannot send a REGISTER request with no bindings.");
 			return false;
@@ -174,7 +174,7 @@ public class SipUserAgentClient {
 				Address contactAddress = addressMaker.createAddress(contactUri);
 				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 				try {
-					contactHeader.setExpires(3600);
+					contactHeader.setExpires(expires);
 				} catch (InvalidArgumentException ignore) {}
 				contactHeaders.add(contactHeader);
 			} catch (ParseException ignore) {}
@@ -1740,3 +1740,4 @@ public class SipUserAgentClient {
 	}
 
 }
+

@@ -32,15 +32,21 @@ public interface SipuadaApi {
 
 	boolean registerAddresses(RegistrationCallback callback);
 
+	boolean registerAddresses(RegistrationCallback callback, int expires);
+
 	boolean unregisterAddresses(RegistrationCallback callback, String... localAddresses);
 
 	boolean clearAddresses(RegistrationCallback callback);
 
 	boolean includeUserAgents(RegistrationCallback callback, String... localAddresses);
 
+	boolean includeUserAgents(RegistrationCallback callback, int expires, String... localAddresses);
+
 	boolean excludeUserAgents(RegistrationCallback callback, String... localAddresses);
 
 	boolean overwriteUserAgents(RegistrationCallback callback, String... localAddresses);
+
+	boolean overwriteUserAgents(RegistrationCallback callback, int expires, String... localAddresses);
 
 	interface CallInvitationCallback {
 
@@ -65,3 +71,4 @@ public interface SipuadaApi {
 	boolean registerPlugin(SipuadaPlugin plugin);
 
 }
+

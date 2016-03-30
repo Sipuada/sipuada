@@ -323,16 +323,16 @@ public class SipUserAgent implements SipListener {
 
 	public boolean sendRegisterRequest(RegistrationCallback callback,
 			String... additionalAddresses) {
-		return sendRegisterRequest(callback, false, additionalAddresses);
+		return sendRegisterRequest(callback, 3600, additionalAddresses);
 	}
 
 	public boolean sendUnregisterRequest(RegistrationCallback callback,
 			String... expiredAddresses) {
-		return sendRegisterRequest(callback, true, expiredAddresses);
+		return sendRegisterRequest(callback, 0, expiredAddresses);
 	}
 
-	private boolean sendRegisterRequest(final RegistrationCallback callback,
-			boolean unregister, String... addresses) {
+	public boolean sendRegisterRequest(final RegistrationCallback callback,
+			int expires, String... addresses) {
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
@@ -352,11 +352,11 @@ public class SipUserAgent implements SipListener {
 		internalEventBus.register(eventBusSubscriber);
 		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
 		boolean expectRemoteAnswer = false;
-		if (unregister) {
+		if (expires == 0) {
 			expectRemoteAnswer = uac.sendUnregisterRequest(addresses);
 		}
 		else {
-			expectRemoteAnswer = uac.sendRegisterRequest(addresses);
+			expectRemoteAnswer = uac.sendRegisterRequest(expires, addresses);
 		}
 		if (!expectRemoteAnswer) {
 			logger.error("REGISTER request not sent.");
