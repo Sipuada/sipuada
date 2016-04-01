@@ -70,7 +70,7 @@ public interface SipuadaApi {
 
 	boolean sendMessage(String remoteUser, String remoteDomain, String content, ContentTypeHeader contentTypeHeader, SendingMessageCallback callback);
 	
-	boolean sendMessage(String remoteUser, String remoteDomain, String content, ContentTypeHeader contentTypeHeader, SendingMessageCallback callback, Header[] additionalHeaders);
+	boolean sendMessage(String remoteUser, String remoteDomain, String content, ContentTypeHeader contentTypeHeader, Header[] additionalHeaders, SendingMessageCallback callback);
 
 	boolean sendMessage(String callId, String content, ContentTypeHeader contentTypeHeader, SendingMessageCallback callback);
 

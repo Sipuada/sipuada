@@ -2,6 +2,7 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.eventbus.EventBus;
+import com.sun.xml.internal.bind.v2.runtime.reflect.ListIterator;
 
 import android.javax.sdp.SdpFactory;
 import android.javax.sdp.SdpParseException;
@@ -291,6 +293,12 @@ public class SipUserAgentServer {
 			handleReSendMessageRequest(request, serverTransaction);
 			return;
 		}
+		
+		Iterator iterator = request.getHeaderNames();
+		while(iterator.hasNext()) {
+			logger.debug("NEXT HEADER:" + iterator.next() );
+		}
+		
 		//TODO also consider supporting multicast conferences, by sending silent 2xx responses
 		//when appropriate, by using identifiers within the SDP session description.
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);

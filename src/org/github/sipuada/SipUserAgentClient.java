@@ -315,6 +315,7 @@ public class SipUserAgentClient {
 		}
 		long cseq = ++localCSeq;
 		List<Header> additionalHeaderList = (null != additionalHeaders ? new ArrayList<Header>(Arrays.asList(additionalHeaders)) : new ArrayList<Header>());
+		logger.debug("sendMessageRequest - additional headers size:" + additionalHeaderList.size());
 		
 		SipURI contactUri;
 		try {

@@ -1068,7 +1068,7 @@ public class Sipuada implements SipuadaApi {
 	
 	@Override
 	public boolean sendMessage(String remoteUser, String remoteDomain, String content,
-			ContentTypeHeader contentTypeHeader, SendingMessageCallback callback, Header[] additionalHeaders) {
+			ContentTypeHeader contentTypeHeader, Header[] additionalHeaders, SendingMessageCallback callback) {
 		try {
 			return chooseBestAgentThatIsAvailable().sendMessageRequest(remoteUser,
 					remoteDomain, content, contentTypeHeader, callback, additionalHeaders);

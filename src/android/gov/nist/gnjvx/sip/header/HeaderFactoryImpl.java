@@ -1204,7 +1204,7 @@ public class HeaderFactoryImpl implements HeaderFactory , HeaderFactoryExt {
 	/** Create and return a list of headers.
 	 *@param headers -- list of headers.
 	 *@throws ParseException -- if a parse exception occurs or a List
-	 * of that type of header is not alowed.
+	 * of that type of header is not allowed.
 	 *@return a List containing the headers.
 	 */
 	public java.util.List createHeaders(String headers)
