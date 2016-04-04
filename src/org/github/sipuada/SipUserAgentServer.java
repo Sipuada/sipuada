@@ -280,6 +280,8 @@ public class SipUserAgentServer {
 					Response.UNSUPPORTED_MEDIA_TYPE)) {
 				bus.post(new ReceivingOptionsRequestFailed("Unsupported Media Type", callId));
 				//FIXME enhance this reason above.
+			}else {
+				sendEarlyMediaIfApllicable(request, newServerTransaction);
 			}
 			return;
 		}
@@ -448,6 +450,50 @@ public class SipUserAgentServer {
 			return true;
 		}
 		return false;
+	}
+
+	public boolean sendEarlyMediaIfApllicable(Request request, ServerTransaction serverTransaction) {
+		// TODO
+		SipuadaPlugin sessionPlugin = sessionPlugins.get(RequestMethod.INVITE);
+		if (sessionPlugin == null) {
+			logger.debug("putOfferOrAnswerIntoResponseIfApplicable - sessionPlugin == null");
+			return true;
+		}
+
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		SessionDescription earlyMediaSDP = null;
+
+		try {
+			earlyMediaSDP = sessionPlugin.generateOfferForEarlyMedia(callId, localIp);
+		} catch (Throwable unexpectedException) {
+			logger.error("Bad plug-in crashed while trying to generate early media offer to be inserted");
+			return true;
+		}
+		if (earlyMediaSDP == null) {
+			return false;
+		}
+
+		ServerTransaction newServerTransaction = serverTransaction;
+		if (newServerTransaction == null) {
+			try {
+				newServerTransaction = provider.getNewServerTransaction(request);
+			} catch (TransactionAlreadyExistsException | TransactionUnavailableException e) {
+				e.printStackTrace();
+				logger.error("Error in server transaction creation: {}", e.getMessage());
+			}
+		}
+
+		Response response;
+		try {
+			response = messenger.createResponse(Response.SESSION_PROGRESS, request);
+			response.setContent(earlyMediaSDP, headerMaker.createContentTypeHeader("application", "sdp"));
+			newServerTransaction.sendResponse(response);
+		} catch (ParseException | SipException | InvalidArgumentException e) {
+			logger.error("sendEarlyMediaIfApllicable Error: {}", e.getMessage());
+			return false;
+		}
+		return true;
 	}
 
 	public boolean sendRejectResponse(RequestMethod method, Request request,

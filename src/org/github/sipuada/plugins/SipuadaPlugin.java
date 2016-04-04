@@ -16,6 +16,12 @@ public interface SipuadaPlugin {
 	SessionDescription generateOffer(String callId, RequestMethod method, String localAddress);
 
 	/**
+	 * Generates an SDP offer to go along the 183 (Session Progress) response.
+	 * @return a SessionDescription if the plug-in wishes early media.
+	 */
+	SessionDescription generateOfferForEarlyMedia(String callId, String localAddress);
+	
+	/**
 	 * Feeds the accepted answer to a given offer back to the plug-in that generated
 	 * that offer. The plug-in should know which offer this answer corresponds to
 	 * by comparing the given callId with the one that was passed to generateOffer().
