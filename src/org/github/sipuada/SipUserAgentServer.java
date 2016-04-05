@@ -324,9 +324,17 @@ public class SipUserAgentServer {
 					ToHeader fromHeader = (ToHeader) request.getHeader(ToHeader.NAME);
 					String remoteUsername = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
 					String remoteHost = fromHeader.getAddress().getURI().toString().split("@")[1];
+					
+					Iterator<String> headerNamesIterator = request.getHeaderNames();
+					List<Header> headers = new ArrayList<>();
+					while( headerNamesIterator.hasNext() ) {
+						headers.add(request.getHeader(headerNamesIterator.next()));
+					}
+					Header[] existingHeaders = headers.toArray(new Header[headers.size()]);
+					logger.debug("Content:" + (null != request.getRawContent() ? new String(request.getRawContent()) : ""));
 					bus.post(new MessageReceived(callId,
 							(null != serverTransaction ? serverTransaction.getDialog() : null), remoteUsername, remoteHost,
-							new String(request.getRawContent()), contentTypeHeader));
+							new String(request.getRawContent()), contentTypeHeader, existingHeaders));
 				}
 			}
 			return;

@@ -24,7 +24,7 @@ public interface SipuadaApi {
 
 		void onCallFailure(String reason, String callId);
 
-		void onMessageReceived(String callId, String remoteUsername, String remoteHost, ContentTypeHeader contentTypeHeader, String content);
+		void onMessageReceived(String callId, String remoteUsername, String remoteHost, ContentTypeHeader contentTypeHeader, String content, Header[] additionalHeaders);
 
 		void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content);
 
