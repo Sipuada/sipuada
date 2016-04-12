@@ -62,9 +62,7 @@ public class SipUserAgent implements SipListener {
 	protected static final RequestMethod ACCEPTED_METHODS[] = {
 	        RequestMethod.CANCEL,
 	        RequestMethod.OPTIONS,
-	        RequestMethod.MESSAGE,
 	        RequestMethod.INVITE,
-	        RequestMethod.INFO,
 	        RequestMethod.ACK,
 	        RequestMethod.BYE };
 	protected static final String X_FAILURE_REASON_HEADER = "XFailureReason";
@@ -362,38 +360,6 @@ public class SipUserAgent implements SipListener {
 			internalEventBus.unregister(eventBusSubscriber);
 		}
 		return expectRemoteAnswer;
-	}
-
-	public boolean sendOptionsRequest(String remoteUser, String remoteDomain, final OptionsQueryingCallback callback) {
-		CallIdHeader callIdHeader = provider.getNewCallId();
-		final String callId = callIdHeader.getCallId();
-		logger.debug("UserAgent - sendOptionsRequest - callId:" + callId);
-		final String eventBusSubscriberId = Utils.getInstance().generateTag();
-		Object eventBusSubscriber = new Object() {
-
-			@Subscribe
-			public void onEvent(QueryingOptionsSuccess event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingSuccess(callId, event.getSessionDescription());
-				}
-			}
-
-			@Subscribe
-			public void onEvent(QueryingOptionsFailed event) {
-				if (event.getCallId().equals(callId)) {
-					callback.onOptionsQueryingFailed(event.getReason());
-				}
-			}
-
-		};
-		internalEventBus.register(eventBusSubscriber);
-		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
-		boolean expectRemoteAnswer = uac.sendOptionsRequest(remoteUser, remoteDomain, callIdHeader, true);
-		if (!expectRemoteAnswer) {
-			logger.error("OPTIONS request not sent.");
-			internalEventBus.unregister(eventBusSubscriber);
-		}
-		return true;
 	}
 
 	public String sendInviteRequest(String remoteUser, String remoteDomain,

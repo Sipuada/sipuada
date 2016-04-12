@@ -1064,17 +1064,6 @@ public class Sipuada implements SipuadaApi {
 	}
 
 	@Override
-	public boolean queryOptions(String remoteUser, String remoteDomain,
-			OptionsQueryingCallback callback) {
-		try {
-			return chooseBestAgentThatIsAvailable().sendOptionsRequest(remoteUser,
-					remoteDomain, callback);
-		} catch (InternalJainSipException internalJainSipError) {
-			return false;
-		}
-	}
-
-	@Override
 	public String inviteToCall(String remoteUser, String remoteDomain,
 			CallInvitationCallback callback) {
 		try {
