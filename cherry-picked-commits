@@ -1,0 +1,290 @@
+git reset --hard a6e50b10a769d48620eb885101aa43876f4cdc19
+
+git cherry-pick c0a511017044b7d39939fd5f7ec52da074ef84bb
+
+git cherry-pick 01a99b20fb139b1db05d5da3de9e186e84683ce6
+
+git cherry-pick 809a81d0c3bf1649e0ddb69576ac770abcfd0cef
+
+git cherry-pick bd1242d48a40996d412ae89d5deb03c71602b074
+
+git cherry-pick 0cf8b5d4965e113174bc5bd0856a79655f128087
+
+git cherry-pick bf996cb0f0edf4d09040c5e5e7acdff57e0c1518
+
+git cherry-pick a65efaad18618ce6190cbf0881ea87b4f4691b71
+
+git cherry-pick 963b0cb14613c7007eda7630091535f18b1ef405
+
+git cherry-pick 07e9a65d1ddadda109822398ba892b3903542895
+
+git cherry-pick 5c56691be473fbaacb031c681dcc4bc657409afe
+
+git cherry-pick 188fabebccb25744f7ca06cebcc5c49d8e9ec7ca
+
+git cherry-pick f6fb7f0273bb22317cc837c91df4c62b90098461
+
+git cherry-pick de58aae0365a6b92d4a5064f6f593d5458897bce
+
+git cherry-pick efc1cec5f0631c2119ab34412ec576519cae4a50
+
+git cherry-pick 091c28ace9960e5806ca96d920856e36d73a3e5d
+
+git cherry-pick 0e4f2781fe8d52b9ecf93dbae47c929e5d9a4199
+
+git cherry-pick 99cc8b96ad16b825acd15301df04ceed80e43341
+
+git cherry-pick d0614d95046a68c72b59d3844f1fabc3b29930e1
+
+git cherry-pick 333d65db3d0ed565e1e00a61f442f09c8f520122
+
+git cherry-pick 7d7f51043145806a7a5533aa757ee2962e244230
+
+git cherry-pick 7439a9d6fdc910fa0cbda442e74ae6ef74e177bf
+
+git cherry-pick b404e4f58e49fee9dcc42a7dd828ecb27c116c0a
+
+git cherry-pick 8eaa3d1c635355b893e60b2254f0eb5308c09394
+
+git cherry-pick bfc45868bb5ad76e407b0db8f8681cfccf6799ce
+
+git cherry-pick cfeccc4e3a1db63f1bbd9d8573c94a7a3841a755
+
+git cherry-pick 19f122c1e85f4c9b6e05fdf53f57aadaf9cac7c7
+
+git cherry-pick bbfb9e6053c9d1d2335a3678294c14e10630074d
+
+git cherry-pick dfe91f110523000222ca8902f2e5b9c14b964b1b
+
+git cherry-pick 9042b6aeba5819b28c4cabc3b90142ed123c8adb
+
+git cherry-pick f8c9918130751b93c90ae2268cad10bc02f56542
+
+git cherry-pick d9830c34047058d8689437b90f598b21b724d9f9
+
+git cherry-pick f14344d8f80ae1a8d423d6f05e9e93f9042c1447
+
+git cherry-pick 95115578b5154d174743e579615c42cdd145efc8
+
+git cherry-pick bdcb80b6fd503154c2681bc345ae3fdbaebab81e
+
+git cherry-pick 698a25dde3ecdd09faf9abc1974e62c8e356bf25
+
+git cherry-pick 3315216dee0fd2184e3a30fdc4ea74132487613a
+
+git cherry-pick 8fa2604de2870f56d56957033e4d85b7b5b1fcef
+
+git cherry-pick 2d4317c3c9e6a25bbe8679864926fd96f5a26063
+
+git cherry-pick e0726f9ee9b9b80dee591f40bc868c635d070312
+
+git cherry-pick eed0eb7bf5646a27925627bafe3463db5051215e
+
+git cherry-pick a25116a6e9ba81cf7b2b8bd92c66cf8046d712b5
+
+git cherry-pick 7b3bb557b4b4c89c9423c6cc2005e78c4a2ece01
+
+git cherry-pick 7c737614a855b0972a3256fc2119e2760fcae80c
+
+git cherry-pick e72f6e5e33b49239774edd14ef3ed957b884c4a8
+
+git cherry-pick db0f30e3084273575e4427568bf0ddbb65e0d91a
+
+git cherry-pick 01de7f4d06d68d78fce46ddbc467228462c9fcc0
+
+git cherry-pick 9d1d9684e9c566280f0ab78ac3d2f9bf6c0a2761
+
+git cherry-pick d157386f0cdc6ce0884b630ba29bc5ac4a249315
+
+git cherry-pick f989ace624b16879611a7bcae4e819dde604df98
+
+git cherry-pick 3c7a59eb5461a824f1c6d352df94cdf0242fcdba
+
+git cherry-pick c544bf9363b659a37c8de8076c3a71ee62f1f0f0
+
+git cherry-pick 13be8de25b73f2b74ec5b58042c9cc60190a99d9
+
+git cherry-pick bd17f1975c27dae4e4c2140b10caefcec2a3d1ed
+
+git cherry-pick cbc3320081a4213d542cc4a5ffd709a33cf255bf
+
+git cherry-pick f48fac63003ae940727eafcb3c38204edff74d71
+
+git cherry-pick 2afd537498dbf44c373b1985d4cfb7d5871b506d
+
+git cherry-pick e8701060ef5d550af430a7fb7f2b028b5266340e
+
+git cherry-pick 73d69ff08e84a6a78f589126a066bfbb312f0c3b
+
+git cherry-pick 62cd6bf00c95e7b1de4949ca138aaf7d01c66670
+
+git cherry-pick fe5a7ffcb9d10307a42c0b0ec040d37e30f9e62f
+
+#git cherry-pick d68340e35c16dfcd7c1f8bbcdc54960662998ba8
+
+#    Conflicts:
+#    	src/org/github/sipuada/UserAgentServer.java
+#    	src/org/github/sipuada/UserAgentClient.java
+#    	src/org/github/sipuada/UserAgent.java
+#    	src/org/github/sipuada/Sipuada.java
+#Merge: d68340e fe5a7ff
+git cherry-pick -m 2 882553b9ea6449a2673a39c1da4c812fbff7eeef
+
+git cherry-pick 3cc0a6484719b17d4042b095821e9ef5e7bdfb31
+
+git cherry-pick 72bd626c0c23d99cb9a5d53638117a17e3892d53
+
+git cherry-pick 6c5e632808642919c5818b43d990a3226c8b3da9
+
+git cherry-pick 470502417266ca7e54a28b6fa3fbc6ad45ec6dba
+
+#git cherry-pick c3647a23ed9201a52cf0f46b1ce584b84a6aad84
+
+#    Conflicts:
+#    	.gitignore
+#Merge: c3647a2 4705024
+#git cherry-pick -m 2 9579147a192010734a5f55c22415b87507022277
+
+git cherry-pick c6b91614b3f5fa0d484cef5106b31d770959ff0c
+
+#Merge: c6b9161 9579147
+#commit b86467dcc88177c497ecec6a9287a0a3449001ad
+
+git cherry-pick 16ab3c2e50e1bec088ef06e0c691c078a3b9f6ab
+
+git cherry-pick 237995300d498897da35245b2546c97955eed2e1
+
+git cherry-pick 1439a5c584716e5e77a6628697afeeba0469d45b
+
+#git cherry-pick 8a6ff06bb4978b4262f05bec46399b701ef01fb5
+
+git cherry-pick 7c5264b8a60c1043e340be63fbb8d67e56b7eed6
+
+#git cherry-pick 00136ddb107cdbb265248f38d505ab150094cf39
+
+#Merge: 00136dd 7c5264b
+git cherry-pick -m 2 5fa3c8ba332ea3da6c2ecdadb69d279013a4f267
+
+git cherry-pick aec8de98a5b4a69591538286f48906e1a3d6cec6
+
+git cherry-pick ba97de178b82e8d6e8c547fd87b04d9e2f29837d
+
+git cherry-pick 2c2e2ec7f885ca836e4890555c23b69aabdd04dd
+
+git cherry-pick 9b524ebc353607f116412d350fcbbeb2eb3c8917
+
+git cherry-pick 54c8567350abd0fc7358608d2ae860a1c0c8cde0
+
+git cherry-pick 09213b19328a7faf48ec353408fc6cad5c584ea4
+
+git cherry-pick 101e9882bf2d0a9717702bc51b9c00c3f8e596f6
+
+#    Conflicts:
+#    	src/org/github/sipuada/UserAgentClient.java
+#Merge: 101e988 c852216
+#commit a7e70fd2f4f053cf5554c882e2d8fccc80d673bb
+
+git cherry-pick a1b9ce753e27b39f8ed3e40e18094eebdc5d2efd
+
+#Merge: a1b9ce7 cab5244
+#commit c1ec26d9f9719ebd07ce78030380b2e11f45f237
+
+git cherry-pick c2381689e1fef2aee7834dd9d30aacccf0cb4f06
+
+#Merge: c238168 239257b
+#commit 6b40fb9d10dc6b978282d982426a5ef63c221d5e
+
+git cherry-pick e7e8d490326240ca06139dd3e7e88db1c5535bf8
+
+git cherry-pick 24fac29ea4884616a8796966ab4c71c6ff20a2d2
+
+git cherry-pick 98353624545da08a3ee82b4061ba20a24df6c913
+
+git cherry-pick 6e901bf681715c1785502db48f30a1eeed1c5231
+
+git cherry-pick 2df4fbe54a9e9dba8bd630dcb045c864730a28d6
+
+git cherry-pick 0f13531a1640191e2b66e8bae007db557b6282f5
+
+git cherry-pick d747cc96ab8cfb9a5c781ba76f39684259de227c
+
+git cherry-pick 32655cfd5a0465ca309652f01107b2a0020abb0c
+
+git cherry-pick 72e685e5cb9e1d33d60a559482f6da3a3419ce88
+
+git cherry-pick cecbbe70fe7e8a20a44b983ffa10ba717e75be2d
+
+git cherry-pick 21bfdc3c865eaf9397e631389b20cb6af9263566
+
+#Merge: 21bfdc3 dfe413b
+#commit 8017a3509f4d3cb9383ddda70f348e10b99cdd38
+
+git cherry-pick c8b0e0649d5b26abad458723d24a2c6aa707f4f9
+
+git cherry-pick e3e539d9267732f0408acd63278408d50cf7efa9
+
+git cherry-pick ea04457ef5e8e91ed75bc08057f0fa93539feffb
+
+git cherry-pick d0565157394d616cd06a0ba2357f943ae3a93049
+
+git cherry-pick 765b346728ffe5336b09ecde37119d1a1ce07c7b
+
+git cherry-pick 4a3b169e219ca879bc8e80ee53800116acd53ba4
+
+git cherry-pick f1e00cc7ee77a744a6e153ea297d12e13b00d9d4
+
+git cherry-pick eb5ab315f4034c1daea9b5c3817f3138e008b165
+
+git cherry-pick 988f277b897ed5a3e0ee36d0e925fe5eb5c84943
+
+git cherry-pick 3c94f35d8f5a0a02080c3cc60d1124b86d087a18
+
+git cherry-pick 117f9e2e54898a93820b245866e5685d8ad6a1aa
+
+git cherry-pick 4571b0b6e936b2d72628f1e910c5df8ed1e1867f
+
+git cherry-pick 51f040fabec18fc252044150623742b2911871a7
+
+#git cherry-pick ff991ba0a87156eab9b5459260b05386bd910591
+
+#Merge: ff991ba 51f040f
+
+git cherry-pick -m 2 ba642711066a86e074020e523f5bf2b5ec02be0b
+
+git cherry-pick a96b344828ebf8ecaa0653fe1a02daace96f0607
+
+git cherry-pick 782d41c2d4d9dd539bad9b6f99f376905ecb17cc
+
+git cherry-pick 3cb6e2787d72150f833e95d997444e7ae224e65b
+
+git cherry-pick e236978a9a080cd583eceb8c7d60d3690d76e04a
+
+git cherry-pick 6998dacdbf6007131e0cab746c9aa7f52bb06697
+
+git cherry-pick 5d3d71eddd1d09b23a41f1c0e609812b9fd41383
+
+git cherry-pick 0103da41867b85a74b850673b41661b570afa5e7
+
+#git cherry-pick d395b46d65a69b8aabb95ac1eb9da8fa67847875
+
+git cherry-pick 6e6d9998bc8512a202a229ebb22bfa96b0ec9fd6
+
+#Merge: 6e6d999 d395b46
+
+git cherry-pick -m 1 b47d5b1f6aa17ccfdb3b09762d54c2a2d057b143
+
+git cherry-pick c73fe0af7ded31e124b1f92e123fee75953ace12
+
+git cherry-pick 09fb776357f42c610b6e943d6be3c43bd2777390
+
+git cherry-pick 6e036a5ef29f6001f7f7bbc78fa6ffc3fee2caad
+
+git cherry-pick cb3a7d5c9e85c9baffce5e2390dd8cbf43b80494
+
+git cherry-pick 4a828b3a93a5be947272f491c53c6fca216420bf
+
+git cherry-pick 3adcf267c6575543b0b1d4c327ca0def1cc5dc8f
+
+git cherry-pick b62172f64493e30d48d59cd826835857f638f9a1
+
+git cherry-pick cb953059e6ab829cacfe5b1febf4af8d4be0a724
