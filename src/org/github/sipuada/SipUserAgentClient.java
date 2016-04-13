@@ -1,6 +1,7 @@
 package org.github.sipuada;
 
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,6 +60,7 @@ import android.javax.sip.address.SipURI;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.AcceptEncodingHeader;
 import android.javax.sip.header.AcceptHeader;
+import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.AuthorizationHeader;
 import android.javax.sip.header.CSeqHeader;
 import android.javax.sip.header.CallIdHeader;
@@ -333,7 +335,7 @@ public class SipUserAgentClient {
 						.createHeader(SipUserAgent.X_FAILURE_REASON_HEADER, reason));
 			} catch (ParseException ignore) {}
 		}
-		return sendRequest(RequestMethod.BYE, dialog, null, null,
+		return sendRequest(RequestMethod.BYE, dialog,
 				additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
@@ -1309,33 +1311,6 @@ public class SipUserAgentClient {
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to REGISTER arrived.", statusCode);
 			bus.post(new RegistrationSuccess(response.getHeaders(ContactHeader.NAME)));
-		}
-	}
-
-	private void handleOptionsResponse(int statusCode, Response response,
-			ClientTransaction clientTransaction) {
-		Request request = clientTransaction.getRequest();
-		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
-		Dialog dialog = clientTransaction.getDialog();
-		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
-			SessionDescription responseSdp = null;
-			if (response.getContent() != null) {
-				try {
-					responseSdp = SdpFactory.getInstance()
-							.createSessionDescriptionFromString(new String(response.getRawContent()));
-				} catch (SdpParseException ignore) {}
-			}
-			if (request.getContent() != null && responseSdp != null) {
-				bus.post(new QueryingOptionsSuccess(callId, dialog, responseSdp));
-			} else if (request.getContent() == null && responseSdp != null) {
-				bus.post(new QueryingOptionsSuccess(callId, dialog, responseSdp));
-			} else if (request.getContent() == null && responseSdp == null) {
-				bus.post(new QueryingOptionsSuccess(callId, dialog, null));
-			} else {
-				bus.post(new QueryingOptionsFailed(String
-						.format("Could not find session offer within the %s response.",
-								response.getStatusCode()), callId));
-			}
 		}
 	}
 

@@ -1,0 +1,469 @@
+#    Support for multiple addresses with same transport kind, by creating multiple SipProviders when necessary
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git reset --hard 62cd6bf00c95e7b1de4949ca138aaf7d01c66670
+
+#    Manually setting timeout for MessageChannel sockets to 30 seconds
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick fe5a7ffcb9d10307a42c0b0ec040d37e30f9e62f
+
+#    Support for multiple addresses with same transport protocol
+Author: Guilherme Baptista <guisgb13@gmail.com>
+#git cherry-pick d68340e35c16dfcd7c1f8bbcdc54960662998ba8
+
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+#    Conflicts:
+#    	src/org/github/sipuada/UserAgentServer.java
+#    	src/org/github/sipuada/UserAgentClient.java
+#    	src/org/github/sipuada/UserAgent.java
+#    	src/org/github/sipuada/Sipuada.java   
+Author: Guilherme Baptista <guisgb13@gmail.com>
+Merge: d68340e fe5a7ff
+git cherry-pick -m 2 882553b9ea6449a2673a39c1da4c812fbff7eeef
+
+#    Removing unused methods
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 3cc0a6484719b17d4042b095821e9ef5e7bdfb31
+
+#    Enhance handling of 420, if no unsupported header present, report error back to application layer
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 72bd626c0c23d99cb9a5d53638117a17e3892d53
+
+#    Add J2OBJC script for translating Sipuada to iOS-ready Objective-C code
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 6c5e632808642919c5818b43d990a3226c8b3da9
+
+#    Designing the contract between Sipuada and pluggable Session setup providers
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 470502417266ca7e54a28b6fa3fbc6ad45ec6dba
+
+#    Adding JetBrains IntelliJ gitignore
+Author: Bruno Brandão <bruno.brandao@embedded.ufcg.edu.br>
+#git cherry-pick c3647a23ed9201a52cf0f46b1ce584b84a6aad84
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+#    Conflicts:
+#    	.gitignore   
+Author: Bruno Brandão <bruno.brandao@embedded.ufcg.edu.br>
+Merge: c3647a2 4705024
+git cherry-pick -m 2 9579147a192010734a5f55c22415b87507022277
+
+#    Adding basic support for the offer/answer model by delegating sdp generation to external plug-ins
+Author: Guilherme Baptista <guisgb13@gmail.com>
+#git cherry-pick c6b91614b3f5fa0d484cef5106b31d770959ff0c
+
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+Author: Guilherme Baptista <guisgb13@gmail.com>
+Merge: c6b9161 9579147
+git cherry-pick -m 2 b86467dcc88177c497ecec6a9287a0a3449001ad
+
+#    Terminating call right away if offer was sent but response arrived without an answer
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 16ab3c2e50e1bec088ef06e0c691c078a3b9f6ab
+
+#    Fixes bug introduced in last batch where a NPE occurred if no plugin was registered
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 237995300d498897da35245b2546c97955eed2e1
+
+#    Fixes bug at UAS where offer was being put into original request instead of into the generated response
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 1439a5c584716e5e77a6628697afeeba0469d45b
+
+#    sendOptionsMethod added.
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 955791a3605cbaa51eca6f03fb79e19159b917c5
+
+#    Fixes formatting problems with last nommit
+#Author: Guilherme Baptista <guisgb13@gmail.com>
+#nommit 8a6ff06bb4978b4262f05bec46399b701ef01fb5
+
+#    Fixes bug where UAS would loop infinitely trying to send a 415 response plus NPE when UAC tried to parse the received 415 response
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 7c5264b8a60c1043e340be63fbb8d67e56b7eed6
+
+#    createSessionDescription(String) now creates a sdp with localHost as parameter and the method createSessionDescriptionFromString replaced the old createSessionDescription(String)
+Author: Bruno Brandão <bruno.brandao@embedded.ufcg.edu.br>
+#git cherry-pick 00136ddb107cdbb265248f38d505ab150094cf39
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+Author: Bruno Brandão <bruno.brandao@embedded.ufcg.edu.br>
+Merge: 00136dd 7c5264b
+git cherry-pick -m 2 5fa3c8ba332ea3da6c2ecdadb69d279013a4f267
+
+#    Enhancing occurences of offers and answers in log statements
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick aec8de98a5b4a69591538286f48906e1a3d6cec6
+
+#    Reporting call invitation canceled from UAS back to application layer when session negotiation fails
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick ba97de178b82e8d6e8c547fd87b04d9e2f29837d
+
+#    Making sure that even when negotiation fails, a 180 is sent beforehand
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 2c2e2ec7f885ca836e4890555c23b69aabdd04dd
+
+#    Tweaking logs related to session offer/answer negotiation checks
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 9b524ebc353607f116412d350fcbbeb2eb3c8917
+
+#    Passing answer by remote plug-in back to plug-in that is the author of the accepted offer
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 54c8567350abd0fc7358608d2ae860a1c0c8cde0
+
+#    Renaming new SipuadaPlugin interface method to better convey what it represents
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 09213b19328a7faf48ec353408fc6cad5c584ea4
+
+#    Options Request is in construction.
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit f8f72e289708c5c330e60c4cef28ef350b478a1b
+
+#    Options Request implemented. Starting test stage...
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 5fa4afa1bba2576322ea0a1c5b5cef4217b006ce
+
+#    Fix header in sendRequest method...
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 1d322f65ac34979fa8193847bdcf74e55a00e797
+
+#    UserAgentServer - handleOptionsRequest implemented
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit b51fd1e52c83fee294c8c231dd826cf70b3c5e37
+
+#    Bug fix - Dialog was used when null to get callId.
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit c85221602492b32254cea6d78e993d8f34346d77
+
+#    Fixes bug where handling a 407 w/o a dialog would yield a NPE, retrieving callId directly from request
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 101e9882bf2d0a9717702bc51b9c00c3f8e596f6
+    
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+#    Conflicts:
+#    	src/org/github/sipuada/UserAgentClient.java
+#Author: Guilherme Baptista <guisgb13@gmail.com>
+#Merge: 101e988 c852216
+#git cherry-pick a7e70fd2f4f053cf5554c882e2d8fccc80d673bb
+
+#    Options - sending OK when Options request received
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit cab524480f64bb4ef24706d8be94a81b9f0c41a1
+
+#    Playing safe, no longer ignoring some unexpected Sipuada-level exceptions and catching any exceptions that may happen when delegating execution to the registered Sipuada plug-ins
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick a1b9ce753e27b39f8ed3e40e18094eebdc5d2efd
+
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+#Author: Guilherme Baptista <guisgb13@gmail.com>
+#Merge: a1b9ce7 cab5244
+#nommit c1ec26d9f9719ebd07ce78030380b2e11f45f237
+
+#    Options request refactoring.
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 99cb4a1abb8cb299af20878118f21640b036d853
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#Merge: 99cb4a1 c1ec26d
+#nommit 239257b13b134108b6db1d8f6a5668be268198ba
+
+#    Ongoing work on allowing dynamic updates of local address, including registering/unregistering them at the primary host
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick c2381689e1fef2aee7834dd9d30aacccf0cb4f06
+
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+#Author: Guilherme Baptista <guisgb13@gmail.com>
+#Merge: c238168 239257b
+#nommit 6b40fb9d10dc6b978282d982426a5ef63c221d5e
+
+#    Support for dynamic address set updates in sync with primary host's registrar
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick e7e8d490326240ca06139dd3e7e88db1c5535bf8
+
+#    Fixes bug where it would NPE when trying to run postponed REGISTER requests
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 24fac29ea4884616a8796966ab4c71c6ff20a2d2
+
+#    Firing application layer callback when postponed operation cannot be sent
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 98353624545da08a3ee82b4061ba20a24df6c913
+
+#    Mechanism for postponing operations moved into Sipuada layer and now only applicable to REGISTER related operations
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 6e901bf681715c1785502db48f30a1eeed1c5231
+
+#    Refactoring postponing mechanism so that it's more evident that it only applies to REGISTER related operations
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 2df4fbe54a9e9dba8bd630dcb045c864730a28d6
+
+#    Binding callIds to UserAgents so that these cannot be removed while active (missing: fetching proper UserAgent for operations bound to callIds)
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 0f13531a1640191e2b66e8bae007db557b6282f5
+
+#    Testing concurrency between inviting through a UserAgent and trying to remove it
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick d747cc96ab8cfb9a5c781ba76f39684259de227c
+
+#    Fetching appropriate UserAgent to execute operations which use callIds, refactoring overall codebase
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 32655cfd5a0465ca309652f01107b2a0020abb0c
+
+#    Fixes bug when trying to access null set of callIds for a given UserAgent
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 72e685e5cb9e1d33d60a559482f6da3a3419ce88
+
+#    Implemented election system so that only one among the potentially many UserAgents process incoming requests outside of a Dialog
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick cecbbe70fe7e8a20a44b983ffa10ba717e75be2d
+
+#    Some additional headers implemented on send invite and options methods as also on server response maker
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit b3399945331a348a606982dd5c45cded5eaec581
+
+#    resolving merge conflicts
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#Merge: b339994 cecbbe7
+#nommit dfe413bffaf024c39708c8482296aaea55c06899
+
+#    Favour best UserAgent which is currently available when firing requests
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 21bfdc3c865eaf9397e631389b20cb6af9263566
+
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+#Author: Guilherme Baptista <guisgb13@gmail.com>
+#:Merge: 21bfdc3 dfe413b
+#nommit 8017a3509f4d3cb9383ddda70f348e10b99cdd38
+
+#    UserAgent selection will always prioritize those bound to network interfaces that are currently up
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick c8b0e0649d5b26abad458723d24a2c6aa707f4f9
+
+#    Make UserAgents share callId and cSeq sequence reserved for REGISTER requests, fix synchronization requirements
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick e3e539d9267732f0408acd63278408d50cf7efa9
+
+#    Fixes bug where global REGISTER cSeq would not properly update after resending challenged requests + MAJOR refactoring
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick ea04457ef5e8e91ed75bc08057f0fa93539feffb
+
+#    Fixes bug introduced in last nommit, wrong requestUris being passed to INVITE and OPTION requests
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick d0565157394d616cd06a0ba2357f943ae3a93049
+
+#    Explicitly starting stack for each UserAgent
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 765b346728ffe5336b09ecde37119d1a1ce07c7b
+
+#    Implemented a new convenience method for removing a few localAddresses, keeping the remaining ones registered
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 4a3b169e219ca879bc8e80ee53800116acd53ba4
+
+#    Removing unnecessary public modifiers
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick f1e00cc7ee77a744a6e153ea297d12e13b00d9d4
+
+#    Sip INFO and Sip MESSAGE (inside dialog) requests implemented - SIP MESSAGE outside dialog under construction
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit fa737df2cce6f90f73ded2584c1bcfbe4648ef2f
+
+#     Fixing SIP MESSAGE under construction
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit fb0b874a0c418d508ac58f350a3f258dc097136b
+
+#    Removing log4j as a depedency of JainSIP
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick eb5ab315f4034c1daea9b5c3817f3138e008b165
+
+#    Finished removing all direct usages of log4j from JainSIP's codebase
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 988f277b897ed5a3e0ee36d0e925fe5eb5c84943
+
+#    Remaining old usages of log4j among JainSIP code purged
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 3c94f35d8f5a0a02080c3cc60d1124b86d087a18
+
+#    Removing unused .jars
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 117f9e2e54898a93820b245866e5685d8ad6a1aa
+
+#    Bug fixing - SIP INFO e SIP MESSAGE
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 24fe209253a7fdb9fe490b5f909111a0b415742c
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#Merge: 24fe209 117f9e2
+#nommit 90dc9207808bcffbd35beb3a6b6a25da75221662
+
+#    SIP INFO and MESSAGE - bug fixing and refactoring
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 233af8e2d3d69333058d0add7bcb0a537b4fc22b
+
+#    Cleaning up and fixing the tiny test suite
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 4571b0b6e936b2d72628f1e910c5df8ed1e1867f
+
+#    Changes missing from last nommit
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 51f040fabec18fc252044150623742b2911871a7
+
+#    Updating SipuadaPlugin's interface so that the current local address is passed when asking it to generate offers and answers
+Author: Guilherme Baptista <guisgb13@gmail.com>
+#git cherry-pick ff991ba0a87156eab9b5459260b05386bd910591
+
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+Author: Guilherme Baptista <guisgb13@gmail.com>
+Merge: ff991ba 51f040f
+git cherry-pick -m 2 ba642711066a86e074020e523f5bf2b5ec02be0b
+
+#    Bug fixing - methodIsAllowed for INFO request
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit d143bccf7253b313e58b167b9a3e4637542a936b
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#Merge: d143bcc ba64271
+#nommit 1e5ba9b09e06b408ff06e0a11f8b7a22895b7432
+
+#    Bug fix at handleInfoRequest when parsing request.getRawContent
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 954448c85514b928d770762b8817b65a2e66b36e
+
+#    Bug fix at handleInfoRequest when post InfoReceived to bus
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 79c4c49372ec7adc5604caafc711a4473779f1fd
+
+#    refactoring AcceptedMethods to a UserAgent static property
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 5b3d3ecb6161ad29fc7634d0bfc424e5f15e6742
+
+#    refactoring UserAgentServer.methodIsAllowed for make use of UserAgent.sAcceptedMethods
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 72b8d6841c7b8df7483e950b6fef58d740479fa1
+
+#    Fixes bug where invalid callIds would cause NPEs
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick a96b344828ebf8ecaa0653fe1a02daace96f0607
+
+#    Passing back remote username and host into onCallInvitationArrived callback + quick refactoring
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 782d41c2d4d9dd539bad9b6f99f376905ecb17cc
+
+#    Breaking change to API. InviteToCall returns the callId if a remote answer should be expected rather than a boolean
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 3cb6e2787d72150f833e95d997444e7ae224e65b
+
+#    JAINSIP crashed if stack was terminated while a request was being sent, safeguarding from these cases
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick e236978a9a080cd583eceb8c7d60d3690d76e04a
+
+#    In light of last nommit, playing safe against any runtime exceptions that might happen at the JAINSIP-level layer
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 6998dacdbf6007131e0cab746c9aa7f52bb06697
+
+#    Update README.md
+Author: Guilherme Santos <guisgb13@gmail.com>
+git cherry-pick 5d3d71eddd1d09b23a41f1c0e609812b9fd41383
+
+#    Renaming classes, enhancing logs to explicitly state UserAgent that processes requests and responses through their ip:port combination
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 0103da41867b85a74b850673b41661b570afa5e7
+
+#    Update README.md
+Author: Guilherme Santos <guisgb13@gmail.com>
+#git cherry-pick d395b46d65a69b8aabb95ac1eb9da8fa67847875
+
+#    Fixes bug when trying to fecth request from null client for logging purposes
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 6e6d9998bc8512a202a229ebb22bfa96b0ec9fd6
+
+#    Merge branch 'ua_rfc3261' of github.com:sipuada/sipuada into ua_rfc3261
+Author: Guilherme Baptista <guisgb13@gmail.com>
+Merge: 6e6d999 d395b46
+git cherry-pick -m 1 b47d5b1f6aa17ccfdb3b09762d54c2a2d057b143
+
+#    Adding logger for debugging options request
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 59ed5b930bb0f79bca2bad5765eb71289fa6917c
+
+#    register plugin for Options method request
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 6de5130d6b000456be3aa5d8577f589716211121
+
+#    Fixing Options Querying feature - Could not find session offer...
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit d294e500d80f19da99ca4852abdc9d4fb60890f1
+
+#    Fixing reason string when posting a CallInvitationCanceled
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick c73fe0af7ded31e124b1f92e123fee75953ace12
+
+#    Session negotiation failures now trigger onCallFailures instead of onCallFinisheds
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 09fb776357f42c610b6e943d6be3c43bd2777390
+
+#    Changed 401/407 handling procedures. Now it always retries requests with suggested authorize headers from response, at most two times.
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 6e036a5ef29f6001f7f7bbc78fa6ffc3fee2caad
+
+#    Refactoring Sip Message feature and fixing bugs
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit e571d04cb96eb49e382af1d788ea10b8fe3d9c7c
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#Merge: e571d04 6e036a5
+#nommit 77ed6c7ba23349d283f960d00cae6eb7317a5cd1
+
+#    Refactoring Sipuada UA_RFC3261 - It refers to the following nommit - Implementing Message Input Callback to show message on Main Activity
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 454eea6b3e5c1c472b44983b9d36b4d7f4dba6ea
+
+#    Refactoring ReceivedMessage event - SIP Message
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 43c3d98f0b1d86bd1a90bf15bde85b64417aa860
+
+#    Adding new endpoint to API for unregistering addresses without destroying bound Sipuada instances
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick cb3a7d5c9e85c9baffce5e2390dd8cbf43b80494
+
+#    Adding another endpoint to API: for clearing ANY existing addresses for a particular user
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick 4a828b3a93a5be947272f491c53c6fca216420bf
+
+#    SIP Message method now receives optional additional headers
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit f16aa3b208b769c4d2b85298c442ed4cbc28a341
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#Merge: f16aa3b 4a828b3
+#nommit aa06407ae2ed261b60d9c6a6470de77deae81886
+
+#    Adding register expires
+Author: Renan Diniz <renan.almeida@embedded.ufcg.edu.br>
+git cherry-pick 3adcf267c6575543b0b1d4c327ca0def1cc5dc8f
+
+#    Fixed last nommit
+Author: Renan Diniz <renan.almeida@embedded.ufcg.edu.br>
+git cherry-pick b62172f64493e30d48d59cd826835857f638f9a1
+
+#    Fixed bug where subsequent REGISTER operations ignored previous expires value
+Author: Guilherme Baptista <guisgb13@gmail.com>
+git cherry-pick cb953059e6ab829cacfe5b1febf4af8d4be0a724
+
+#    Refactoring SIP Message - additional headers
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 5689a32bd5c057b9709569cc7e8874a51dc0ae32
+
+#    Merge branch 'ua_rfc3261' of https://github.com/Sipuada/sipuada into ua_rfc3261
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#Merge: 5689a32 cb95305
+#nommit 58abb39159335d6b6a25cc7631c7ce353096e2dd
+
+#    Adding offer to Session Progress(183)
+#Author: Renan Diniz <renan.almeida@embedded.ufcg.edu.br>
+#nommit bb9d49159d8bf6a52cc15cd3eb751434e30fd975
+
+#    Sip Message - getting request headers on receive message
+#Author: Samir Trajano Feitosa <samircc20092@gmail.com>
+#nommit 19052f8dc4c8f99e10be568879d43a2f291c65df

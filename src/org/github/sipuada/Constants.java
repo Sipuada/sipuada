@@ -7,7 +7,7 @@ public class Constants {
 	}
 
 	public enum RequestMethod {
-		REGISTER, OPTIONS, INVITE, CANCEL, BYE, ACK, UNKNOWN
+		REGISTER, OPTIONS, INVITE, CANCEL, BYE, ACK, MESSAGE, INFO, UNKNOWN
 	}
 	
 	public static RequestMethod getRequestMethod(String method) {
