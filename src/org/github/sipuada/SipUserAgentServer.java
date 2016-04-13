@@ -101,6 +101,9 @@ public class SipUserAgentServer {
 			ServerTransaction serverTransaction) {
 		try {
 			if (tryHandlingRequestGenerically(method, request, serverTransaction)) {
+				
+				logger.debug("HANDLE GENERIC REQUEST - METHOD:" + method);
+				
 				switch (method) {
 					case CANCEL:
 						handleCancelRequest(request, serverTransaction);
@@ -280,7 +283,7 @@ public class SipUserAgentServer {
 					Response.UNSUPPORTED_MEDIA_TYPE)) {
 				bus.post(new ReceivingOptionsRequestFailed("Unsupported Media Type", callId));
 				//FIXME enhance this reason above.
-			}else {
+			} else {
 				sendEarlyMediaIfApllicable(request, newServerTransaction);
 			}
 			return;

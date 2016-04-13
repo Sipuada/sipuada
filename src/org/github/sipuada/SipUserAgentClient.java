@@ -345,6 +345,15 @@ public class SipUserAgentClient {
 				additionalHeaderList.add(allowHeader);
 			} catch (ParseException ignore) {}
 		}
+		try {
+			AcceptHeader textPlainAcceptHeader = headerMaker.createAcceptHeader("text", "plain");
+			AcceptHeader instantMessageAcceptHeader = headerMaker.createAcceptHeader("application", "im-iscomposing+xml");
+			additionalHeaderList.add(textPlainAcceptHeader);
+			additionalHeaderList.add(instantMessageAcceptHeader);
+		} catch (ParseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return sendRequest(RequestMethod.MESSAGE, remoteUser, remoteHost, requestUri,
 				callIdHeader, cseq, content, contentTypeHeader, additionalHeaderList.toArray(new Header[additionalHeaderList.size()]));
 	}
