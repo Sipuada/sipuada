@@ -64,8 +64,8 @@ public class SIPClientMain implements SipuadaListener {
 
 	private void setDefautValues() {
 		registrarDomainTextField.setText("10.90.90.175:5060");
-		registrarUserNameTextField.setText("guilherme");
-		passwordField.setText("guilherme");
+		registrarUserNameTextField.setText("xibaca");
+		passwordField.setText("xibaca");
 		callerDomainTextField.setText("10.90.90.175:5060");
 	}
 
@@ -135,7 +135,7 @@ public class SIPClientMain implements SipuadaListener {
 						registrarDomainTextField.getText(),
 						passwordField.getText(),
 //						"192.168.130.49:55002/TCP",
-						"10.100.100.125:55003/TCP");
+						"10.100.100.125:55001/TCP");
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
@@ -154,7 +154,7 @@ public class SIPClientMain implements SipuadaListener {
 								+ " failure to register: " + reason);
 					}
 
-				});
+				}, 420);
 			}
 		});
 
@@ -341,6 +341,11 @@ public class SIPClientMain implements SipuadaListener {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Failure: " + reason);
+		btAcceptCall.setEnabled(false);
+		btRejectCall.setEnabled(false);
+		btnEndCall.setEnabled(false);
+		btCall.setEnabled(true);
+		isBusy = false;
 	}
 
 }
