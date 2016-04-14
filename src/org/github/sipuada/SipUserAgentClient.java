@@ -1575,7 +1575,7 @@ public class SipUserAgentClient {
 				}
 				for (String realm : probableRealms.keySet()) {
 					addAuthorizationHeader(request, hostUri, toHeaderValue,
-							toHeaderValue, toHeaderValue, realm, probableRealms.get(realm));
+							username, password, realm, probableRealms.get(realm));
 				}
 			}
 			if (proxyAuthNoncesCache.containsKey(toHeaderValue)) {
@@ -1596,8 +1596,7 @@ public class SipUserAgentClient {
 					String savedCallId = proxyAuthCallIdCache.get(toHeaderValue).get(realm);
 					if (thisCallId.equals(savedCallId)) {
 						addProxyAuthorizationHeader(request, hostUri, toHeaderValue,
-								toHeaderValue, toHeaderValue, realm,
-								probableRealms.get(realm));
+								username, password, realm, probableRealms.get(realm));
 					}
 				}
 			}
