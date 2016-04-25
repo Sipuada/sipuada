@@ -3,6 +3,7 @@ package org.github.sipuada;
 import java.util.List;
 
 import org.github.sipuada.plugins.SipuadaPlugin;
+import org.github.sipuada.plugins.SipuadaPlugin.SipuadaPluginIntent;
 
 import android.javax.sdp.SessionDescription;
 import android.javax.sip.header.ContentTypeHeader;
