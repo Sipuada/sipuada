@@ -73,6 +73,7 @@ public class SipUserAgent implements SipListener {
 		RequestMethod.BYE
 	};
 	protected static final String X_FAILURE_REASON_HEADER = "XFailureReason";
+	protected static final String NO_PUBLIC_PORT_FOUND = "-1";
 
 	private final Logger logger = LoggerFactory.getLogger(SipUserAgent.class);
 
@@ -113,8 +114,8 @@ public class SipUserAgent implements SipListener {
 		internalEventBus.register(this);
 		this.localIp = localIp;
 		this.localPort = Integer.parseInt(localPort);
-		String publicIp = this.localIp;
-		String publicPort = Integer.toString(this.localPort);
+		String publicIp = null;
+		String publicPort = NO_PUBLIC_PORT_FOUND;
 		this.transport = transport;
 		StunInfo priorStunInfo = new StunInfo(StunInfo.TYPE_SIP, "stun.siplogin.de", 3478);
 		//"stun.siplogin.de", 3478);////"stun.icchw.jflddns.com.br", 5070);

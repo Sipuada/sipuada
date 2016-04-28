@@ -176,6 +176,10 @@ public class SipUserAgentClient {
 		for (String address : addresses) {
 			String addressIp = address.split(":")[0];
 			int addressPort = Integer.parseInt(address.split(":")[1]);
+			if(null != publicIp && SipUserAgent.NO_PUBLIC_PORT_FOUND != address.split(":")[1]) {
+				addressIp = publicIp;
+				addressPort = publicPort;
+			}
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
 				contactUri.setPort(addressPort);
@@ -230,6 +234,10 @@ public class SipUserAgentClient {
 		for (String address : expiredAddresses) {
 			String addressIp = address.split(":")[0];
 			int addressPort = Integer.parseInt(address.split(":")[1]);
+			if(null != publicIp && SipUserAgent.NO_PUBLIC_PORT_FOUND != address.split(":")[1]) {
+				addressIp = publicIp;
+				addressPort = publicPort;
+			}
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
 				contactUri.setPort(addressPort);
@@ -262,8 +270,15 @@ public class SipUserAgentClient {
 		long cseq = ++localCSeq;
 		List<Header> additionalHeaders = new ArrayList<>();
 		SipURI contactUri;
+		String addressIp = localIp;
+		int addressPort = localPort;
+		if(null != publicIp && Integer.valueOf(SipUserAgent.NO_PUBLIC_PORT_FOUND) != publicPort) {
+			addressIp = publicIp;
+			addressPort = Integer.valueOf(publicPort);
+		}
 		try {
-			contactUri = addressMaker.createSipURI(username, localIp);
+			contactUri = addressMaker.createSipURI(username, addressIp);
+			contactUri.setPort(addressPort);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create the contact URI for {} at {}." +
 					"[username] must be a valid id, [localIp] must be a valid " +
@@ -271,7 +286,7 @@ public class SipUserAgentClient {
 			//No need for caller to wait for remote responses.
 			return false;
 		}
-		contactUri.setPort(localPort);
+		
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 		try {
