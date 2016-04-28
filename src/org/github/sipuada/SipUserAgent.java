@@ -56,6 +56,10 @@ import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
+import de.javawi.jstun.test.DiscoveryInfo;
+import de.tinysip.stun.StunDiscoveryResultEvent;
+import de.tinysip.stun.StunDiscoveryTask;
+import de.tinysip.stun.StunInfo;
 
 public class SipUserAgent implements SipListener {
 
@@ -107,6 +111,44 @@ public class SipUserAgent implements SipListener {
 		provider = sipProvider;
 		listener = sipuadaListener;
 		internalEventBus.register(this);
+		this.localIp = localIp;
+		this.localPort = Integer.parseInt(localPort);
+		String publicIp = this.localIp;
+		String publicPort = Integer.toString(this.localPort);
+		this.transport = transport;
+		StunInfo priorStunInfo = new StunInfo(StunInfo.TYPE_SIP, "stun.siplogin.de", 3478);
+		//"stun.siplogin.de", 3478);////"stun.icchw.jflddns.com.br", 5070);
+		priorStunInfo.setLocalPort(this.localPort);
+		StunDiscoveryTask sipPortTask = new StunDiscoveryTask();
+		StunDiscoveryResultEvent event = sipPortTask.execute(this.localIp, priorStunInfo);
+		if (event != null) {
+			DiscoveryInfo discoveryInfo = event.getDiscoveryInfo();
+			if (discoveryInfo != null) {
+				StunInfo stunInfo = event.getStunInfo();
+				switch (stunInfo.getType()) {
+					case StunInfo.TYPE_SIP:
+						if (discoveryInfo.isBlockedUDP() || discoveryInfo.isSymmetric()
+								|| discoveryInfo.isSymmetricUDPFirewall()) {
+							logger.error("STUN is not supported by your network topology!");
+						} else {
+							logger.info(String.format("STUN is supported. Information follows." +
+										" Local address: %s:%d. Public address: %s:%d!",
+										discoveryInfo.getLocalIP(), discoveryInfo.getLocalPort(),
+										discoveryInfo.getPublicIP(), discoveryInfo.getPublicPort()));
+							publicIp = discoveryInfo.getPublicIP().getHostAddress();
+							publicPort = Integer.toString(discoveryInfo.getPublicPort());
+						}
+						break;
+					default:
+						logger.error("STUN is not supported!");
+                }
+			} else {
+				logger.error("STUN failed miserably (No discovery info)!");
+			}
+		} else {
+			logger.error("STUN failed miserably (No discovery result event)!");
+		}
+
 		try {
 			SipFactory factory = SipFactory.getInstance();
 			MessageFactory messenger = factory.createMessageFactory();
@@ -114,18 +156,15 @@ public class SipUserAgent implements SipListener {
 			AddressFactory addressMaker = factory.createAddressFactory();
 			uac = new SipUserAgentClient(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					globalRegisterCallIds, globalRegisterCSeqs, username, primaryHost, password,
-					localIp, localPort, transport);
+					localIp, localPort, transport, publicIp, publicPort);
 			uas = new SipUserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
-					username, localIp, localPort);
+					username, localIp, localPort, publicIp);
 		} catch (PeerUnavailableException ignore){}
 		try {
 			provider.addSipListener(this);
 		} catch (TooManyListenersException ignore) {}
 		registeredPlugins = plugins;
 		initSipuadaListener();
-		this.localIp = localIp;
-		this.localPort = Integer.parseInt(localPort);
-		this.transport = transport;
 		this.callIdToActiveUserAgent = callIdToActiveUserAgent;
 		this.activeUserAgentCallIds = activeUserAgentCallIds;
 	}

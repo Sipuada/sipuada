@@ -101,6 +101,8 @@ public class SipUserAgentClient {
 	private final String password;
 	private final String localIp;
 	private final int localPort;
+	private final String publicIp;
+	private final int publicPort;
 	private final String transport;
 	private final Map<String, Map<String, String>> authNoncesCache = new HashMap<>();
 	private final Map<String, Map<String, String>> proxyAuthNoncesCache = new HashMap<>();
@@ -137,6 +139,10 @@ public class SipUserAgentClient {
 				Integer.parseInt(credentialsAndAddress[4]) : 5060;
 		transport = credentialsAndAddress.length > 5 && credentialsAndAddress[5] != null ?
 				credentialsAndAddress[5] : "TCP";
+		publicIp = credentialsAndAddress.length > 6 && credentialsAndAddress[6] != null ?
+				credentialsAndAddress[6] : localIp;
+		publicPort = credentialsAndAddress.length > 7 && credentialsAndAddress[7] != null ?
+				Integer.parseInt(credentialsAndAddress[7]) : localPort;
 		try {
 			registerRequestUri = addressMaker.createSipURI(null, primaryHost);
 		} catch (ParseException parseException) {
@@ -374,7 +380,12 @@ public class SipUserAgentClient {
 		List<Address> canonRouteSet = new LinkedList<>();
 		final URI remoteTargetUri;
 		if (dialog != null) {
-			remoteTargetUri = dialog.getRemoteTarget().getURI();
+			Address remoteTarget = dialog.getRemoteTarget();
+			if (remoteTarget != null) {
+				remoteTargetUri = remoteTarget.getURI();
+			} else {
+				remoteTargetUri = (URI) requestUri.clone();
+			}
 			from = addressMaker.createAddress(dialog.getLocalParty().getURI());
 			fromTag = dialog.getLocalTag();
 			to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
@@ -417,7 +428,7 @@ public class SipUserAgentClient {
 		}
 		ViaHeader viaHeader = null;
 		try {
-			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
+			viaHeader = headerMaker.createViaHeader(publicIp, publicPort, transport, null);
 			viaHeader.setRPort();
 			final Request request = messenger.createRequest(requestUri, method.toString(),
 					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
@@ -508,7 +519,7 @@ public class SipUserAgentClient {
 		}
 		SessionDescription offer = null;
 		try {
-			offer = sessionPlugin.generateOffer(callId, method, localIp);
+			offer = sessionPlugin.generateOffer(callId, method, publicIp);
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate offer " +
 					"to be inserted into {} request.", method, unexpectedException);
@@ -1419,7 +1430,7 @@ public class SipUserAgentClient {
 		}
 		SessionDescription answer = null;
 		try {
-			answer = sessionPlugin.generateAnswer(callId, method, offer, localIp);
+			answer = sessionPlugin.generateAnswer(callId, method, offer, publicIp);
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate answer " +
 					"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +

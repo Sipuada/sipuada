@@ -62,6 +62,7 @@ public class SipUserAgentServer {
 	private final String username;
 	private final String localIp;
 	private final int localPort;
+	private final String publicIp;
 
 	public SipUserAgentServer(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
 			MessageFactory messageFactory, HeaderFactory headerFactory, AddressFactory addressFactory,
@@ -78,6 +79,8 @@ public class SipUserAgentServer {
 				credentialsAndAddress[1] : "127.0.0.1";
 		localPort = credentialsAndAddress.length > 2 && credentialsAndAddress[2] != null ?
 				Integer.parseInt(credentialsAndAddress[2]) : 5060;
+		publicIp = credentialsAndAddress.length > 3 && credentialsAndAddress[3] != null ?
+				credentialsAndAddress[3] : localIp;
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -472,7 +475,7 @@ public class SipUserAgentServer {
 			}
 			SessionDescription offer = null;
 			try {
-				offer = sessionPlugin.generateOffer(callId, method, localIp);
+				offer = sessionPlugin.generateOffer(callId, method, publicIp);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate offer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);
@@ -518,7 +521,7 @@ public class SipUserAgentServer {
 			}
 			SessionDescription answer = null;
 			try {
-				answer = sessionPlugin.generateAnswer(callId, method, offer, localIp);
+				answer = sessionPlugin.generateAnswer(callId, method, offer, publicIp);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate answer to be inserted " +
 						"into {} response to {} request.", statusCode, method, unexpectedException);
