@@ -130,12 +130,12 @@ public class SIPClientMain implements SipuadaListener {
 				if (sipuada != null) {
 					sipuada.destroySipuada();
 				}
+				String username = registrarUserNameTextField.getText();
 				sipuada = new Sipuada(SIPClientMain.this,
-						registrarUserNameTextField.getText(),
-						registrarDomainTextField.getText(),
+						username, registrarDomainTextField.getText(),
 						passwordField.getText(),
 //						"192.168.130.49:55002/TCP",
-						"10.100.100.125:55001/TCP");
+						"10.100.100.125:54458/TCP"); //150.165.11.157:65486
 				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
 				sipuada.registerAddresses(new RegistrationCallback() {
 
