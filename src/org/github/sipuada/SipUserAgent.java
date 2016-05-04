@@ -73,7 +73,7 @@ public class SipUserAgent implements SipListener {
 		RequestMethod.BYE
 	};
 	protected static final String X_FAILURE_REASON_HEADER = "XFailureReason";
-	protected static final String NO_PUBLIC_PORT_FOUND = "-1";
+	protected static final int NO_PUBLIC_PORT_FOUND = -1;
 
 	private final Logger logger = LoggerFactory.getLogger(SipUserAgent.class);
 
@@ -115,7 +115,7 @@ public class SipUserAgent implements SipListener {
 		this.localIp = localIp;
 		this.localPort = Integer.parseInt(localPort);
 		String publicIp = null;
-		String publicPort = NO_PUBLIC_PORT_FOUND;
+		String publicPort = Integer.toString(NO_PUBLIC_PORT_FOUND);
 		this.transport = transport;
 		StunInfo priorStunInfo = new StunInfo(StunInfo.TYPE_SIP, "stun.siplogin.de", 3478);
 		//"stun.siplogin.de", 3478);////"stun.icchw.jflddns.com.br", 5070);
@@ -159,7 +159,7 @@ public class SipUserAgent implements SipListener {
 					globalRegisterCallIds, globalRegisterCSeqs, username, primaryHost, password,
 					localIp, localPort, transport, publicIp, publicPort);
 			uas = new SipUserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
-					username, localIp, localPort, publicIp);
+					username, localIp, localPort, publicIp, publicPort);
 		} catch (PeerUnavailableException ignore){}
 		try {
 			provider.addSipListener(this);

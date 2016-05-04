@@ -63,6 +63,7 @@ public class SipUserAgentServer {
 	private final String localIp;
 	private final int localPort;
 	private final String publicIp;
+	private final int publicPort;
 
 	public SipUserAgentServer(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
 			MessageFactory messageFactory, HeaderFactory headerFactory, AddressFactory addressFactory,
@@ -81,6 +82,8 @@ public class SipUserAgentServer {
 				Integer.parseInt(credentialsAndAddress[2]) : 5060;
 		publicIp = credentialsAndAddress.length > 3 && credentialsAndAddress[3] != null ?
 				credentialsAndAddress[3] : localIp;
+		publicPort = credentialsAndAddress.length > 4 && credentialsAndAddress[4] != null ?
+				Integer.parseInt(credentialsAndAddress[4]) : localPort;
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -325,9 +328,16 @@ public class SipUserAgentServer {
 	public boolean sendAcceptResponse(RequestMethod method, Request request,
 			ServerTransaction serverTransaction) {
 		List<Header> additionalHeaders = new ArrayList<>();
+		String addressIp = localIp;
+		int addressPort = localPort;
+		if (publicIp != null && publicPort != SipUserAgent.NO_PUBLIC_PORT_FOUND) {
+			addressIp = publicIp;
+			addressPort = publicPort;
+		}
 		SipURI contactUri;
 		try {
-			contactUri = addressMaker.createSipURI(username, localIp);
+			contactUri = addressMaker.createSipURI(username, addressIp);
+			contactUri.setPort(addressPort);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create the contact URI for {} at {}." +
 					"[username] must be a valid id, [localIp] must be a valid " +
@@ -335,7 +345,6 @@ public class SipUserAgentServer {
 			//No need for caller to wait for remote responses.
 			return false;
 		}
-		contactUri.setPort(localPort);
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 		try {

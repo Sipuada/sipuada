@@ -176,9 +176,8 @@ public class SipUserAgentClient {
 		for (String address : addresses) {
 			String addressIp = address.split(":")[0];
 			int addressPort = Integer.parseInt(address.split(":")[1]);
-			if(null != publicIp && SipUserAgent.NO_PUBLIC_PORT_FOUND != address.split(":")[1]) {
+			if (publicIp != null) {
 				addressIp = publicIp;
-				addressPort = publicPort;
 			}
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
@@ -234,9 +233,8 @@ public class SipUserAgentClient {
 		for (String address : expiredAddresses) {
 			String addressIp = address.split(":")[0];
 			int addressPort = Integer.parseInt(address.split(":")[1]);
-			if(null != publicIp && SipUserAgent.NO_PUBLIC_PORT_FOUND != address.split(":")[1]) {
+			if (publicIp != null) {
 				addressIp = publicIp;
-				addressPort = publicPort;
 			}
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
@@ -272,9 +270,9 @@ public class SipUserAgentClient {
 		SipURI contactUri;
 		String addressIp = localIp;
 		int addressPort = localPort;
-		if(null != publicIp && Integer.valueOf(SipUserAgent.NO_PUBLIC_PORT_FOUND) != publicPort) {
+		if (publicIp != null && publicPort != SipUserAgent.NO_PUBLIC_PORT_FOUND) {
 			addressIp = publicIp;
-			addressPort = Integer.valueOf(publicPort);
+			addressPort = publicPort;
 		}
 		try {
 			contactUri = addressMaker.createSipURI(username, addressIp);
@@ -286,7 +284,6 @@ public class SipUserAgentClient {
 			//No need for caller to wait for remote responses.
 			return false;
 		}
-		
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 		try {
