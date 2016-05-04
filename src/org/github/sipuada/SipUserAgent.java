@@ -725,8 +725,8 @@ public class SipUserAgent implements SipListener {
 							}
 						} catch (Throwable unexpectedException) {
 							logger.error("Bad plug-in crashed while trying " +
-									"to perform session termination in context of call {}.",
-									callId, unexpectedException);
+									"to perform session termination in context of call {}.", callId);
+							logger.error("Crash:", unexpectedException);
 						}
 					}
 					listener.onCallFailure(event.getReason(), callId);
@@ -748,8 +748,8 @@ public class SipUserAgent implements SipListener {
 							}
 						} catch (Throwable unexpectedException) {
 							logger.error("Bad plug-in crashed while trying " +
-									"to perform session termination in context of call {}.",
-									callId, unexpectedException);
+									"to perform session termination in context of call {}.", callId);
+							logger.error("Crash:", unexpectedException);
 						}
 					}
 					listener.onCallFinished(callId);
@@ -769,7 +769,8 @@ public class SipUserAgent implements SipListener {
 			} catch (Throwable unexpectedException) {
 				String error = "Bad plug-in crashed while trying to perform" +
 						" session setup in context of call";
-				logger.error(String.format("%s {}.", error), callId, unexpectedException);
+				logger.error(String.format("%s {}.", error), callId);
+				logger.error("Crash:", unexpectedException);
 				listener.onCallFailure(String.format("%s %s.", error, callId), callId);
 			}
 		}

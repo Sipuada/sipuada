@@ -6,7 +6,7 @@
 # Package Files #
 *.jar
 !/lib/guava-19.0.jar
-!/lib/slf4j-api-1.7.13.jar
+!/lib/slf4j-api-1.7.21.jar
 *.war
 *.ear
 

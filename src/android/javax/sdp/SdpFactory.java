@@ -27,10 +27,6 @@ import java.text.*;
 public class SdpFactory extends Object {
 	private static final SdpFactory singletonInstance = new SdpFactory();
 
-	/** Creates new SdpFactory */
-	private SdpFactory() {
-	}
-
 	/**
 	 * Obtain an instance of an SdpFactory.
 	 *

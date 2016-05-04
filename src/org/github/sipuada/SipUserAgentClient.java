@@ -522,7 +522,8 @@ public class SipUserAgentClient {
 			offer = sessionPlugin.generateOffer(callId, method, publicIp);
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate offer " +
-					"to be inserted into {} request.", method, unexpectedException);
+					"to be inserted into {} request.", method);
+			logger.error("Offer: null", unexpectedException);
 			return;
 		}
 		if (offer == null) {
@@ -531,12 +532,14 @@ public class SipUserAgentClient {
 		try {
 			request.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
 		} catch (ParseException parseException) {
-			logger.error("Plug-in-generated offer {{}} by {} could not be inserted into {} request.",
-					offer.toString(), sessionPlugin.getClass().getName(), method, parseException);
+			logger.error("Plug-in-generated offer by {} could not be inserted into {} request.",
+					sessionPlugin.getClass().getName(), method);
+			logger.error("Offer: {{}}", offer.toString(), parseException);
 			return;
 		}
-		logger.info("Plug-in-generated offer {{}} by {} inserted into {} request.",
-				offer.toString(), sessionPlugin.getClass().getName(), method);
+		logger.info("Plug-in-generated offer by {} inserted into {} request.",
+				sessionPlugin.getClass().getName(), method);
+		logger.info("Offer: {{}}", offer.toString());
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
@@ -1385,6 +1388,7 @@ public class SipUserAgentClient {
 				logger.error("{} request was sent with an offer but {} response " +
 						"arrived with no answer so this UAC will terminate the dialog right away.",
 						method, response.getStatusCode());
+				logger.error("Offer: {{}}", request.getContent().toString());
 			}
 			else {
 				try {
@@ -1397,7 +1401,8 @@ public class SipUserAgentClient {
 						} catch (Throwable unexpectedException) {
 							logger.error("Bad plug-in crashed while receiving answer " +
 									"that arrived alongside {} response to {} request. The UAC will terminate " +
-									"the dialog right away.", response.getStatusCode(), method, unexpectedException);
+									"the dialog right away.", response.getStatusCode(), method);
+							logger.error("Offer: {{}}", request.getContent().toString(), unexpectedException);
 							return false;
 						}
 					}
@@ -1424,8 +1429,9 @@ public class SipUserAgentClient {
 		}
 		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 		if (sessionPlugin == null) {
-			logger.error("No plug-in available to generate valid answer to offer {} in {} response " +
-					"to {} request.", offer.toString(), response.getStatusCode(), method);
+			logger.error("No plug-in available to generate valid answer to offer in {} response " +
+					"to {} request.", response.getStatusCode(), method);
+			logger.error("Offer: {{}}", offer.toString());
 			return false;
 		}
 		SessionDescription answer = null;
@@ -1434,27 +1440,29 @@ public class SipUserAgentClient {
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate answer " +
 					"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
-					"right away.", RequestMethod.ACK, response.getStatusCode(), method, unexpectedException);
+					"right away.", RequestMethod.ACK, response.getStatusCode(), method);
+			logger.error("Offer: {{}}", offer.toString(), unexpectedException);
 			return false;
 		}
 		if (answer == null) {
-			logger.error("Plug-in {} could not generate valid answer to offer {} in {} response " +
-					"to {} request.", sessionPlugin.getClass().getName(), offer.toString(),
-					response.getStatusCode(), method);
+			logger.error("Plug-in {} could not generate valid answer to offer in {} response " +
+					"to {} request.", sessionPlugin.getClass().getName(), response.getStatusCode(), method);
+			logger.error("Offer: {{}}", offer.toString());
 			return false;
 		}
 		try {
 			ackRequest.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
 		} catch (ParseException parseException) {
-			logger.error("Plug-in-generated answer {{}} to offer {{}} by {} could not be inserted into {} " +
-					"for {} response to {} request.", answer.toString(), offer.toString(),
-					sessionPlugin.getClass().getName(), RequestMethod.ACK, response.getStatusCode(),
-					method, parseException);
+			logger.error("Plug-in-generated answer to offer by {} could not be inserted into {} " +
+					"for {} response to {} request.", sessionPlugin.getClass().getName(), RequestMethod.ACK,
+					response.getStatusCode(), method);
+			logger.error("Answer :{{}}\nOffer: {{}}", answer.toString(), offer.toString(), parseException);
 			return false;
 		}
-		logger.info("Plug-in-generated answer {{}} to offer {{}} by {} inserted into {} for {} response" +
-				" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
-				RequestMethod.ACK, response.getStatusCode(), method);
+		logger.info("Plug-in-generated answer to offer by {} inserted into {} for {} response" +
+				" to {} request.", sessionPlugin.getClass().getName(), RequestMethod.ACK,
+				response.getStatusCode(), method);
+		logger.info("Answer: {{}}\nOffer: {{}}", answer.toString(), offer.toString());
 		return true;
 	}
 
