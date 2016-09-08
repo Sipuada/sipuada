@@ -55,11 +55,16 @@ public class RequestLine extends SIPObject {
 	/** sipVersion field
 	 */
 	protected String sipVersion;
+	
+	/** transport field
+	 */
+	protected String transport = "transport=TCP";
 
 	/** Default constructor
 	 */
 	public RequestLine() {
 		sipVersion = "SIP/2.0";
+		transport = "transport=TCP";
 	}
 
 	/** Set the SIP version.
@@ -84,6 +89,8 @@ public class RequestLine extends SIPObject {
 		}
 		if (uri != null) {
 			uri.encode(buffer);
+			buffer.append(SEMICOLON);
+			buffer.append(transport);
 			buffer.append(SP);
 		}
 		buffer.append(sipVersion);
