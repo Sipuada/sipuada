@@ -168,8 +168,8 @@ public class SipUserAgentClient {
 		}
 		List<ContactHeader> contactHeaders = new LinkedList<>();
 		for (String address : addresses) {
-//			String addressIp = address.split(":")[0];
-			String addressIp = "150.165.75.133";
+            String addressIp = address.split(":")[0];
+			//String addressIp = "150.165.75.133";
 			int addressPort = Integer.parseInt(address.split(":")[1]);
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
