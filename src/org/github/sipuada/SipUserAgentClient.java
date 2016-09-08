@@ -169,7 +169,8 @@ public class SipUserAgentClient {
 		}
 		List<ContactHeader> contactHeaders = new LinkedList<>();
 		for (String address : addresses) {
-			String addressIp = address.split(":")[0];
+            String addressIp = address.split(":")[0];
+			//String addressIp = "150.165.75.133";
 			int addressPort = Integer.parseInt(address.split(":")[1]);
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
@@ -420,7 +421,7 @@ public class SipUserAgentClient {
 		ViaHeader viaHeader = null;
 		try {
 			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
-//			viaHeader.setRPort();
+			//viaHeader.setRPort(); // Don't allow rport as 'rport='. Must be 'rport' or 'rport=15324' for example. Use rport only for UDP.
 			FromHeader fromHeader = headerMaker.createFromHeader(from, fromTag);
 //			fromHeader.setParameter("transport", "tcp");
 			ToHeader toHeader = headerMaker.createToHeader(to, toTag);
