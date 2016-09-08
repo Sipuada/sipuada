@@ -69,6 +69,7 @@ import android.javax.sip.header.ContentEncodingHeader;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.ExpiresHeader;
 import android.javax.sip.header.ExtensionHeader;
+import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ProxyAuthenticateHeader;
@@ -173,6 +174,7 @@ public class SipUserAgentClient {
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
 				contactUri.setPort(addressPort);
+//				contactUri.setTransportParam("TCP");
 				Address contactAddress = addressMaker.createAddress(contactUri);
 				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 				try {
@@ -418,12 +420,14 @@ public class SipUserAgentClient {
 		ViaHeader viaHeader = null;
 		try {
 			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
-			viaHeader.setRPort();
+//			viaHeader.setRPort();
+			FromHeader fromHeader = headerMaker.createFromHeader(from, fromTag);
+//			fromHeader.setParameter("transport", "tcp");
+			ToHeader toHeader = headerMaker.createToHeader(to, toTag);
+//			toHeader.setParameter("transport", "tcp");
 			final Request request = messenger.createRequest(requestUri, method.toString(),
 					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
-					headerMaker.createFromHeader(from, fromTag),
-					headerMaker.createToHeader(to, toTag),
-					Collections.singletonList(viaHeader),
+					fromHeader, toHeader, Collections.singletonList(viaHeader),
 					headerMaker.createMaxForwardsHeader(70));
 			if (!normalizedRouteSet.isEmpty()) {
 				for (Address routeAddress : normalizedRouteSet) {
@@ -1608,9 +1612,9 @@ public class SipUserAgentClient {
 			ViaHeader viaHeader = (ViaHeader) request.getHeader(ViaHeader.NAME);
 			try {
 				viaHeader.setBranch(newClientTransaction.getBranchId());
-				viaHeader.setRPort();
-			} catch (ParseException ignore) {
-			} catch (InvalidArgumentException ignore) {}
+//				viaHeader.setRPort();
+			} catch (ParseException ignore) {}
+//			} catch (InvalidArgumentException ignore) {}
 		}
 		newClientTransaction.setApplicationData(attempt);
 		if (dialog != null) {
