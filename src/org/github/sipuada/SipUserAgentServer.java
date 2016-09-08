@@ -24,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.eventbus.EventBus;
-import com.sun.xml.internal.bind.v2.runtime.reflect.ListIterator;
 
 import android.javax.sdp.SdpFactory;
 import android.javax.sdp.SdpParseException;

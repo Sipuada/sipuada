@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.Header;
 
 public class SipuadaTest {
 
@@ -52,17 +53,17 @@ public class SipuadaTest {
 			}
 
 			@Override
-			public void onMessageReceived(String callId, String remoteUsername, String remoteHost,
-					ContentTypeHeader contentTypeHeader, String content) {
-				logger.debug("onMessageReceived: [callId={{}}; remoteUsername={{}}; remoteHost={{}}; "
-						+ "contentTypeHeader={{}}; content={{}}].", callId, remoteUsername, remoteHost,
-						contentTypeHeader, content);
-			}
-
-			@Override
 			public void onInfoReceived(String callId, ContentTypeHeader contentTypeHeader, String content) {
 				logger.debug("onInfoReceived: [callId={{}}; contentTypeHeader={{}}; content={{}}].",
 						callId, contentTypeHeader, content);
+			}
+
+			@Override
+			public void onMessageReceived(String callId, String remoteUsername, String remoteHost,
+					ContentTypeHeader contentTypeHeader, String content, Header[] additionalHeaders) {
+				logger.debug("onMessageReceived: [callId={{}}; remoteUsername={{}}; remoteHost={{}}; "
+						+ "contentTypeHeader={{}}; content={{}}].", callId, remoteUsername, remoteHost,
+						contentTypeHeader, content);
 			}
 
 		};

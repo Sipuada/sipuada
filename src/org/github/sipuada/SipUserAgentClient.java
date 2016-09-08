@@ -544,7 +544,7 @@ public class SipUserAgentClient {
 		ViaHeader viaHeader = null;
 		try {
 			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
-			viaHeader.setRPort();
+//			viaHeader.setRPort();
 			final Request request = messenger.createRequest(requestUri, method.toString(),
 					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
 					headerMaker.createFromHeader(from, fromTag),
@@ -1807,9 +1807,9 @@ public class SipUserAgentClient {
 			ViaHeader viaHeader = (ViaHeader) request.getHeader(ViaHeader.NAME);
 			try {
 				viaHeader.setBranch(newClientTransaction.getBranchId());
-				viaHeader.setRPort();
-			} catch (ParseException ignore) {
-			} catch (InvalidArgumentException ignore) {}
+//				viaHeader.setRPort();
+			} catch (ParseException ignore) {}
+//			} catch (InvalidArgumentException ignore) {}
 		}
 		newClientTransaction.setApplicationData(attempt);
 		if (dialog != null) {
