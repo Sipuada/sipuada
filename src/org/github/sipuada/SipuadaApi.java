@@ -1,8 +1,9 @@
 package org.github.sipuada;
 
-import java.util.List;
-
 import org.github.sipuada.plugins.SipuadaPlugin;
+
+import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.Header;
 
 public interface SipuadaApi {
 
@@ -20,33 +21,36 @@ public interface SipuadaApi {
 
 		void onCallFailure(String reason, String callId);
 
-	}
-
-	interface RegistrationCallback {
-
-		void onRegistrationSuccess(List<String> registeredContacts);
-
-		void onRegistrationFailed(String reason);
+		void onMessageReceived(String callId, String remoteUser, String remoteDomain,
+			String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders);
 
 	}
 
-	boolean registerAddresses(RegistrationCallback callback);
+	interface BasicRequestCallback {
 
-	boolean registerAddresses(RegistrationCallback callback, int expires);
+		void onRequestSuccess(Object... response);
 
-	boolean unregisterAddresses(RegistrationCallback callback, String... localAddresses);
+		void onRequestFailed(String reason);
 
-	boolean clearAddresses(RegistrationCallback callback);
+	}
 
-	boolean includeUserAgents(RegistrationCallback callback, String... localAddresses);
+	boolean registerAddresses(BasicRequestCallback callback);
 
-	boolean includeUserAgents(RegistrationCallback callback, int expires, String... localAddresses);
+	boolean registerAddresses(BasicRequestCallback callback, int expires);
 
-	boolean excludeUserAgents(RegistrationCallback callback, String... localAddresses);
+	boolean unregisterAddresses(BasicRequestCallback callback, String... localAddresses);
 
-	boolean overwriteUserAgents(RegistrationCallback callback, String... localAddresses);
+	boolean clearAddresses(BasicRequestCallback callback);
 
-	boolean overwriteUserAgents(RegistrationCallback callback, int expires, String... localAddresses);
+	boolean includeUserAgents(BasicRequestCallback callback, String... localAddresses);
+
+	boolean includeUserAgents(BasicRequestCallback callback, int expires, String... localAddresses);
+
+	boolean excludeUserAgents(BasicRequestCallback callback, String... localAddresses);
+
+	boolean overwriteUserAgents(BasicRequestCallback callback, String... localAddresses);
+
+	boolean overwriteUserAgents(BasicRequestCallback callback, int expires, String... localAddresses);
 
 	interface CallInvitationCallback {
 
@@ -70,5 +74,10 @@ public interface SipuadaApi {
 
 	boolean registerPlugin(SipuadaPlugin plugin);
 
-}
+	boolean sendMessage(String remoteUser, String remoteDomain, String content,
+		String contentType, BasicRequestCallback callback, String... additionalHeaders);
 
+	boolean sendMessage(String callId, String content, String contentType,
+		BasicRequestCallback callback, String... additionalHeaders);
+
+}

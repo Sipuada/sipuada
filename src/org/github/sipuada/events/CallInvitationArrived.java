@@ -6,15 +6,15 @@ public class CallInvitationArrived {
 
 	private final String callId;
 	private final ServerTransaction serverTransaction;
-	private final String remoteUsername;
-	private final String remoteHost;
+	private final String remoteUser;
+	private final String remoteDomain;
 
 	public CallInvitationArrived(String callId, ServerTransaction transaction,
-			String remoteUsername, String remoteHost) {
+			String remoteUser, String remoteDomain) {
 		this.callId = callId;
 		this.serverTransaction = transaction;
-		this.remoteUsername = remoteUsername;
-		this.remoteHost = remoteHost;
+		this.remoteUser = remoteUser;
+		this.remoteDomain = remoteDomain;
 	}
 
 	public String getCallId() {
@@ -25,12 +25,12 @@ public class CallInvitationArrived {
 		return serverTransaction;
 	}
 
-	public String getRemoteUsername() {
-		return remoteUsername;
+	public String getRemoteUser() {
+		return remoteUser;
 	}
 
-	public String getRemoteHost() {
-		return remoteHost;
+	public String getRemoteDomain() {
+		return remoteDomain;
 	}
 
 }

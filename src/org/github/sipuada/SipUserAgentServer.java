@@ -2,6 +2,7 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +14,7 @@ import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.github.sipuada.plugins.SipuadaPlugin;
@@ -39,6 +41,7 @@ import android.javax.sip.address.URI;
 import android.javax.sip.header.AllowHeader;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.ContactHeader;
+import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.ExtensionHeader;
 import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
@@ -110,6 +113,9 @@ public class SipUserAgentServer {
 						break;
 					case BYE:
 						handleByeRequest(request, serverTransaction);
+						break;
+					case MESSAGE:
+						handleMessageRequest(request, serverTransaction);
 						break;
 					case UNKNOWN:
 					default:
@@ -262,10 +268,10 @@ public class SipUserAgentServer {
 		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING, RequestMethod.INVITE,
 				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 		FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
-		String remoteUsername = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
-		String remoteHost = fromHeader.getAddress().getURI().toString().split("@")[1];
+		String remoteUser = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
+		String remoteDomain = fromHeader.getAddress().getURI().toString().split("@")[1];
 		if (newServerTransaction != null) {
-			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUsername, remoteHost));
+			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUser, remoteDomain));
 			RequestMethod method = RequestMethod.INVITE;
 			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
 					Response.UNSUPPORTED_MEDIA_TYPE)) {
@@ -306,6 +312,48 @@ public class SipUserAgentServer {
 				}
 			}
 			bus.post(new EstablishedCallFinished(callId));
+			return;
+		}
+		throw new RequestCouldNotBeAddressed();
+	}
+
+	private void handleMessageRequest(Request request, ServerTransaction serverTransaction) {
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		List<Header> allowHeaders = new ArrayList<>();
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
+			try {
+				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+				allowHeaders.add(allowHeader);
+			} catch (ParseException ignore) {}
+		}
+		ServerTransaction newServerTransaction = doSendResponse(Response.OK, RequestMethod.MESSAGE, request,
+			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()]));
+		if (newServerTransaction != null) {
+			ContentTypeHeader contentTypeHeader = (ContentTypeHeader) request.getHeader(ContentTypeHeader.NAME);
+			if (contentTypeHeader == null) {
+				try {
+					contentTypeHeader = headerMaker.createContentTypeHeader("text", "plain");
+				} catch (ParseException ignore) {}
+			}
+			byte[] rawContent = request.getRawContent();
+			String content = "";
+			if (rawContent != null) {
+				content = new String(rawContent);
+			}
+			FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
+			String remoteUser = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
+			String remoteDomain = fromHeader.getAddress().getURI().toString().split("@")[1];
+			Iterator<String> headerNamesIterator = request.getHeaderNames();
+			List<Header> additionalHeaders = new ArrayList<>();
+			while (headerNamesIterator.hasNext()) {
+				Iterator<Header> headers = request.getHeaders(headerNamesIterator.next());
+				while (headers.hasNext()) {
+					additionalHeaders.add(headers.next());
+				}
+			}
+			bus.post(new MessageReceived(callId, remoteUser, remoteDomain, content, contentTypeHeader,
+				additionalHeaders.toArray(new Header[additionalHeaders.size()])));
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();

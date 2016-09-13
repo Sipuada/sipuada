@@ -25,6 +25,8 @@ import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
+import org.github.sipuada.events.MessageNotSent;
+import org.github.sipuada.events.MessageSent;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.exceptions.InternalJainSipException;
@@ -290,14 +292,95 @@ public class SipUserAgentClient {
 				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
+	public boolean sendMessageRequest(String remoteUser, String remoteHost, CallIdHeader callIdHeader,
+			String content, String contentType, String... additionalHeaders) {
+		URI requestUri;
+		try {
+			requestUri = addressMaker.createSipURI(remoteUser, remoteHost);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create URI for this MESSAGE request "
+					+ "to {} at {}.\n[remoteUser] must be a valid id, [remoteHost] "
+					+ "must be a valid IP address: {}.", remoteUser, remoteHost, parseException.getMessage());
+			// No need for caller to wait for remote responses.
+			return false;
+		}
+		long cseq = ++localCSeq;
+		String contentTypeValue = contentType.split("/")[0].trim();
+		String contentSubTypeValue = contentType.split("/")[1].trim();
+		ContentTypeHeader contentTypeHeader;
+		try {
+			contentTypeHeader = headerMaker
+				.createContentTypeHeader(contentTypeValue, contentSubTypeValue);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the ContentTypeHeader for this MESSAGE request "
+				+ "to {} at {}.", remoteUser, remoteHost, parseException.getMessage());
+			// No need for caller to wait for remote responses.
+			return false;
+		}
+		List<Header> additionalHeadersList = new ArrayList<Header>();
+		for (String additionalHeader : additionalHeaders) {
+			if (additionalHeader != null) {
+				String[] split = additionalHeader.split("\\:");
+				String headerName = split[0].trim();
+				if (headerName.isEmpty()) {
+					continue;
+				}
+				String headerValue = split.length > 1 ? split[1].trim() : "";
+				try {
+					Header header = headerMaker.createHeader(headerName, headerValue);
+					additionalHeadersList.add(header);
+				} catch (ParseException parseException) {
+					continue;
+				}
+			}
+		}
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the contact URI for {} at {}."
+					+ "[username] must be a valid id, [localIp] must be a valid " + "IP address.",
+					username, localIp, parseException);
+			// No need for caller to wait for remote responses.
+			return false;
+		}
+		contactUri.setPort(localPort);
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		try {
+			contactHeader.setExpires(60);
+		} catch (InvalidArgumentException ignore) {
+		}
+		additionalHeadersList.add(contactHeader);
+		try {
+			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
+			additionalHeadersList.add(expiresHeader);
+		} catch (InvalidArgumentException ignore) {}
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
+			try {
+				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+				additionalHeadersList.add(allowHeader);
+			} catch (ParseException ignore) {}
+		}
+		return sendRequest(RequestMethod.MESSAGE, remoteUser, remoteHost, requestUri, callIdHeader, cseq, content,
+			contentTypeHeader, additionalHeadersList.toArray(new Header[additionalHeadersList.size()]));
+	}
+
 	private boolean sendRequest(RequestMethod method, String remoteUser,
 			String remoteHost, URI requestUri, CallIdHeader callIdHeader, long cseq,
 			Header... additionalHeaders) {
+		return sendRequest(method, remoteUser, remoteHost, requestUri,
+			callIdHeader, cseq, null, null, additionalHeaders);
+	}
+
+	private boolean sendRequest(RequestMethod method, String remoteUser,
+			String remoteHost, URI requestUri, CallIdHeader callIdHeader, long cseq,
+			String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
 		try {
 			URI addresserUri = addressMaker.createSipURI(username, primaryHost);
 			URI addresseeUri = addressMaker.createSipURI(remoteUser, remoteHost);
 			return sendRequest(method, requestUri, addresserUri, addresseeUri, null,
-					callIdHeader, cseq, additionalHeaders);
+					callIdHeader, cseq, content, contentTypeHeader, additionalHeaders);
 		} catch (ParseException parseException) {
 			logger.error("Could not properly create addresser and addressee URIs for " +
 					"this {} request from {} at {} to {} at {}." +
@@ -342,8 +425,46 @@ public class SipUserAgentClient {
 				additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
 
+	public boolean sendMessageRequest(Dialog dialog, String content, String contentType, String... additionalHeaders) {
+		String contentTypeValue = contentType.split("/")[0].trim();
+		String contentSubTypeValue = contentType.split("/")[1].trim();
+		ContentTypeHeader contentTypeHeader;
+		try {
+			contentTypeHeader = headerMaker
+				.createContentTypeHeader(contentTypeValue, contentSubTypeValue);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the ContentTypeHeader for this MESSAGE request which was "
+				+ "meant to be sent in context of call {{}}.", dialog.getCallId().getCallId(), parseException.getMessage());
+			// No need for caller to wait for remote responses.
+			return false;
+		}
+		List<Header> additionalHeadersList = new ArrayList<Header>();
+		for (String additionalHeader : additionalHeaders) {
+			if (additionalHeader != null) {
+				String[] split = additionalHeader.split("\\:");
+				String headerName = split[0].trim();
+				if (headerName.isEmpty()) {
+					continue;
+				}
+				String headerValue = split.length > 1 ? split[1].trim() : "";
+				try {
+					Header header = headerMaker.createHeader(headerName, headerValue);
+					additionalHeadersList.add(header);
+				} catch (ParseException parseException) {
+					continue;
+				}
+			}
+		}
+		return sendRequest(RequestMethod.MESSAGE, dialog, content, contentTypeHeader,
+			additionalHeadersList.toArray(new Header[additionalHeadersList.size()]));
+	}
+
+	private boolean sendRequest(RequestMethod method, Dialog dialog, Header... additionalHeaders) {
+		return sendRequest(method, dialog, null, null, additionalHeaders);
+	}
+
 	private boolean sendRequest(RequestMethod method, Dialog dialog,
-			Header... additionalHeaders) {
+			String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
 		URI addresserUri = dialog.getLocalParty().getURI();
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
@@ -356,12 +477,20 @@ public class SipUserAgentClient {
 			localCSeq = cseq;
 		}
 		return sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
-				callIdHeader, cseq, additionalHeaders);
+			callIdHeader, cseq, content, contentTypeHeader, additionalHeaders);
 	}
+
+//	private boolean sendRequest(final RequestMethod method, URI requestUri,
+//			URI addresserUri, URI addresseeUri, final Dialog dialog,
+//			final CallIdHeader callIdHeader, long cseq, Header... additionalHeaders) {
+//		return sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
+//			callIdHeader, cseq, null, null, additionalHeaders);
+//	}
 
 	private boolean sendRequest(final RequestMethod method, URI requestUri,
 			URI addresserUri, URI addresseeUri, final Dialog dialog,
-			final CallIdHeader callIdHeader, long cseq, Header... additionalHeaders) {
+			final CallIdHeader callIdHeader, long cseq, String content,
+			ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
 		if (method == RequestMethod.CANCEL || method == RequestMethod.ACK
 				|| method == RequestMethod.UNKNOWN) {
 			//This method is meant for the INVITE request and
@@ -448,6 +577,8 @@ public class SipUserAgentClient {
 			final String callId = callIdHeader.getCallId();
 			if (isDialogCreatingRequest(method)) {
 				putOfferIntoRequestIfApplicable(method, callId, request);
+			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
+				request.setContent(content, contentTypeHeader);
 			}
 			new Thread(new Runnable() {
 
@@ -501,6 +632,17 @@ public class SipUserAgentClient {
 			case INVITE:
 			case OPTIONS:
 				return true;
+			default:
+				return false;
+		}
+	}
+
+	private boolean isPayloadSenderRequest(RequestMethod method, String content,
+			ContentTypeHeader contentTypeHeader) {
+		switch (method) {
+			case MESSAGE:
+			case INFO:
+				return content != null && contentTypeHeader != null;
 			default:
 				return false;
 		}
@@ -599,6 +741,9 @@ public class SipUserAgentClient {
 			case INVITE:
 				bus.post(new CallInvitationFailed(errorMessage, callId));
 				break;
+			case MESSAGE:
+				bus.post(new MessageNotSent(errorMessage, callId));
+				break;
 			default:
 				break;
 		}
@@ -677,6 +822,10 @@ public class SipUserAgentClient {
 						break;
 					case BYE:
 						handleByeResponse(statusCode, response, clientTransaction);
+						break;
+					case MESSAGE:
+						handleMessageResponse(statusCode, response, clientTransaction);
+						break;
 					case UNKNOWN:
 					default:
 						break;
@@ -1533,6 +1682,15 @@ public class SipUserAgentClient {
 			}
 		} catch (InvalidArgumentException ignore) {}
 		request.setHeader(cseq);
+	}
+
+	private void handleMessageResponse(int statusCode, Response response, ClientTransaction clientTransaction) {
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			logger.info("{} response to MESSAGE arrived.", statusCode);
+			CallIdHeader callIdHeader = (CallIdHeader) response.getHeader(CallIdHeader.NAME);
+			final String callId = (callIdHeader).getCallId();
+			bus.post(new MessageSent(callId));
+		}
 	}
 
 	private boolean doSendRequest(Request request,

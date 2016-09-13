@@ -11,8 +11,8 @@ import java.util.Set;
 import java.util.TooManyListenersException;
 
 import org.github.sipuada.Constants.RequestMethod;
+import org.github.sipuada.SipuadaApi.BasicRequestCallback;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
-import org.github.sipuada.SipuadaApi.RegistrationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.github.sipuada.events.CallInvitationAccepted;
 import org.github.sipuada.events.CallInvitationArrived;
@@ -24,6 +24,9 @@ import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.MessageNotSent;
+import org.github.sipuada.events.MessageReceived;
+import org.github.sipuada.events.MessageSent;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
@@ -53,6 +56,8 @@ import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.address.AddressFactory;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.CallIdHeader;
+import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
@@ -212,37 +217,41 @@ public class SipUserAgent implements SipListener {
 	}
 
 	private void initSipuadaListener() {
-		final String eventBusSubscriberId =
-				Utils.getInstance().generateTag();
+		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
 
 			@Subscribe
 			public void onEvent(CallInvitationArrived event) {
 				ServerTransaction serverTransaction = event.getServerTransaction();
 				final String callId = event.getCallId();
-				inviteOperationIsAnswerable(eventBusSubscriberId,
-						callId, serverTransaction);
+				inviteOperationIsAnswerable(eventBusSubscriberId, callId, serverTransaction);
 				Object inviteCancelerEventBusSubscriber = new Object() {
 
 					@Subscribe
 					public void onEvent(CallInvitationCanceled event) {
 						if (event.getCallId().equals(callId)) {
 							wipeAnswerableInviteOperation(callId, eventBusSubscriberId,
-									event.shouldTerminateOriginalInvite());
+								event.shouldTerminateOriginalInvite());
 							internalEventBus.unregister(this);
-							listener.onCallInvitationCanceled(event.getReason(),
-									callId);
+							listener.onCallInvitationCanceled(event.getReason(), callId);
 						}
 					}
 
 				};
 				internalEventBus.register(inviteCancelerEventBusSubscriber);
 				boolean currentlyBusy = listener.onCallInvitationArrived(callId,
-						event.getRemoteUsername(), event.getRemoteHost());
+					event.getRemoteUser(), event.getRemoteDomain());
 				if (currentlyBusy) {
 					logger.info("Callee is currently busy.");
 					answerInviteRequest(callId, false);
 				}
+			}
+
+			@Subscribe
+			public void onEvent(MessageReceived event) {
+				final String callId = event.getCallId();
+				listener.onMessageReceived(callId, event.getRemoteUser(), event.getRemoteDomain(),
+					event.getContent(), event.getContentTypeHeader(), event.getAdditionalHeaders());
 			}
 
 		};
@@ -321,17 +330,17 @@ public class SipUserAgent implements SipListener {
 		}
 	}
 
-	public boolean sendRegisterRequest(RegistrationCallback callback,
+	public boolean sendRegisterRequest(BasicRequestCallback callback,
 			String... additionalAddresses) {
 		return sendRegisterRequest(callback, 3600, additionalAddresses);
 	}
 
-	public boolean sendUnregisterRequest(RegistrationCallback callback,
+	public boolean sendUnregisterRequest(BasicRequestCallback callback,
 			String... expiredAddresses) {
 		return sendRegisterRequest(callback, 0, expiredAddresses);
 	}
 
-	public boolean sendRegisterRequest(final RegistrationCallback callback,
+	public boolean sendRegisterRequest(final BasicRequestCallback callback,
 			int expires, String... addresses) {
 		final String eventBusSubscriberId = Utils.getInstance().generateTag();
 		Object eventBusSubscriber = new Object() {
@@ -339,13 +348,13 @@ public class SipUserAgent implements SipListener {
 			@Subscribe
 			public void onEvent(RegistrationSuccess event) {
 				internalEventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
-				callback.onRegistrationSuccess(event.getContactBindings());
+				callback.onRequestSuccess(event.getContactBindings());
 			}
 
 			@Subscribe
 			public void onEvent(RegistrationFailed event) {
 				internalEventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
-				callback.onRegistrationFailed(event.getReason());
+				callback.onRequestFailed(event.getReason());
 			}
 
 		};
@@ -815,6 +824,85 @@ public class SipUserAgent implements SipListener {
 		}
 		logger.error("Cannot finish call.\nEstablished call with callId " +
 				"'{}' not found.", callId);
+		return false;
+	}
+
+	public boolean sendMessageRequest(String remoteUser, String remoteDomain, String content,
+			String contentType, final BasicRequestCallback callback, String... additionalHeaders) {
+		CallIdHeader callIdHeader = provider.getNewCallId();
+		final String callId = callIdHeader.getCallId();
+		final String eventBusSubscriberId = Utils.getInstance().generateTag();
+		Object eventBusSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(MessageSent event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onRequestSuccess();
+				}
+			}
+
+			@Subscribe
+			public void onEvent(MessageNotSent event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onRequestFailed(event.getReason());
+				}
+			}
+
+		};
+		internalEventBus.register(eventBusSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberId, eventBusSubscriber);
+		boolean expectRemoteAnswer = uac.sendMessageRequest(remoteUser, remoteDomain,
+			callIdHeader, content, contentType, additionalHeaders);
+		if (!expectRemoteAnswer) {
+			internalEventBus.unregister(eventBusSubscriber);
+		}
+		return true;
+	}
+
+	public boolean sendMessageRequest(final String callId, String content, String contentType,
+			final BasicRequestCallback callback, String... additionalHeaders) {
+		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot send message.\nEstablished call with callId " + "'{}' not found.", callId);
+			return false;
+		}
+		final String eventBusSubscriberInfoId = Utils.getInstance().generateTag();
+		Object eventBusInfoSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(MessageSent event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onRequestSuccess();
+				}
+			}
+
+			@Subscribe
+			public void onEvent(MessageNotSent event) {
+				if (event.getCallId().equals(callId)) {
+					callback.onRequestFailed(event.getReason());
+				}
+			}
+
+		};
+		internalEventBus.register(eventBusInfoSubscriber);
+		eventBusSubscribers.put(eventBusSubscriberInfoId, eventBusInfoSubscriber);
+		synchronized (establishedCalls) {
+			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+			if (calls == null) {
+				logger.error("Cannot send message.\nEstablished call with callId " + "'{}' not found.", callId);
+				return false;
+			}
+			synchronized (calls) {
+				Iterator<Dialog> iterator = calls.iterator();
+				while (iterator.hasNext()) {
+					Dialog dialog = iterator.next();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						return uac.sendMessageRequest(dialog, content, contentType, additionalHeaders);
+					}
+				}
+			}
+		}
+		logger.error("Cannot send message.\nEstablished call with callId " + "'{}' not found.", callId);
 		return false;
 	}
 

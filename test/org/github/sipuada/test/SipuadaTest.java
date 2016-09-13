@@ -4,10 +4,13 @@ import java.util.List;
 
 import org.github.sipuada.Sipuada;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
-import org.github.sipuada.SipuadaApi.RegistrationCallback;
+import org.github.sipuada.SipuadaApi.BasicRequestCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import android.javax.sip.header.ContentTypeHeader;
+import android.javax.sip.header.Header;
 
 public class SipuadaTest {
 
@@ -49,23 +52,33 @@ public class SipuadaTest {
 				logger.debug("onCallFailure: [reason={{}}; callId={{}}].", reason, callId);
 			}
 
+			@Override
+			public void onMessageReceived(String callId, String remoteUser, String remoteDomain, String content,
+					ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
+				logger.debug("onMessageReceived: [callId={{}}; remoteUser={{}}; remoteDomain={{}}; content={{}};"
+					+ " contentTypeHeader={{}}; additionalHeaders={{}};].", callId, remoteUser, remoteDomain, content);
+			}
+
 		};
 		Sipuada sipuada = new Sipuada(sipuadaListener,
 				"xibaca", "192.168.130.207:5060", "xibaca",
 				"192.168.130.207:55501/TCP",
 				"192.168.130.207:55502/TCP"
 		);
-		RegistrationCallback registrationCallback =
-				new RegistrationCallback() {
+		BasicRequestCallback registrationCallback =
+				new BasicRequestCallback() {
 
 			@Override
-			public void onRegistrationSuccess(List<String> registeredContacts) {
-				logger.debug("onRegistrationSuccess: [registeredContacts={{}}].", registeredContacts);
+			public void onRequestSuccess(Object... response) {
+				for (Object object : response) {
+					List<String> registeredContacts = (List<String>) object;
+					logger.debug("onRegistrationSuccess: [registeredContacts={{}}].", registeredContacts);
+				}
 			}
 
 			@Override
-			public void onRegistrationFailed(String reason) {
-				logger.debug("onRegistrationFailed.");
+			public void onRequestFailed(String reason) {
+				logger.debug("onRegistrationFailed: " + reason);
 			}
 
 		};
