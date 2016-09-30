@@ -374,8 +374,6 @@ public class SipUserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(RegistrationSuccess event) {
-				logger.info("OperationSubscriber captured RegistrationSuccess("
-					+ event.getCallId() + "). Operation CallId: " + callId);
 				if (event.getCallId().equals(callId)) {
 					internalEventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
 					callback.onRequestSuccess(username, primaryHost, event.getContactBindings());
@@ -384,8 +382,6 @@ public class SipUserAgent implements SipListener {
 
 			@Subscribe
 			public void onEvent(RegistrationFailed event) {
-				logger.info("OperationSubscriber captured RegistrationFailed("
-					+ event.getCallId() + "): " + event.getReason() + " - Operation CallId: " + callId);
 				if (event.getCallId().equals(callId)) {
 					internalEventBus.unregister(eventBusSubscribers.remove(eventBusSubscriberId));
 					callback.onRequestFailed(username, primaryHost, event.getReason());
@@ -412,8 +408,6 @@ public class SipUserAgent implements SipListener {
 
 					@Subscribe
 					public void onEvent(RegistrationSuccess event) {
-						logger.info("TimeoutSubscriber captured RegistrationSuccess("
-							+ event.getCallId() + "). Operation CallId: " + callId);
 						if (event.getCallId().equals(callId)) {
 							internalEventBus.unregister(this);
 							currentTolerableTimeout = maxTolerableTimeout;
