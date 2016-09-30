@@ -2,35 +2,36 @@ package org.github.sipuada;
 
 import org.github.sipuada.plugins.SipuadaPlugin;
 
-import android.javax.sip.header.ContentTypeHeader;
-import android.javax.sip.header.Header;
-
 public interface SipuadaApi {
 
 	interface SipuadaListener {
 
-		boolean onCallInvitationArrived(String callId, String remoteUser, String remoteDomain);
+		boolean onCallInvitationArrived(String localUser, String localDomain,
+			String callId, String remoteUser, String remoteDomain);
 
-		void onCallInvitationCanceled(String reason, String callId);
+		void onCallInvitationCanceled(String localUser, String localDomain,
+			String reason, String callId);
 
-		void onCallInvitationFailed(String reason, String callId);
+		void onCallInvitationFailed(String localUser, String localDomain,
+			String reason, String callId);
 
-		void onCallEstablished(String callId);
+		void onCallEstablished(String localUser, String localDomain, String callId);
 
-		void onCallFinished(String callId);
+		void onCallFinished(String localUser, String localDomain, String callId);
 
-		void onCallFailure(String reason, String callId);
+		void onCallFailure(String localUser, String localDomain, String reason, String callId);
 
-		void onMessageReceived(String callId, String remoteUser, String remoteDomain,
-			String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders);
+		void onMessageReceived(String localUser, String localDomain, String callId,
+			String remoteUser, String remoteDomain, String content,
+			String contentType, String... additionalHeaders);
 
 	}
 
 	interface BasicRequestCallback {
 
-		void onRequestSuccess(Object... response);
+		void onRequestSuccess(String localUser, String localDomain, Object... response);
 
-		void onRequestFailed(String reason);
+		void onRequestFailed(String localUser, String localDomain, String reason);
 
 	}
 
@@ -54,11 +55,11 @@ public interface SipuadaApi {
 
 	interface CallInvitationCallback {
 
-		void onWaitingForCallInvitationAnswer(String callId);
+		void onWaitingForCallInvitationAnswer(String localUser, String localDomain, String callId);
 
-		void onCallInvitationRinging(String callId);
+		void onCallInvitationRinging(String localUser, String localDomain, String callId);
 
-		void onCallInvitationDeclined(String reason);
+		void onCallInvitationDeclined(String localUser, String localDomain, String reason);
 
 	}
 

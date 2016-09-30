@@ -46,8 +46,6 @@ import android.javax.sip.SipStack;
 import android.javax.sip.TransportNotSupportedException;
 import android.javax.sip.address.URI;
 import android.javax.sip.header.CallIdHeader;
-import android.javax.sip.header.ContentTypeHeader;
-import android.javax.sip.header.Header;
 
 public class Sipuada implements SipuadaApi {
 
@@ -66,8 +64,8 @@ public class Sipuada implements SipuadaApi {
 
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins = new HashMap<>();
 
-	private final Map<URI, CallIdHeader> registerCallIds = Collections
-			.synchronizedMap(new HashMap<URI, CallIdHeader>());
+	private final Map<String, CallIdHeader> registerCallIds = Collections
+			.synchronizedMap(new HashMap<String, CallIdHeader>());
 	private final Map<URI, Long> registerCSeqs = Collections
 			.synchronizedMap(new HashMap<URI, Long>());
 	private final Map<RequestMethod, Boolean> registerOperationsInProgress = Collections
@@ -89,6 +87,8 @@ public class Sipuada implements SipuadaApi {
 			.synchronizedMap(new HashMap<String, Set<ElectionCandidate>>());
 	private final Map<String, Boolean> electionStarted = new HashMap<>();
 	private Timer electionTimer;
+
+	private boolean intolerantModeEnabled = false;
 
 	protected static class RegisterOperation {
 
@@ -135,7 +135,14 @@ public class Sipuada implements SipuadaApi {
 	public Sipuada(SipuadaListener sipuadaListener, final String sipUsername,
 			final String sipPrimaryHost, String sipPassword,
 			String... localAddresses) throws SipuadaException {
+		this(false, sipuadaListener, sipUsername, sipPrimaryHost, sipPassword, localAddresses);
+	}
+
+	public Sipuada(boolean intolerantModeIsEnabled, SipuadaListener sipuadaListener,
+			final String sipUsername, final String sipPrimaryHost, String sipPassword,
+			String... localAddresses) throws SipuadaException {
 		eventBus.register(this);
+		intolerantModeEnabled = intolerantModeIsEnabled;
 		listener = sipuadaListener;
 		username = sipUsername;
 		primaryHost = sipPrimaryHost;
@@ -215,7 +222,7 @@ public class Sipuada implements SipuadaApi {
 					registeredPlugins, sipUsername, sipPrimaryHost, sipPassword,
 					listeningPoint.getIPAddress(), Integer.toString(listeningPoint.getPort()),
 					rawTransport, callIdToActiveUserAgent, activeUserAgentCallIds,
-					registerCallIds, registerCSeqs);
+					registerCallIds, registerCSeqs, intolerantModeEnabled);
 			userAgents.add(userAgent);
 			activeUserAgentCallIds.put(userAgent, Collections
 					.synchronizedSet(new HashSet<String>()));
@@ -270,6 +277,10 @@ public class Sipuada implements SipuadaApi {
 			logger.info("Sipuada created. Default transport: {}. UA: {}",
 					defaultTransport, userAgentsDump.toString());
 		}
+	}
+
+	public void setIntolerantModeEnabled(boolean intolerantModeIsEnabled) {
+		intolerantModeEnabled = intolerantModeIsEnabled;
 	}
 
 	private SipStack generateSipStack() {
@@ -367,21 +378,22 @@ public class Sipuada implements SipuadaApi {
 		logger.debug("All existing registrations will be renewed.");
 		try {
 			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-					.sendRegisterRequest(new BasicRequestCallback() {
+				.sendRegisterRequest(new BasicRequestCallback() {
 
-						@Override
-						public void onRequestSuccess(Object... registeredContacts) {
-							registerRelatedOperationFinished();
-							callback.onRequestSuccess(registeredContacts);
-						}
+					@Override
+					public void onRequestSuccess(String localUser, String localUserDomain,
+							Object... registeredContacts) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestSuccess(localUser, localUserDomain, registeredContacts);
+					}
 
-						@Override
-						public void onRequestFailed(String reason) {
-							registerRelatedOperationFinished();
-							callback.onRequestFailed(reason);
-						}
+					@Override
+					public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestFailed(localUser, localUserDomain, reason);
+					}
 
-					}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+				}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
 			if (couldDispatchOperation) {
 				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
@@ -433,21 +445,22 @@ public class Sipuada implements SipuadaApi {
 		}
 		try {
 			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-					.sendUnregisterRequest(new BasicRequestCallback() {
+				.sendUnregisterRequest(new BasicRequestCallback() {
 
-						@Override
-						public void onRequestSuccess(Object... unregisteredContacts) {
-							registerRelatedOperationFinished();
-							callback.onRequestSuccess(unregisteredContacts);
-						}
+					@Override
+					public void onRequestSuccess(String localUser, String localUserDomain,
+							Object... unregisteredContacts) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestSuccess(localUser, localUserDomain, unregisteredContacts);
+					}
 
-						@Override
-						public void onRequestFailed(String reason) {
-							registerRelatedOperationFinished();
-							callback.onRequestFailed(reason);
-						}
+					@Override
+					public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestFailed(localUser, localUserDomain, reason);
+					}
 
-					}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
+				}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
 			if (couldDispatchOperation) {
 				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
@@ -470,21 +483,22 @@ public class Sipuada implements SipuadaApi {
 				" (but Sipuada instances bound to them will be kept).");
 		try {
 			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-					.sendUnregisterRequest(new BasicRequestCallback() {
+				.sendUnregisterRequest(new BasicRequestCallback() {
 
-						@Override
-						public void onRequestSuccess(Object... unregisteredContacts) {
-							registerRelatedOperationFinished();
-							callback.onRequestSuccess(unregisteredContacts);
-						}
+					@Override
+					public void onRequestSuccess(String localUser, String localUserDomain,
+							Object... unregisteredContacts) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestSuccess(localUser, localUserDomain, unregisteredContacts);
+					}
 
-						@Override
-						public void onRequestFailed(String reason) {
-							registerRelatedOperationFinished();
-							callback.onRequestFailed(reason);
-						}
+					@Override
+					public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestFailed(localUser, localUserDomain, reason);
+					}
 
-					});
+				});
 			if (couldDispatchOperation) {
 				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
@@ -540,21 +554,22 @@ public class Sipuada implements SipuadaApi {
 		}
 		try {
 			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-					.sendRegisterRequest(new BasicRequestCallback() {
+				.sendRegisterRequest(new BasicRequestCallback() {
 
-						@Override
-						public void onRequestSuccess(Object... registeredContacts) {
-							registerRelatedOperationFinished();
-							callback.onRequestSuccess(registeredContacts);
-						}
+					@Override
+					public void onRequestSuccess(String localUser, String localUserDomain,
+							Object... registeredContacts) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestSuccess(localUser, localUserDomain, registeredContacts);
+					}
 
-						@Override
-						public void onRequestFailed(String reason) {
-							registerRelatedOperationFinished();
-							callback.onRequestFailed(reason);
-						}
+					@Override
+					public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestFailed(localUser, localUserDomain, reason);
+					}
 
-					}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
+				}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
 			if (couldDispatchOperation) {
 				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
@@ -605,22 +620,23 @@ public class Sipuada implements SipuadaApi {
 		}
 		try {
 			boolean couldDispatchOperation = chooseBestAgentThatIsAvailable()
-					.sendUnregisterRequest(new BasicRequestCallback() {
+				.sendUnregisterRequest(new BasicRequestCallback() {
 
-						@Override
-						public void onRequestSuccess(Object... unregisteredContacts) {
-							performUserAgentsCleanup(expired);
-							registerRelatedOperationFinished();
-							callback.onRequestSuccess(unregisteredContacts);
-						}
+					@Override
+					public void onRequestSuccess(String localUser, String localUserDomain,
+							Object... unregisteredContacts) {
+						performUserAgentsCleanup(expired);
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestSuccess(localUser, localUserDomain, unregisteredContacts);
+					}
 
-						@Override
-						public void onRequestFailed(String reason) {
-							registerRelatedOperationFinished();
-							callback.onRequestFailed(reason);
-						}
+					@Override
+					public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestFailed(localUser, localUserDomain, reason);
+					}
 
-					}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
+				}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
 			if (couldDispatchOperation) {
 				registerOperationsInProgress.put(RequestMethod.REGISTER, true);
 			}
@@ -693,7 +709,8 @@ public class Sipuada implements SipuadaApi {
 				couldDispatchOperation = chosenUserAgent.sendRegisterRequest(new BasicRequestCallback() {
 
 					@Override
-					public void onRequestSuccess(Object... registeredContacts) {
+					public void onRequestSuccess(String localUser, String localUserDomain,
+							Object... registeredContacts) {
 						if (!unregisteredAddresses.isEmpty()) {
 							boolean couldSendRequest;
 							try {
@@ -701,16 +718,19 @@ public class Sipuada implements SipuadaApi {
 									.sendUnregisterRequest(new BasicRequestCallback() {
 
 										@Override
-										public void onRequestSuccess(Object... unregisteredContacts) {
+										public void onRequestSuccess(String localUser, String localUserDomain,
+												Object... unregisteredContacts) {
 											performUserAgentsCleanup(expired);
-											registerRelatedOperationFinished();
-											callback.onRequestSuccess(unregisteredContacts);
+											registerRelatedOperationFinished(localUser, localUserDomain);
+											callback.onRequestSuccess(localUser,
+												localUserDomain, unregisteredContacts);
 										}
 
 										@Override
-										public void onRequestFailed(String reason) {
-											registerRelatedOperationFinished();
-											callback.onRequestFailed(reason);
+										public void onRequestFailed(String localUser, String localUserDomain,
+												String reason) {
+											registerRelatedOperationFinished(localUser, localUserDomain);
+											callback.onRequestFailed(localUser, localUserDomain, reason);
 										}
 
 									}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
@@ -718,21 +738,21 @@ public class Sipuada implements SipuadaApi {
 								couldSendRequest = false;
 							}
 							if (!couldSendRequest) {
-								registerRelatedOperationFinished();
-								callback.onRequestFailed(String.format("Could register some contacts " +
-										"(%s) but could not unregister others (%s).", registeredAddresses,
-										unregisteredAddresses));
+								registerRelatedOperationFinished(localUser, localUserDomain);
+								callback.onRequestFailed(localUser, localUserDomain, String.format("Could register " +
+									"some contacts (%s) but could not unregister others (%s).", registeredAddresses,
+									unregisteredAddresses));
 							}
 						} else {
-							registerRelatedOperationFinished();
-							callback.onRequestSuccess(registeredContacts);
+							registerRelatedOperationFinished(localUser, localUserDomain);
+							callback.onRequestSuccess(localUser, localUserDomain, registeredContacts);
 						}
 					}
 
 					@Override
-					public void onRequestFailed(String reason) {
-						registerRelatedOperationFinished();
-						callback.onRequestFailed(reason);
+					public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+						registerRelatedOperationFinished(localUser, localUserDomain);
+						callback.onRequestFailed(localUser, localUserDomain, reason);
 					}
 
 				}, expires, registeredAddresses.toArray(new String[registeredAddresses.size()]));
@@ -745,16 +765,17 @@ public class Sipuada implements SipuadaApi {
 					.sendUnregisterRequest(new BasicRequestCallback() {
 
 						@Override
-						public void onRequestSuccess(Object... registeredContacts) {
+						public void onRequestSuccess(String localUser, String localUserDomain,
+								Object... registeredContacts) {
 							performUserAgentsCleanup(expired);
-							registerRelatedOperationFinished();
-							callback.onRequestSuccess(new LinkedList<String>());
+							registerRelatedOperationFinished(localUser, localUserDomain);
+							callback.onRequestSuccess(localUser, localUserDomain, new LinkedList<String>());
 						}
 
 						@Override
-						public void onRequestFailed(String reason) {
-							registerRelatedOperationFinished();
-							callback.onRequestFailed(reason);
+						public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+							registerRelatedOperationFinished(localUser, localUserDomain);
+							callback.onRequestFailed(localUser, localUserDomain, reason);
 						}
 
 					}, unregisteredAddresses.toArray(new String[unregisteredAddresses.size()]));
@@ -858,7 +879,7 @@ public class Sipuada implements SipuadaApi {
 		}
 	}
 
-	private void registerRelatedOperationFinished() {
+	private void registerRelatedOperationFinished(String localUser, String localUserDomain) {
 		registerOperationsInProgress.put(RequestMethod.REGISTER, false);
 		synchronized (postponedRegisterOperations) {
 			Iterator<RegisterOperation> iterator = postponedRegisterOperations.iterator();
@@ -893,8 +914,8 @@ public class Sipuada implements SipuadaApi {
 						break;
 				}
 				if (!couldDispatchOperation) {
-					operation.callback
-						.onRequestFailed("Request could not be sent.");
+					operation.callback.onRequestFailed(localUser, localUserDomain,
+						"Request could not be sent.");
 					continue;
 				}
 				break;
@@ -924,7 +945,7 @@ public class Sipuada implements SipuadaApi {
 						username, primaryHost, password, listeningPoint.getIPAddress(),
 						Integer.toString(listeningPoint.getPort()), rawTransport,
 						callIdToActiveUserAgent, activeUserAgentCallIds,
-						registerCallIds, registerCSeqs);
+						registerCallIds, registerCSeqs, intolerantModeEnabled);
 				userAgents.add(userAgent);
 				activeUserAgentCallIds.put(userAgent, Collections
 						.synchronizedSet(new HashSet<String>()));

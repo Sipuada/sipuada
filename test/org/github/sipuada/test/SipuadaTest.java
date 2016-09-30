@@ -3,14 +3,11 @@ package org.github.sipuada.test;
 import java.util.List;
 
 import org.github.sipuada.Sipuada;
-import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.BasicRequestCallback;
+import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import android.javax.sip.header.ContentTypeHeader;
-import android.javax.sip.header.Header;
 
 public class SipuadaTest {
 
@@ -20,43 +17,45 @@ public class SipuadaTest {
 		SipuadaListener sipuadaListener = new SipuadaListener() {
 
 			@Override
-			public boolean onCallInvitationArrived(String callId,
+			public boolean onCallInvitationArrived(String localUser, String localUserDomain, String callId,
 					String remoteUsername, String remoteHost) {
-				logger.debug("onCallInvitationArrived: [callId={{}};" +
-					" remoteUsername={{}}; remoteHost={{}}].", callId, remoteUsername, remoteHost);
+				logger.debug("onCallInvitationArrived: [localUser={{}}, localUserDomain={{}}, callId={{}};" +
+					" remoteUsername={{}}; remoteHost={{}}].", localUser, localUserDomain, callId, remoteUsername, remoteHost);
 				return false;
 			}
 
 			@Override
-			public void onCallInvitationCanceled(String reason, String callId) {
-				logger.debug("onCallInvitationCanceled: [reason={{}}; callId={{}}].", reason, callId);
+			public void onCallInvitationCanceled(String localUser, String localUserDomain, String reason, String callId) {
+				logger.debug("onCallInvitationCanceled: [localUser={{}}, localUserDomain={{}}, reason={{}}; callId={{}}].", localUser, localUserDomain, reason, callId);
 			}
 
 			@Override
-			public void onCallInvitationFailed(String reason, String callId) {
-				logger.debug("onCallInvitationFailed: [reason={{}}; callId={{}}].", reason, callId);
+			public void onCallInvitationFailed(String localUser, String localUserDomain, String reason, String callId) {
+				logger.debug("onCallInvitationFailed: [localUser={{}}, localUserDomain={{}}, reason={{}}; callId={{}}].", localUser, localUserDomain, reason, callId);
 			}
 
 			@Override
-			public void onCallEstablished(String callId) {
-				logger.debug("onCallEstablished: [callId={{}}].", callId);
+			public void onCallEstablished(String localUser, String localUserDomain, String callId) {
+				logger.debug("onCallEstablished: [localUser={{}}, localUserDomain={{}}, callId={{}}].", localUser, localUserDomain, callId);
 			}
 
 			@Override
-			public void onCallFinished(String callId) {
-				logger.debug("onCallFinished: [callId={{}}].", callId);
+			public void onCallFinished(String localUser, String localUserDomain, String callId) {
+				logger.debug("onCallFinished: [localUser={{}}, localUserDomain={{}}, callId={{}}].", localUser, localUserDomain, callId);
 			}
 
 			@Override
-			public void onCallFailure(String reason, String callId) {
-				logger.debug("onCallFailure: [reason={{}}; callId={{}}].", reason, callId);
+			public void onCallFailure(String localUser, String localUserDomain, String reason, String callId) {
+				logger.debug("onCallFailure: [localUser={{}}, localUserDomain={{}}, reason={{}}; callId={{}}].", localUser, localUserDomain, reason, callId);
 			}
 
 			@Override
-			public void onMessageReceived(String callId, String remoteUser, String remoteDomain, String content,
-					ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
-				logger.debug("onMessageReceived: [callId={{}}; remoteUser={{}}; remoteDomain={{}}; content={{}};"
-					+ " contentTypeHeader={{}}; additionalHeaders={{}};].", callId, remoteUser, remoteDomain, content);
+			public void onMessageReceived(String localUser, String localUserDomain,
+					String callId, String remoteUser, String remoteDomain, String content,
+					String contentType, String... additionalHeaders) {
+				logger.debug("onMessageReceived: [localUser={{}}, localUserDomain={{}}, callId={{}}; remoteUser={{}}; remoteDomain={{}}; content={{}};"
+					+ " contentType={{}}; additionalHeaders={{}};].", localUser, localUserDomain, callId, remoteUser, remoteDomain,
+					content, contentType, additionalHeaders);
 			}
 
 		};
@@ -69,16 +68,16 @@ public class SipuadaTest {
 				new BasicRequestCallback() {
 
 			@Override
-			public void onRequestSuccess(Object... response) {
+			public void onRequestSuccess(String localUser, String localUserDomain, Object... response) {
 				for (Object object : response) {
 					List<String> registeredContacts = (List<String>) object;
-					logger.debug("onRegistrationSuccess: [registeredContacts={{}}].", registeredContacts);
+					logger.debug("onRegistrationSuccess: [localUser={{}}, localUserDomain={{}}, registeredContacts={{}}].", localUser, localUserDomain, registeredContacts);
 				}
 			}
 
 			@Override
-			public void onRequestFailed(String reason) {
-				logger.debug("onRegistrationFailed: " + reason);
+			public void onRequestFailed(String localUser, String localUserDomain, String reason) {
+				logger.debug("onRegistrationFailed: [localUser={{}}, localUserDomain={{}}, reason={{}}].", localUser, localUserDomain, reason);
 			}
 
 		};
@@ -93,18 +92,18 @@ public class SipuadaTest {
 		CallInvitationCallback callInvitationCallback = new CallInvitationCallback() {
 
 			@Override
-			public void onWaitingForCallInvitationAnswer(String callId) {
-				logger.debug("onWaitingForCallInvitationAnswer: [callId={{}}].", callId);
+			public void onWaitingForCallInvitationAnswer(String localUser, String localUserDomain, String callId) {
+				logger.debug("onWaitingForCallInvitationAnswer: [localUser={{}}, localUserDomain={{}}, callId={{}}].", localUser, localUserDomain, callId);
 			}
 
 			@Override
-			public void onCallInvitationRinging(String callId) {
-				logger.debug("onCallInvitationRinging: [callId={{}}].", callId);
+			public void onCallInvitationRinging(String localUser, String localUserDomain, String callId) {
+				logger.debug("onCallInvitationRinging: [localUser={{}}, localUserDomain={{}}, callId={{}}].", localUser, localUserDomain, callId);
 			}
 
 			@Override
-			public void onCallInvitationDeclined(String reason) {
-				logger.debug("onCallInvitationDeclined: [reason={{}}].", reason);
+			public void onCallInvitationDeclined(String localUser, String localUserDomain, String reason) {
+				logger.debug("onCallInvitationDeclined: [localUser={{}}, localUserDomain={{}}, reason={{}}].", localUser, localUserDomain, reason);
 			}
 
 		};

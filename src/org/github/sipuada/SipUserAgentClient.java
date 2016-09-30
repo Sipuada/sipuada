@@ -110,7 +110,6 @@ public class SipUserAgentClient {
 	private final Map<String, Map<String, String>> proxyAuthCallIdCache = new HashMap<>();
 	private long localCSeq = 0;
 	private final List<Address> configuredRouteSet = new LinkedList<>();
-	private final Map<URI, CallIdHeader> registerCallIds;
 	private final Map<URI, Long> registerCSeqs;
 
 	private final URI registerRequestUri;
@@ -118,15 +117,13 @@ public class SipUserAgentClient {
 	public SipUserAgentClient(EventBus eventBus, SipProvider sipProvider,
 			Map<RequestMethod, SipuadaPlugin> plugins, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
-			Map<URI, CallIdHeader> globalRegisterCallIds, Map<URI, Long> globalRegisterCSeqs,
-			String... credentialsAndAddress) {
+			Map<URI, Long> globalRegisterCSeqs, String... credentialsAndAddress) {
 		bus = eventBus;
 		provider = sipProvider;
 		sessionPlugins = plugins;
 		messenger = messageFactory;
 		headerMaker = headerFactory;
 		addressMaker = addressFactory;
-		registerCallIds = globalRegisterCallIds;
 		registerCSeqs = globalRegisterCSeqs;
 		username = credentialsAndAddress.length > 0 && credentialsAndAddress[0] != null ?
 				credentialsAndAddress[0] : "";
@@ -151,18 +148,15 @@ public class SipUserAgentClient {
 		}
 	}
 
-	public boolean sendRegisterRequest(int expires, String... addresses) {
+	public boolean sendRegisterRequest(CallIdHeader callIdHeader, int expires, String... addresses) {
 		if (addresses.length == 0) {
 			logger.error("Cannot send a REGISTER request with no bindings.");
 			return false;
 		}
-		CallIdHeader callIdHeader;
-		synchronized (registerCallIds) {
-			if (!registerCallIds.containsKey(registerRequestUri)) {
-				registerCallIds.put(registerRequestUri, provider.getNewCallId());
+		synchronized (registerCSeqs) {
+			if (!registerCSeqs.containsKey(registerRequestUri)) {
 				registerCSeqs.put(registerRequestUri, ++localCSeq);
 			}
-			callIdHeader = registerCallIds.get(registerRequestUri);
 		}
 		long cseq;
 		synchronized (registerCSeqs) {
@@ -199,14 +193,11 @@ public class SipUserAgentClient {
 	//TODO when we do it, make sure that no dialog and session state is
 	//messed up with by the flow of incoming responses to this OPTIONS request.
 
-	public boolean sendUnregisterRequest(String... expiredAddresses) {
-		CallIdHeader callIdHeader;
-		synchronized (registerCallIds) {
-			if (!registerCallIds.containsKey(registerRequestUri)) {
-				registerCallIds.put(registerRequestUri, provider.getNewCallId());
+	public boolean sendUnregisterRequest(CallIdHeader callIdHeader, String... expiredAddresses) {
+		synchronized (registerCSeqs) {
+			if (!registerCSeqs.containsKey(registerRequestUri)) {
 				registerCSeqs.put(registerRequestUri, ++localCSeq);
 			}
-			callIdHeader = registerCallIds.get(registerRequestUri);
 		}
 		long cseq;
 		synchronized (registerCSeqs) {
@@ -736,7 +727,7 @@ public class SipUserAgentClient {
 			ClientTransaction clientTransaction, String errorMessage) {
 		switch (Constants.getRequestMethod(clientTransaction.getRequest().getMethod())) {
 			case REGISTER:
-				bus.post(new RegistrationFailed(errorMessage));
+				bus.post(new RegistrationFailed(errorMessage, callId));
 				break;
 			case INVITE:
 				bus.post(new CallInvitationFailed(errorMessage, callId));
@@ -815,7 +806,7 @@ public class SipUserAgentClient {
 				switch (Constants.getRequestMethod(clientTransaction
 						.getRequest().getMethod())) {
 					case REGISTER:
-						handleRegisterResponse(statusCode, response);
+						handleRegisterResponse(statusCode, response, clientTransaction);
 						break;
 					case INVITE:
 						handleInviteResponse(statusCode, response, clientTransaction);
@@ -977,8 +968,8 @@ public class SipUserAgentClient {
 							" a REGISTER request, no end-user callback might get fired.");
 			//Just in case this error is associated with a REGISTER or INVITE request,
 			//a RegistrationFailed event and a CallInvitationFailed event are sent.");
-			bus.post(new RegistrationFailed(codeAndReason));
 			if (callIdInAdvance != null) {
+				bus.post(new RegistrationFailed(codeAndReason, callIdInAdvance));
 				bus.post(new CallInvitationFailed(codeAndReason, callIdInAdvance));
 			}
 			return;
@@ -988,7 +979,7 @@ public class SipUserAgentClient {
 		String callId = callIdHeader.getCallId();
 		switch (Constants.getRequestMethod(request.getMethod())) {
 			case REGISTER:
-				bus.post(new RegistrationFailed(codeAndReason));
+				bus.post(new RegistrationFailed(codeAndReason, callId));
 				break;
 			case INVITE:
 				if (statusCode == Response.BUSY_HERE ||
@@ -1461,10 +1452,13 @@ public class SipUserAgentClient {
 		}
 	}
 
-	private void handleRegisterResponse(int statusCode, Response response) {
+	private void handleRegisterResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
+		Request request = clientTransaction.getRequest();
+		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			logger.info("{} response to REGISTER arrived.", statusCode);
-			bus.post(new RegistrationSuccess(response.getHeaders(ContactHeader.NAME)));
+			bus.post(new RegistrationSuccess(callId, response.getHeaders(ContactHeader.NAME)));
 		}
 	}
 
