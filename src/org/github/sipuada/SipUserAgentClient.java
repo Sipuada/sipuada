@@ -171,7 +171,7 @@ public class SipUserAgentClient {
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
 				contactUri.setPort(addressPort);
-				contactUri.setTransportParam(transport.toLowerCase());
+				contactUri.setTransportParam(transport.toUpperCase());
 				contactUri.setParameter("ob", null);
 				Address contactAddress = addressMaker.createAddress(contactUri);
 				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
@@ -264,7 +264,7 @@ public class SipUserAgentClient {
 		}
 		contactUri.setPort(localPort);
 		try {
-			contactUri.setTransportParam(transport.toLowerCase());
+			contactUri.setTransportParam(transport.toUpperCase());
 			contactUri.setParameter("ob", null);
 		} catch (ParseException ignore) {}
 		Address contactAddress = addressMaker.createAddress(contactUri);
@@ -342,7 +342,7 @@ public class SipUserAgentClient {
 		}
 		contactUri.setPort(localPort);
 		try {
-			contactUri.setTransportParam(transport.toLowerCase());
+			contactUri.setTransportParam(transport.toUpperCase());
 			contactUri.setParameter("ob", null);
 		} catch (ParseException ignore) {}
 		Address contactAddress = addressMaker.createAddress(contactUri);

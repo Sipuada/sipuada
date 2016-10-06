@@ -386,7 +386,7 @@ public class SipUserAgentServer {
 		}
 		contactUri.setPort(localPort);
 		try {
-			contactUri.setTransportParam(transport.toLowerCase());
+			contactUri.setTransportParam(transport.toUpperCase());
 			contactUri.setParameter("ob", null);
 		} catch (ParseException ignore) {}
 		Address contactAddress = addressMaker.createAddress(contactUri);
