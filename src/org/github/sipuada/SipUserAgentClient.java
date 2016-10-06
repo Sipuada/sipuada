@@ -171,7 +171,8 @@ public class SipUserAgentClient {
 			try {
 				SipURI contactUri = addressMaker.createSipURI(username, addressIp);
 				contactUri.setPort(addressPort);
-//				contactUri.setTransportParam("TCP");
+				contactUri.setTransportParam(transport.toLowerCase());
+				contactUri.setParameter("ob", null);
 				Address contactAddress = addressMaker.createAddress(contactUri);
 				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 				try {
@@ -262,16 +263,20 @@ public class SipUserAgentClient {
 			return false;
 		}
 		contactUri.setPort(localPort);
+		try {
+			contactUri.setTransportParam(transport.toLowerCase());
+			contactUri.setParameter("ob", null);
+		} catch (ParseException ignore) {}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-		try {
-			contactHeader.setExpires(60);
-		} catch (InvalidArgumentException ignore) {}
+//		try {
+//			contactHeader.setExpires(60);
+//		} catch (ParseException ignore) {}
 		additionalHeaders.add(contactHeader);
-		try {
-			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
-			additionalHeaders.add(expiresHeader);
-		} catch (InvalidArgumentException ignore) {}
+//		try {
+//			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
+//			additionalHeaders.add(expiresHeader);
+//		} catch (InvalidArgumentException ignore) {}
 
 		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
@@ -336,12 +341,15 @@ public class SipUserAgentClient {
 			return false;
 		}
 		contactUri.setPort(localPort);
+		try {
+			contactUri.setTransportParam(transport.toLowerCase());
+			contactUri.setParameter("ob", null);
+		} catch (ParseException ignore) {}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-		try {
-			contactHeader.setExpires(60);
-		} catch (InvalidArgumentException ignore) {
-		}
+//		try {
+//			contactHeader.setExpires(60);
+//		} catch (ParseException ignore) {}
 		additionalHeadersList.add(contactHeader);
 		try {
 			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);

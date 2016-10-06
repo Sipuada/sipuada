@@ -65,6 +65,7 @@ public class SipUserAgentServer {
 	private final String username;
 	private final String localIp;
 	private final int localPort;
+	private final String transport;
 
 	public SipUserAgentServer(EventBus eventBus, SipProvider sipProvider, Map<RequestMethod, SipuadaPlugin> plugins,
 			MessageFactory messageFactory, HeaderFactory headerFactory, AddressFactory addressFactory,
@@ -81,6 +82,8 @@ public class SipUserAgentServer {
 				credentialsAndAddress[1] : "127.0.0.1";
 		localPort = credentialsAndAddress.length > 2 && credentialsAndAddress[2] != null ?
 				Integer.parseInt(credentialsAndAddress[2]) : 5060;
+		transport = credentialsAndAddress.length > 3 && credentialsAndAddress[3] != null ?
+				credentialsAndAddress[3] : "TCP";
 	}
 
 	public void processRequest(RequestEvent requestEvent) {
@@ -317,6 +320,7 @@ public class SipUserAgentServer {
 		throw new RequestCouldNotBeAddressed();
 	}
 
+	@SuppressWarnings("unchecked")
 	private void handleMessageRequest(Request request, ServerTransaction serverTransaction) {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
@@ -381,11 +385,15 @@ public class SipUserAgentServer {
 			return false;
 		}
 		contactUri.setPort(localPort);
+		try {
+			contactUri.setTransportParam(transport.toLowerCase());
+			contactUri.setParameter("ob", null);
+		} catch (ParseException ignore) {}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-		try {
-			contactHeader.setExpires(60);
-		} catch (InvalidArgumentException ignore) {}
+//		try {
+//			contactHeader.setExpires(60);
+//		} catch (ParseException ignore) {}
 		additionalHeaders.add(contactHeader);
 
 		for (RequestMethod acceptedMethod : SipUserAgent.ACCEPTED_METHODS) {

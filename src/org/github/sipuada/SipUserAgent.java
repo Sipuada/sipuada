@@ -131,7 +131,7 @@ public class SipUserAgent implements SipListener {
 			uac = new SipUserAgentClient(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					globalRegisterCSeqs, username, primaryHost, password, localIp, localPort, transport);
 			uas = new SipUserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
-					username, localIp, localPort);
+					username, localIp, localPort, transport);
 		} catch (PeerUnavailableException ignore){}
 		try {
 			provider.addSipListener(this);
