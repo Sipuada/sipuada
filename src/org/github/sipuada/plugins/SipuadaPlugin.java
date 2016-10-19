@@ -2,10 +2,27 @@ package org.github.sipuada.plugins;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.SipUserAgent;
+import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 
 import android.javax.sdp.SessionDescription;
 
 public interface SipuadaPlugin {
+
+	public enum SessionType {
+		REGULAR("session"),
+		EARLY("early-session");
+
+		private String disposition;
+
+		SessionType(String disposition) {
+			this.disposition = disposition;
+		}
+
+		public String getDisposition() {
+			return disposition;
+		}
+
+	}
 
 	/**
 	 * Generates offer to go along
@@ -13,7 +30,8 @@ public interface SipuadaPlugin {
 	 * @return a SessionDescription representing an offer or null if the plug-in
 	 * wishes to propose no offer to a request of given method.
 	 */
-	SessionDescription generateOffer(String callId, RequestMethod method, String localAddress);
+	SessionDescription generateOffer(String callId, SessionType type,
+			RequestMethod method, String localAddress);
 
 	/**
 	 * Feeds the accepted answer to a given offer back to the plug-in that generated
@@ -27,7 +45,7 @@ public interface SipuadaPlugin {
 	 * receiveAcceptedAnswer() because obviously this was the plug-in that accepted
 	 * someone else's offer, and thus it must only expect a performSessionSetup() later.
 	 */
-	void receiveAnswerToAcceptedOffer(String callId, SessionDescription answer);
+	void receiveAnswerToAcceptedOffer(String callId, SessionType type, SessionDescription answer);
 
 	/**
 	 * Generates an answer to an offer to go along a response
@@ -35,7 +53,8 @@ public interface SipuadaPlugin {
 	 * @return a SessionDescription representing the answer to an offer
 	 * or null if the plug-in could not elaborate a valid answer to it.
 	 */
-	SessionDescription generateAnswer(String callId, RequestMethod method, SessionDescription offer, String localAddress);
+	SessionDescription generateAnswer(String callId, SessionType type,
+			RequestMethod method, SessionDescription offer, String localAddress);
 
 	/**
 	 * Perform session setup since offer/answer sent alongside
@@ -45,7 +64,7 @@ public interface SipuadaPlugin {
 	 * it to perform session modification requests in the future.
 	 * @return true if the plug-in could setup the session, false otherwise.
 	 */
-	boolean performSessionSetup(String callId, SipUserAgent userAgent);
+	boolean performSessionSetup(String callId, SessionType type, SipUserAgent userAgent);
 
 	/**
 	 * Perform session termination since offer/answer sent alongside
@@ -53,6 +72,6 @@ public interface SipuadaPlugin {
 	 * establish a call or established a call that was recently finished.
 	 * @return true if the plug-in could terminate the session, false otherwise.
 	 */
-	boolean performSessionTermination(String callId);
+	boolean performSessionTermination(String callId, SessionType type);
 
 }

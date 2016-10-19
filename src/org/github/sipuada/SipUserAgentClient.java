@@ -34,6 +34,7 @@ import org.github.sipuada.exceptions.ResponseDiscarded;
 import org.github.sipuada.exceptions.ResponsePostponed;
 import org.github.sipuada.exceptions.SipuadaException;
 import org.github.sipuada.plugins.SipuadaPlugin;
+import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -575,7 +576,7 @@ public class SipUserAgentClient {
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
 			if (isDialogCreatingRequest(method)) {
-				putOfferIntoRequestIfApplicable(method, callId, request);
+				putOfferIntoRequestIfApplicable(method, callId, SessionType.REGULAR, request);
 			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
 				request.setContent(content, contentTypeHeader);
 			}
@@ -647,31 +648,40 @@ public class SipUserAgentClient {
 		}
 	}
 
-	private void putOfferIntoRequestIfApplicable(RequestMethod method, String callId, Request request) {
+	private void putOfferIntoRequestIfApplicable(RequestMethod method,
+			String callId, SessionType type, Request request) {
 		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 		if (sessionPlugin == null) {
+			logger.info("No plug-in available to generate {} offer to be "
+				+ "inserted into {} request.", type, method);
 			return;
 		}
 		SessionDescription offer = null;
 		try {
-			offer = sessionPlugin.generateOffer(callId, method, localIp);
+			offer = sessionPlugin.generateOffer(callId, type, method, localIp);
 		} catch (Throwable unexpectedException) {
-			logger.error("Bad plug-in crashed while trying to generate offer " +
-					"to be inserted into {} request.", method, unexpectedException);
+			logger.error("Bad plug-in crashed while trying to generate {} offer " +
+				"to be inserted into {} request.", type, method, unexpectedException);
 			return;
 		}
 		if (offer == null) {
+			logger.error("Plug-in {} generated no {} offer to be inserted into {} request.",
+				sessionPlugin.getClass().getName(), type, method);
 			return;
 		}
 		try {
-			request.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
+			request.setContent(offer, headerMaker
+				.createContentTypeHeader("application", "sdp"));
+			request.setContentDisposition(headerMaker
+				.createContentDispositionHeader(type.getDisposition()));
 		} catch (ParseException parseException) {
-			logger.error("Plug-in-generated offer {{}} by {} could not be inserted into {} request.",
-					offer.toString(), sessionPlugin.getClass().getName(), method, parseException);
+			logger.error("Plug-in-generated {} offer {{}} by {} "
+				+ "could not be inserted into {} request.", type, offer.toString(),
+				sessionPlugin.getClass().getName(), method, parseException);
 			return;
 		}
-		logger.info("Plug-in-generated offer {{}} by {} inserted into {} request.",
-				offer.toString(), sessionPlugin.getClass().getName(), method);
+		logger.info("Plug-in-generated {} offer {{}} by {} inserted into {} request.",
+			type, offer.toString(), sessionPlugin.getClass().getName(), method);
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
@@ -1482,7 +1492,7 @@ public class SipUserAgentClient {
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
 					boolean sendByeRightAway = false;
 					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-							callId, request, response, ackRequest)) {
+							callId, SessionType.REGULAR, request, response, ackRequest)) {
 						sendByeRightAway = true;
 					}
 					logger.info("Sending {} to {} response to {} request (from {}:{})...",
@@ -1523,83 +1533,86 @@ public class SipUserAgentClient {
 	}
 
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
-			Request request, Response response, Request ackRequest) {
+			SessionType type, Request request, Response response, Request ackRequest) {
 		if (request.getContent() != null) {
 			boolean responseArrivedWithNoAnswer = response.getContent() == null;
 			if (responseArrivedWithNoAnswer) {
-				logger.error("{} request was sent with an offer but {} response " +
-						"arrived with no answer so this UAC will terminate the dialog right away.",
-						method, response.getStatusCode());
+				logger.error("{} request was sent with an {} offer but {} response " +
+					"arrived with no {} answer so this UAC will terminate the dialog right away.",
+					method, type, response.getStatusCode(), type);
 			}
 			else {
 				try {
 					SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 					if (sessionPlugin != null) {
 						SessionDescription answer = SdpFactory.getInstance()
-								.createSessionDescriptionFromString(new String(response.getRawContent()));
+							.createSessionDescriptionFromString(new String(response.getRawContent()));
 						try {
-							sessionPlugin.receiveAnswerToAcceptedOffer(callId, answer);
+							sessionPlugin.receiveAnswerToAcceptedOffer(callId, type, answer);
 						} catch (Throwable unexpectedException) {
-							logger.error("Bad plug-in crashed while receiving answer " +
-									"that arrived alongside {} response to {} request. The UAC will terminate " +
-									"the dialog right away.", response.getStatusCode(), method, unexpectedException);
+							logger.error("Bad plug-in crashed while receiving {} answer " +
+								"that arrived alongside {} response to {} request. The UAC will terminate " +
+								"the dialog right away.", type, response.getStatusCode(),
+								method, unexpectedException);
 							return false;
 						}
 					}
 				} catch (SdpParseException parseException) {
-					logger.error("Answer arrived in {} response to {} request, but could not be properly" +
-							" parsed, so it was discarded. The UAC will terminate the dialog right away.",
-							response.getStatusCode(), method, parseException);
+					logger.error("{} answer arrived in {} response to {} request, but could not be properly" +
+						" parsed, so it was discarded. The UAC will terminate the dialog right away.",
+						type, response.getStatusCode(), method, parseException);
 					return false;
 				}
 			}
 			return !responseArrivedWithNoAnswer;
 		}
 		if (response.getContent() == null) {
+			logger.info("No offer/answer exchange performed in this transaction.");
 			return true;
 		}
 		SessionDescription offer;
 		try {
 			offer = SdpFactory.getInstance()
-					.createSessionDescriptionFromString(new String(response.getRawContent()));
+				.createSessionDescriptionFromString(new String(response.getRawContent()));
 		} catch (SdpParseException parseException) {
-			logger.error("Offer arrived in {} response to {} request, but could not be properly parsed, " +
-					"so it was discarded.", response.getStatusCode(), method, parseException);
+			logger.error("{} offer arrived in {} response to {} request, but could not be properly parsed, " +
+				"so it was discarded.", type, response.getStatusCode(), method, parseException);
 			return false;
 		}
 		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 		if (sessionPlugin == null) {
-			logger.error("No plug-in available to generate valid answer to offer {} in {} response " +
-					"to {} request.", offer.toString(), response.getStatusCode(), method);
+			logger.info("No plug-in available to generate valid {} answer to {} offer {} in {} response " +
+				"to {} request.", type, type, offer.toString(), response.getStatusCode(), method);
 			return false;
 		}
 		SessionDescription answer = null;
 		try {
-			answer = sessionPlugin.generateAnswer(callId, method, offer, localIp);
+			answer = sessionPlugin.generateAnswer(callId, type, method, offer, localIp);
 		} catch (Throwable unexpectedException) {
-			logger.error("Bad plug-in crashed while trying to generate answer " +
-					"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
-					"right away.", RequestMethod.ACK, response.getStatusCode(), method, unexpectedException);
+			logger.error("Bad plug-in crashed while trying to generate {} answer " +
+				"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
+				"right away.", type, RequestMethod.ACK, response.getStatusCode(), method, unexpectedException);
 			return false;
 		}
 		if (answer == null) {
-			logger.error("Plug-in {} could not generate valid answer to offer {} in {} response " +
-					"to {} request.", sessionPlugin.getClass().getName(), offer.toString(),
-					response.getStatusCode(), method);
+			logger.error("Plug-in {} could not generate valid {} answer to {} offer {} in {} response " +
+				"to {} request.", sessionPlugin.getClass().getName(), type, type, offer.toString(),
+				response.getStatusCode(), method);
 			return false;
 		}
 		try {
 			ackRequest.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
+			ackRequest.setContentDisposition(headerMaker.createContentDispositionHeader(type.getDisposition()));
 		} catch (ParseException parseException) {
-			logger.error("Plug-in-generated answer {{}} to offer {{}} by {} could not be inserted into {} " +
-					"for {} response to {} request.", answer.toString(), offer.toString(),
-					sessionPlugin.getClass().getName(), RequestMethod.ACK, response.getStatusCode(),
-					method, parseException);
+			logger.error("Plug-in-generated {} answer {{}} to {} offer {{}} by {} could not be inserted into {} " +
+				"for {} response to {} request.", type, answer.toString(), type, offer.toString(),
+				sessionPlugin.getClass().getName(), RequestMethod.ACK, response.getStatusCode(),
+				method, parseException);
 			return false;
 		}
-		logger.info("Plug-in-generated answer {{}} to offer {{}} by {} inserted into {} for {} response" +
-				" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
-				RequestMethod.ACK, response.getStatusCode(), method);
+		logger.info("Plug-in-generated {} answer {{}} to {} offer {{}} by {} inserted into {} for {} response" +
+			" to {} request.", type, answer.toString(), type, offer.toString(), sessionPlugin.getClass().getName(),
+			RequestMethod.ACK, response.getStatusCode(), method);
 		return true;
 	}
 

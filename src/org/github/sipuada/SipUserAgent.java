@@ -34,6 +34,7 @@ import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.plugins.SipuadaPlugin;
+import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -752,15 +753,15 @@ public class SipUserAgent implements SipListener {
 					if (sessionPlugin != null) {
 						try {
 							boolean sessionProperlyTerminated = sessionPlugin
-									.performSessionTermination(callId);
+								.performSessionTermination(callId, SessionType.REGULAR);
 							if (!sessionProperlyTerminated) {
 								logger.error("Plug-in signaled session termination failure " +
-										"in context of call {}.", callId);
+									"in context of call {}.", callId);
 							}
 						} catch (Throwable unexpectedException) {
 							logger.error("Bad plug-in crashed while trying " +
-									"to perform session termination in context of call {}.",
-									callId, unexpectedException);
+								"to perform session termination in context of call {}.",
+								callId, unexpectedException);
 						}
 					}
 					listener.onCallFailure(username, primaryHost, event.getReason(), callId);
@@ -775,15 +776,15 @@ public class SipUserAgent implements SipListener {
 					if (sessionPlugin != null) {
 						try {
 							boolean sessionProperlyTerminated = sessionPlugin
-									.performSessionTermination(callId);
+								.performSessionTermination(callId, SessionType.REGULAR);
 							if (!sessionProperlyTerminated) {
 								logger.error("Plug-in signaled session termination failure " +
-										"in context of call {}.", callId);
+									"in context of call {}.", callId);
 							}
 						} catch (Throwable unexpectedException) {
 							logger.error("Bad plug-in crashed while trying " +
-									"to perform session termination in context of call {}.",
-									callId, unexpectedException);
+								"to perform session termination in context of call {}.",
+								callId, unexpectedException);
 						}
 					}
 					listener.onCallFinished(username, primaryHost, callId);
@@ -794,7 +795,8 @@ public class SipUserAgent implements SipListener {
 		internalEventBus.register(eventBusSubscriber);
 		if (sessionPlugin != null) {
 			try {
-				boolean sessionProperlySetup = sessionPlugin.performSessionSetup(callId, this);
+				boolean sessionProperlySetup = sessionPlugin
+					.performSessionSetup(callId, SessionType.REGULAR, this);
 				if (!sessionProperlySetup) {
 					String error = "Plug-in signaled session setup failure in context of call";
 					logger.error(String.format("%s {}.", error), callId);
@@ -803,7 +805,7 @@ public class SipUserAgent implements SipListener {
 				}
 			} catch (Throwable unexpectedException) {
 				String error = "Bad plug-in crashed while trying to perform" +
-						" session setup in context of call";
+					" session setup in context of call";
 				logger.error(String.format("%s {}.", error), callId, unexpectedException);
 				listener.onCallFailure(username, primaryHost,
 					String.format("%s %s.", error, callId), callId);

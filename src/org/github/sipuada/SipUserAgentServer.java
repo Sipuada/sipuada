@@ -18,6 +18,7 @@ import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
 import org.github.sipuada.plugins.SipuadaPlugin;
+import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -269,15 +270,15 @@ public class SipUserAgentServer {
 			} catch (ParseException ignore) {}
 		}
 		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING, RequestMethod.INVITE,
-				request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+			request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 		FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
 		String remoteUser = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
 		String remoteDomain = fromHeader.getAddress().getURI().toString().split("@")[1];
 		if (newServerTransaction != null) {
 			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUser, remoteDomain));
 			RequestMethod method = RequestMethod.INVITE;
-			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
-					Response.UNSUPPORTED_MEDIA_TYPE)) {
+			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, SessionType.REGULAR,
+					request, Response.UNSUPPORTED_MEDIA_TYPE)) {
 				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
 						request, newServerTransaction, false);
 				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
@@ -465,8 +466,8 @@ public class SipUserAgentServer {
 			boolean isSuccessResponse = Constants.getResponseClass(response
 					.getStatusCode()) == ResponseClass.SUCCESS;
 			if (addSessionPayload && isDialogCreatingRequest(method) && isSuccessResponse) {
-				if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
-						request, response)) {
+				if (!putOfferOrAnswerIntoResponseIfApplicable(method,
+						callId, SessionType.REGULAR, request, response)) {
 					doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
 							request, newServerTransaction, false, additionalHeaders);
 					bus.post(new CallInvitationCanceled("Call invitation failed because media types "
@@ -508,47 +509,52 @@ public class SipUserAgentServer {
 		}
 	}
 
-	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
-			Request request, int statusCode) {
-		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, request, statusCode, null);
+	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
+			String callId, SessionType type, Request request, int statusCode) {
+		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, type, request, statusCode, null);
 	}
 
-	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
-			Request request, Response response) {
-		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, request,
-				response.getStatusCode(), response);
+	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
+			String callId, SessionType type, Request request, Response response) {
+		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, type, request,
+			response.getStatusCode(), response);
 	}
 
-	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method, String callId,
-			Request request, int statusCode, Response response) {
+	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
+			String callId, SessionType type, Request request, int statusCode, Response response) {
 		if (request.getContent() == null) {
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
+				logger.info("No plug-in available to generate {} offer to be "
+					+ "inserted into {} response to {} request.", type, statusCode, method);
 				return true;
 			}
 			SessionDescription offer = null;
 			try {
-				offer = sessionPlugin.generateOffer(callId, method, localIp);
+				offer = sessionPlugin.generateOffer(callId, type, method, localIp);
 			} catch (Throwable unexpectedException) {
-				logger.error("Bad plug-in crashed while trying to generate offer to be inserted " +
-						"into {} response to {} request.", statusCode, method, unexpectedException);
+				logger.error("Bad plug-in crashed while trying to generate {} offer to be inserted " +
+					"into {} response to {} request.", type, statusCode, method, unexpectedException);
 				return true;
 			}
 			if (offer == null) {
+				logger.info("Plug-in {} generated no {} offer to be inserted into {} response to {} request.",
+					sessionPlugin.getClass().getName(), type, statusCode, method);
 				return true;
 			}
 			try {
 				if (response != null) {
-					logger.info("Received {} request with no offer, so sending own offer along {} response.",
-							method, statusCode);
+					logger.info("Received {} request with no {} offer, so sending own {} offer along {} response.",
+						method, type, type, statusCode);
 					response.setContent(offer, headerMaker.createContentTypeHeader("application", "sdp"));
-					logger.info("Plug-in-generated offer {{}} by {} inserted into {} response to {} request.",
-							offer.toString(), sessionPlugin.getClass().getName(), statusCode, method);
+					response.setContentDisposition(headerMaker.createContentDispositionHeader(type.getDisposition()));
+					logger.info("Plug-in-generated {} offer {{}} by {} inserted into {} response to {} request.",
+						type, offer.toString(), sessionPlugin.getClass().getName(), statusCode, method);
 				}
 			} catch (ParseException parseException) {
-				logger.error("Plug-in-generated offer {{}} by {} could not be inserted into {} response to " +
-						"{} request.", offer.toString(), sessionPlugin.getClass().getName(),
-						statusCode, method, parseException);
+				logger.error("Plug-in-generated {} offer {{}} by {} could not be inserted into {} response to " +
+					"{} request.", type, offer.toString(), sessionPlugin.getClass().getName(),
+					statusCode, method, parseException);
 			}
 			return true;
 		}
@@ -556,46 +562,47 @@ public class SipUserAgentServer {
 			SessionDescription offer;
 			try {
 				offer = SdpFactory.getInstance()
-						.createSessionDescriptionFromString(new String(request.getRawContent()));
+					.createSessionDescriptionFromString(new String(request.getRawContent()));
 			} catch (SdpParseException parseException) {
-				logger.error("Offer arrived in {} request, but could not be properly parsed, " +
-						"so it was discarded.", method, parseException);
+				logger.error("{} offer arrived in {} request, but could not be properly parsed, " +
+					"so it was discarded.", type, method, parseException);
 				return false;
 			}
 			if (response != null) {
-				logger.info("Received {} request with a offer, so will try sending an answer along {} response.",
-						method, statusCode);
+				logger.info("Received {} request with {} offer, so will try sending an {} answer along {} response.",
+					method, type, type, statusCode);
 			}
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
-				logger.error("No plug-in available to generate valid answer to offer {{}} in {} request.",
-						offer.toString(), method);
+				logger.error("No plug-in available to generate valid {} answer to {} offer {{}} in {} request.",
+					type, type, offer.toString(), method);
 				return false;
 			}
 			SessionDescription answer = null;
 			try {
-				answer = sessionPlugin.generateAnswer(callId, method, offer, localIp);
+				answer = sessionPlugin.generateAnswer(callId, type, method, offer, localIp);
 			} catch (Throwable unexpectedException) {
-				logger.error("Bad plug-in crashed while trying to generate answer to be inserted " +
-						"into {} response to {} request.", statusCode, method, unexpectedException);
+				logger.error("Bad plug-in crashed while trying to generate {} answer to be inserted " +
+					"into {} response to {} request.", type, statusCode, method, unexpectedException);
 				return false;
 			}
 			if (answer == null) {
-				logger.error("Plug-in {} could not generate valid answer to offer {{}} in {} request.",
-						sessionPlugin.getClass().getName(), offer.toString(), method);
+				logger.error("Plug-in {} could not generate valid {} answer to {} offer {{}} in {} request.",
+					sessionPlugin.getClass().getName(), type, type, offer.toString(), method);
 				return false;
 			}
 			try {
 				if (response != null) {
 					response.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
-					logger.info("Plug-in-generated answer {{}} to offer {{}} by {} inserted into {} response" +
-							" to {} request.", answer.toString(), offer.toString(), sessionPlugin.getClass().getName(),
-							statusCode, method);
+					response.setContentDisposition(headerMaker.createContentDispositionHeader(type.getDisposition()));
+					logger.info("Plug-in-generated {} answer {{}} to {} offer {{}} by {} inserted into {} response" +
+						" to {} request.", type, answer.toString(), type, offer.toString(), sessionPlugin.getClass().getName(),
+						statusCode, method);
 				}
 			} catch (ParseException parseException) {
-				logger.error("Plug-in-generated answer {{}} to offer {{}} by {} could not be inserted into " +
-						"{} response to {} request.", answer.toString(), offer.toString(),
-						sessionPlugin.getClass().getName(), statusCode, method, parseException);
+				logger.error("Plug-in-generated {} answer {{}} to {} offer {{}} by {} could not be inserted into " +
+					"{} response to {} request.", type, answer.toString(), type, offer.toString(),
+					sessionPlugin.getClass().getName(), statusCode, method, parseException);
 				return false;
 			}
 			return true;
