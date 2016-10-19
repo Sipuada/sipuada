@@ -73,6 +73,7 @@ public class SipUserAgent implements SipListener {
 		RequestMethod.INVITE,
 		RequestMethod.INFO,
 		RequestMethod.ACK,
+		RequestMethod.PRACK,
 		RequestMethod.BYE
 	};
 	protected static final String X_FAILURE_REASON_HEADER = "XFailureReason";

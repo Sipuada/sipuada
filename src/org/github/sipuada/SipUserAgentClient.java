@@ -81,6 +81,7 @@ import android.javax.sip.header.ProxyRequireHeader;
 import android.javax.sip.header.RequireHeader;
 import android.javax.sip.header.RetryAfterHeader;
 import android.javax.sip.header.RouteHeader;
+import android.javax.sip.header.SupportedHeader;
 import android.javax.sip.header.ToHeader;
 import android.javax.sip.header.UnsupportedHeader;
 import android.javax.sip.header.ViaHeader;
@@ -285,6 +286,11 @@ public class SipUserAgentClient {
 				additionalHeaders.add(allowHeader);
 			} catch (ParseException ignore) {}
 		}
+		try {
+			SupportedHeader supportedHeader = headerMaker
+				.createSupportedHeader(SessionType.EARLY.getDisposition());
+			additionalHeaders.add(supportedHeader);
+		} catch (ParseException ignore) {}
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost, requestUri,
 				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
@@ -1496,21 +1502,21 @@ public class SipUserAgentClient {
 						sendByeRightAway = true;
 					}
 					logger.info("Sending {} to {} response to {} request (from {}:{})...",
-							RequestMethod.ACK, response.getStatusCode(), request.getMethod(),
-							localIp, localPort);
+						RequestMethod.ACK, response.getStatusCode(), request.getMethod(),
+						localIp, localPort);
 					logger.debug("Request Dump:\n{}\n", ackRequest);
 					try {
 						dialog.sendAck(ackRequest);
 					} catch (RuntimeException lowLevelStackFailed) {
 						logger.error("{} to {} response to {} request could not be sent " +
-								"due to a JAINSIP-level failure.", RequestMethod.ACK,
-								response.getStatusCode(), request.getMethod(),
-								lowLevelStackFailed);
+							"due to a JAINSIP-level failure.", RequestMethod.ACK,
+							response.getStatusCode(), request.getMethod(),
+							lowLevelStackFailed);
 						throw new InternalJainSipException("Severe JAINSIP-level failure!",
-								lowLevelStackFailed);
+							lowLevelStackFailed);
 					}
 					logger.info("{} response to {} arrived, so {} sent.", statusCode,
-							RequestMethod.INVITE, RequestMethod.ACK);
+						RequestMethod.INVITE, RequestMethod.ACK);
 					logger.info("New call established: {}.", callId);
 					if (sendByeRightAway) {
 						sendByeRequest(dialog, true, "Media types negotiation failed.");
@@ -1518,14 +1524,76 @@ public class SipUserAgentClient {
 					bus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
 				} catch (SipException ignore) {}
+			} else {
+				logger.error("Could not process {} response to {} request: dialog is missing!" +
+					response.getStatusCode(), request.getMethod());
+				throw new InternalJainSipException("Cannot process successful response "
+					+ "to INVITE: dialog is missing!", null);
 			}
 		}
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
 			if (statusCode == Response.RINGING) {
 				logger.info("Ringing!");
 				bus.post(new CallInvitationRinging(callId, clientTransaction));
-			}
-			else {
+			} else if (statusCode == Response.SESSION_PROGRESS) {
+				if (dialog != null) {
+					boolean earlyMediaIsSupported = false;
+					@SuppressWarnings("unchecked")
+					ListIterator<Header> supportedHeaders = response.getHeaders(SupportedHeader.NAME);
+					while (supportedHeaders.hasNext()) {
+						SupportedHeader supportedHeader = (SupportedHeader) supportedHeaders.next();
+						if (supportedHeader.getOptionTag().toLowerCase()
+								.contains(SessionType.EARLY.getDisposition())) {
+							earlyMediaIsSupported = true;
+							break;
+						}
+					}
+					if (earlyMediaIsSupported) {
+						try {
+							Request prackRequest = dialog.createPrack(response);
+							if (putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
+								callId, SessionType.EARLY, request, response, prackRequest)) {
+								logger.info("UAC could provide suitable answer to {} offer, so, "
+									+ "sending {} to {} response to {} request (from {}:{})...",
+									SessionType.EARLY, RequestMethod.PRACK, response.getStatusCode(),
+									request.getMethod(), localIp, localPort);
+								logger.debug("Request Dump:\n{}\n", prackRequest);
+								try {
+									doSendRequest(prackRequest, clientTransaction, dialog);
+								} catch (RuntimeException lowLevelStackFailed) {
+									logger.error("{} to {} response to {} request could not be sent " +
+										"due to a JAINSIP-level failure.", RequestMethod.PRACK,
+										response.getStatusCode(), request.getMethod(),
+										lowLevelStackFailed);
+									throw new InternalJainSipException("Severe JAINSIP-level failure!",
+										lowLevelStackFailed);
+								}
+								logger.info("{} response to {} arrived, so {} sent.", statusCode,
+									RequestMethod.INVITE, RequestMethod.PRACK);
+								logger.info("Early media session established: {}.", callId);
+								bus.post(new CallInvitationRinging(callId, clientTransaction, true));
+							} else {
+								logger.error("{} response to {} arrived, but UAC cannot provide suitable "
+									+ "answer to {} offer, so treating response as 180 and aborting "
+									+ "early media session negotiation attempt.", statusCode,
+									request.getMethod(), SessionType.EARLY);
+								bus.post(new CallInvitationRinging(callId, clientTransaction));
+							}
+						} catch (SipException ignore) {}
+					} else {
+						logger.error("{} response to {} arrived, but remote UAS hasn't indicated "
+							+ " support for {{}} negotiations, so treating response as 180 and aborting "
+							+ "early media session negotiation attempt.", statusCode,
+							request.getMethod(), SessionType.EARLY.getDisposition());
+						bus.post(new CallInvitationRinging(callId, clientTransaction));
+					}
+				} else {
+					logger.error("Could not process {} response to {} request: dialog is missing!" +
+						response.getStatusCode(), request.getMethod());
+					throw new InternalJainSipException("Cannot process successful response "
+						+ "to INVITE: dialog is missing!", null);
+				}
+			} else {
 				bus.post(new CallInvitationWaiting(callId, clientTransaction));
 			}
 			logger.info("{} response arrived.", statusCode);
@@ -1534,8 +1602,11 @@ public class SipUserAgentClient {
 
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
 			SessionType type, Request request, Response response, Request ackRequest) {
-		if (request.getContent() != null) {
-			boolean responseArrivedWithNoAnswer = response.getContent() == null;
+		if (request.getContent() != null && request.getContentDisposition()
+				.getDispositionType().toLowerCase().trim().equals(type.getDisposition())) {
+			boolean responseArrivedWithNoAnswer = response.getContent() == null
+				|| !response.getContentDisposition().getDispositionType()
+					.toLowerCase().trim().equals(type.getDisposition());
 			if (responseArrivedWithNoAnswer) {
 				logger.error("{} request was sent with an {} offer but {} response " +
 					"arrived with no {} answer so this UAC will terminate the dialog right away.",
@@ -1566,8 +1637,9 @@ public class SipUserAgentClient {
 			}
 			return !responseArrivedWithNoAnswer;
 		}
-		if (response.getContent() == null) {
-			logger.info("No offer/answer exchange performed in this transaction.");
+		if (response.getContent() == null || !response.getContentDisposition().getDispositionType()
+				.toLowerCase().trim().equals(type.getDisposition())) {
+			logger.info("No {} offer/answer exchange performed in this transaction.", type);
 			return true;
 		}
 		SessionDescription offer;

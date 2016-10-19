@@ -7,9 +7,9 @@ public class Constants {
 	}
 
 	public enum RequestMethod {
-		REGISTER, OPTIONS, INVITE, CANCEL, BYE, ACK, MESSAGE, INFO, UNKNOWN
+		REGISTER, OPTIONS, INVITE, CANCEL, BYE, ACK, PRACK, MESSAGE, INFO, UNKNOWN
 	}
-	
+
 	public static RequestMethod getRequestMethod(String method) {
 		try {
 			return RequestMethod.valueOf(method.toUpperCase().trim());

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 
 import org.github.sipuada.Constants.RequestMethod;
@@ -47,6 +48,7 @@ import android.javax.sip.header.ExtensionHeader;
 import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
+import android.javax.sip.header.SupportedHeader;
 import android.javax.sip.header.ToHeader;
 import android.javax.sip.message.MessageFactory;
 import android.javax.sip.message.Request;
@@ -269,20 +271,46 @@ public class SipUserAgentServer {
 				additionalHeaders.add(allowHeader);
 			} catch (ParseException ignore) {}
 		}
-		ServerTransaction newServerTransaction = doSendResponse(Response.RINGING, RequestMethod.INVITE,
-			request, serverTransaction, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
+		boolean earlyMediaIsSupported = false;
+		@SuppressWarnings("unchecked")
+		ListIterator<Header> supportedHeaders = request.getHeaders(SupportedHeader.NAME);
+		while (supportedHeaders.hasNext()) {
+			SupportedHeader supportedHeader = (SupportedHeader) supportedHeaders.next();
+			if (supportedHeader.getOptionTag().toLowerCase()
+					.contains(SessionType.EARLY.getDisposition())) {
+				earlyMediaIsSupported = true;
+				break;
+			}
+		}
+		RequestMethod method = RequestMethod.INVITE;
+		final int provisionalResponse;
+		final SessionType sessionType;
+		if (earlyMediaIsSupported) {
+			provisionalResponse = Response.SESSION_PROGRESS;
+			sessionType = SessionType.EARLY;
+			try {
+				SupportedHeader supportedHeader = headerMaker
+					.createSupportedHeader(SessionType.EARLY.getDisposition());
+				additionalHeaders.add(supportedHeader);
+			} catch (ParseException ignore) {}
+		} else {
+			provisionalResponse = Response.RINGING;
+			sessionType = SessionType.REGULAR;
+		}
+		ServerTransaction newServerTransaction = doSendResponse
+			(provisionalResponse, method, request, serverTransaction, sessionType,
+			additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 		FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
 		String remoteUser = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
 		String remoteDomain = fromHeader.getAddress().getURI().toString().split("@")[1];
 		if (newServerTransaction != null) {
 			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUser, remoteDomain));
-			RequestMethod method = RequestMethod.INVITE;
-			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId, SessionType.REGULAR,
-					request, Response.UNSUPPORTED_MEDIA_TYPE)) {
-				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
-						request, newServerTransaction, false);
+			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
+					sessionType, request, Response.UNSUPPORTED_MEDIA_TYPE)) {
+				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method, request,
+					newServerTransaction, false, sessionType);
 				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
-						+ "negotiation between callee and caller failed.", callId, false));
+					+ "negotiation between callee and caller failed.", callId, false));
 			}
 			return;
 		}
@@ -426,15 +454,21 @@ public class SipUserAgentServer {
 
 	private ServerTransaction doSendResponse(int statusCode, RequestMethod method,
 			Request request, ServerTransaction serverTransaction, Header... additionalHeaders) {
-		return doSendResponse(statusCode, method, request, serverTransaction, true, additionalHeaders);
+		return doSendResponse(statusCode, method, request, serverTransaction, true, SessionType.REGULAR, additionalHeaders);
+	}
+
+	private ServerTransaction doSendResponse(int statusCode, RequestMethod method,
+			Request request, ServerTransaction serverTransaction, SessionType type, Header... additionalHeaders) {
+		return doSendResponse(statusCode, method, request, serverTransaction, true, type, additionalHeaders);
 	}
 
 	private ServerTransaction doSendResponse(int statusCode, RequestMethod method, Request request,
-			ServerTransaction serverTransaction, boolean addSessionPayload, Header... additionalHeaders) {
+			ServerTransaction serverTransaction, boolean addSessionPayload, SessionType type,
+			Header... additionalHeaders) {
 		if (method == RequestMethod.UNKNOWN) {
 			logger.debug("[doSendResponse(int, RequestMethod, Request, " +
-					"ServerTransaction, Header...)] method forbidden for " +
-					"{} requests.", method);
+				"ServerTransaction, Header...)] method forbidden for " +
+				"{} requests.", method);
 			return null;
 		}
 		ServerTransaction newServerTransaction = serverTransaction;
@@ -444,15 +478,15 @@ public class SipUserAgentServer {
 			} catch (TransactionAlreadyExistsException requestIsRetransmit) {
 				//This may happen if UAS got a retransmit of already pending request.
 				logger.debug("{} response could not be sent to {} request: {}.",
-						statusCode, request.getMethod(),
-						requestIsRetransmit.getMessage());
+					statusCode, request.getMethod(),
+					requestIsRetransmit.getMessage());
 				return null;
 			} catch (TransactionUnavailableException invalidTransaction) {
 				//A invalid (maybe null) server transaction
 				//can't be used to send this response.
 				logger.debug("{} response could not be sent to {} request: {}.",
-						statusCode, request.getMethod(),
-						invalidTransaction.getMessage());
+					statusCode, request.getMethod(),
+					invalidTransaction.getMessage());
 				return null;
 			}
 		}
@@ -463,28 +497,30 @@ public class SipUserAgentServer {
 			for (Header header : additionalHeaders) {
 				response.addHeader(header);
 			}
-			boolean isSuccessResponse = Constants.getResponseClass(response
-					.getStatusCode()) == ResponseClass.SUCCESS;
-			if (addSessionPayload && isDialogCreatingRequest(method) && isSuccessResponse) {
+			ResponseClass responseClass = Constants.getResponseClass(response.getStatusCode());
+			boolean isSuccessOrProvisionalEarlyMediaResponse = responseClass == ResponseClass.SUCCESS
+				|| (responseClass == ResponseClass.PROVISIONAL && type == SessionType.EARLY);
+			if (addSessionPayload && isDialogCreatingRequest(method)
+					&& isSuccessOrProvisionalEarlyMediaResponse) {
 				if (!putOfferOrAnswerIntoResponseIfApplicable(method,
-						callId, SessionType.REGULAR, request, response)) {
+						callId, type, request, response)) {
 					doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
-							request, newServerTransaction, false, additionalHeaders);
+						request, newServerTransaction, false, type, additionalHeaders);
 					bus.post(new CallInvitationCanceled("Call invitation failed because media types "
-							+ "negotiation between callee and caller failed.", callId, false));
+						+ "negotiation between callee and caller failed.", callId, false));
 					return null;
 				}
 			}
 			logger.info("Sending {} response to {} request (from {}:{})...", statusCode, method,
-					localIp, localPort);
+				localIp, localPort);
 			logger.debug("Response Dump:\n{}\n", response);
 			try {
 				newServerTransaction.sendResponse(response);
 			} catch (RuntimeException lowLevelStackFailed) {
 				logger.error("{} response to {} request could not be sent due to a " +
-						"JAINSIP-level failure.", statusCode, method, lowLevelStackFailed);
+					"JAINSIP-level failure.", statusCode, method, lowLevelStackFailed);
 				throw new InternalJainSipException("Severe JAINSIP-level failure!",
-						lowLevelStackFailed);
+					lowLevelStackFailed);
 			}
 			logger.info("{} response sent.", statusCode);
 			return newServerTransaction;
@@ -492,9 +528,9 @@ public class SipUserAgentServer {
 		} catch (InvalidArgumentException ignore) {
 		} catch (SipException responseCouldNotBeSent) {
 			logger.debug("{} response could not be sent to {} request: {} {}.",
-					statusCode, method, responseCouldNotBeSent.getMessage(),
-					responseCouldNotBeSent.getCause() == null ? "" :
-					"(" + responseCouldNotBeSent.getCause().getMessage() + ")");
+				statusCode, method, responseCouldNotBeSent.getMessage(),
+				responseCouldNotBeSent.getCause() == null ? "" :
+				"(" + responseCouldNotBeSent.getCause().getMessage() + ")");
 		}
 		return null;
 	}
@@ -522,7 +558,8 @@ public class SipUserAgentServer {
 
 	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
 			String callId, SessionType type, Request request, int statusCode, Response response) {
-		if (request.getContent() == null) {
+		if (request.getContent() == null || !request.getContentDisposition()
+				.getDispositionType().toLowerCase().trim().equals(type.getDisposition())) {
 			SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
 			if (sessionPlugin == null) {
 				logger.info("No plug-in available to generate {} offer to be "
