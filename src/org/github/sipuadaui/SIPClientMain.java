@@ -3,7 +3,6 @@ package org.github.sipuadaui;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.List;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -12,10 +11,10 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
 import org.github.sipuada.Sipuada;
+import org.github.sipuada.SipuadaApi.BasicRequestCallback;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
-import org.github.sipuada.SipuadaApi.RegistrationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
-import org.github.sipuada.plugins.nop.NoOperationSipuadaPlugin;
+import org.github.sipuada.plugins.audio.LibJitsiAudioSipuadaPlugin;
 
 import net.miginfocom.swing.MigLayout;
 
@@ -84,7 +83,7 @@ public class SIPClientMain implements SipuadaListener {
 				sipuada.inviteToCall(callerUserTextField.getText(), callerDomainTextField.getText(),
 						new CallInvitationCallback() {
 					@Override
-					public void onWaitingForCallInvitationAnswer(String callId) {
+					public void onWaitingForCallInvitationAnswer(String localUser, String localDomain, String callId) {
 						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
 								+ " Waiting For Call InvitationAnswer ...");
 						currentCallID = callId;
@@ -92,7 +91,7 @@ public class SIPClientMain implements SipuadaListener {
 					}
 
 					@Override
-					public void onCallInvitationRinging(String callId) {
+					public void onCallInvitationRinging(String localUser, String localDomain, String callId) {
 						textArea.setText(
 								textArea.getText() + System.getProperty("line.separator") + " - " + " Ringing ...");
 						btnCancel.setEnabled(false);
@@ -101,7 +100,7 @@ public class SIPClientMain implements SipuadaListener {
 					}
 
 					@Override
-					public void onCallInvitationDeclined(String reason) {
+					public void onCallInvitationDeclined(String localUser, String localDomain, String reason) {
 						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
 								+ "Invitation Declined.");
 						btnCancel.setEnabled(false);
@@ -135,20 +134,19 @@ public class SIPClientMain implements SipuadaListener {
 						username, registrarDomainTextField.getText(),
 						passwordField.getText(),
 //						"192.168.130.49:55002/TCP",
-						"10.100.100.125:54458/TCP"); //150.165.11.157:65486
-				sipuada.registerPlugin(new NoOperationSipuadaPlugin());
-				sipuada.registerAddresses(new RegistrationCallback() {
+						"192.168.5.19:54758/TCP"); //150.165.11.157:65486
+				sipuada.registerPlugin(new LibJitsiAudioSipuadaPlugin(username));
+				sipuada.registerAddresses(new BasicRequestCallback() {
 
 					@Override
-					public void onRegistrationSuccess(
-							List<String> registeredContacts) {
+					public void onRequestSuccess(String localUser, String localDomain, Object... response) {
 						textArea.setText(textArea.getText()
 								+ System.getProperty("line.separator") + " - "
 								+ " successfully registered");
 					}
 
 					@Override
-					public void onRegistrationFailed(String reason) {
+					public void onRequestFailed(String localUser, String localDomain, String reason) {
 						textArea.setText(textArea.getText()
 								+ System.getProperty("line.separator") + " - "
 								+ " failure to register: " + reason);
@@ -276,7 +274,7 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public boolean onCallInvitationArrived(String callId, String remoteUsername, String remoteHost) {
+	public boolean onCallInvitationArrived(String localUser, String localDomain, String callId, String remoteUsername, String remoteHost) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Invitation from " + remoteUsername + "@" + remoteHost + " Arrived.");
@@ -287,7 +285,7 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public void onCallInvitationCanceled(String reason, String callId) {
+	public void onCallInvitationCanceled(String localUser, String localDomain, String reason, String callId) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Invitation Canceled: " + reason);
@@ -298,7 +296,7 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public void onCallInvitationFailed(String reason, String callId) {
+	public void onCallInvitationFailed(String localUser, String localDomain, String reason, String callId) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Invitation Failed: " + reason);
@@ -310,7 +308,7 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public void onCallEstablished(String callId) {
+	public void onCallEstablished(String localUser, String localDomain, String callId) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Established.");
@@ -325,7 +323,7 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public void onCallFinished(String callId) {
+	public void onCallFinished(String localUser, String localDomain, String callId) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Finished.");
@@ -337,7 +335,7 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public void onCallFailure(String reason, String callId) {
+	public void onCallFailure(String localUser, String localDomain, String reason, String callId) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
 				+ " Call Failure: " + reason);
@@ -346,6 +344,12 @@ public class SIPClientMain implements SipuadaListener {
 		btnEndCall.setEnabled(false);
 		btCall.setEnabled(true);
 		isBusy = false;
+	}
+
+	@Override
+	public void onMessageReceived(String localUser, String localDomain, String callId, String remoteUser,
+			String remoteDomain, String content, String contentType, String... additionalHeaders) {
+		
 	}
 
 }
