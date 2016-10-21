@@ -62,10 +62,10 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	private void setDefautValues() {
-		registrarDomainTextField.setText("10.90.90.175:5060");
+		registrarDomainTextField.setText("10.100.100.125:5060");
 		registrarUserNameTextField.setText("xibaca");
 		passwordField.setText("xibaca");
-		callerDomainTextField.setText("10.90.90.175:5060");
+		callerDomainTextField.setText("10.100.100.125:5060");
 	}
 
 	private void setUPCallButton(final JButton callButton) {
@@ -91,9 +91,10 @@ public class SIPClientMain implements SipuadaListener {
 					}
 
 					@Override
-					public void onCallInvitationRinging(String localUser, String localDomain, String callId) {
-						textArea.setText(
-								textArea.getText() + System.getProperty("line.separator") + " - " + " Ringing ...");
+					public void onCallInvitationRinging(String localUser, String localDomain, String callId,
+							boolean shouldExpectEarlyMedia) {
+						textArea.setText(textArea.getText() + System.getProperty("line.separator") + " - "
+							+ (shouldExpectEarlyMedia ? " Expecting early media..." : " Ringing ..."));
 						btnCancel.setEnabled(false);
 						currentCallID = callId;
 						btnCancel.setEnabled(true);
@@ -134,7 +135,7 @@ public class SIPClientMain implements SipuadaListener {
 						username, registrarDomainTextField.getText(),
 						passwordField.getText(),
 //						"192.168.130.49:55002/TCP",
-						"192.168.5.19:54758/TCP"); //150.165.11.157:65486
+						"10.100.100.125:44898/TCP"); //150.165.11.157:65486
 				sipuada.registerPlugin(new LibJitsiAudioSipuadaPlugin(username));
 				sipuada.registerAddresses(new BasicRequestCallback() {
 
