@@ -707,7 +707,7 @@ public class SipUserAgentServer {
 			SessionDescription offer = null;
 			try {
 				offer = sessionPlugin.generateOffer(callId, type, method, localIp);
-				logger.debug("* UAC just generated {} offer \n{}\n in "
+				logger.debug("* UAS just generated {} offer \n{}\n in "
 					+ "context of call {}! *", type, offer, callId);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate {} offer to be inserted " +

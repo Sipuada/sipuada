@@ -1933,7 +1933,6 @@ public class SipUserAgentClient {
 	private boolean doSendRequest(Request request,
 			ClientTransaction clientTransaction, Dialog dialog)
 			throws TransactionUnavailableException, SipException {
-		//TODO EH ESSE
 		return doSendRequest(request, clientTransaction, dialog, true);
 	}
 
