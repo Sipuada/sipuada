@@ -835,6 +835,8 @@ public class SipUserAgentClient {
 		SessionDescription offer = null;
 		try {
 			offer = sessionPlugin.generateOffer(callId, type, method, localIp);
+			logger.debug("* UAC just generated {} offer \n{}\n in "
+				+ "context of call {}! *", type, offer, callId);
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate {} offer " +
 				"to be inserted into {} request.", type, method, unexpectedException);
@@ -1763,6 +1765,8 @@ public class SipUserAgentClient {
 						SessionDescription answer = SdpFactory.getInstance()
 							.createSessionDescriptionFromString(new String(response.getRawContent()));
 						try {
+							logger.debug("* UAC will process {} answer \n{}\n in context"
+								+ " of call {}! *", type, answer, callId);
 							sessionPlugin.receiveAnswerToAcceptedOffer(callId, type, answer);
 						} catch (Throwable unexpectedException) {
 							logger.error("Bad plug-in crashed while receiving {} answer " +
@@ -1804,6 +1808,8 @@ public class SipUserAgentClient {
 		SessionDescription answer = null;
 		try {
 			answer = sessionPlugin.generateAnswer(callId, type, method, offer, localIp);
+			logger.debug("* UAC just generated {} answer \n{}\n to offer \n{}\n in "
+				+ "context of call {}! *", type, answer, offer, callId);
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate {} answer " +
 				"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +

@@ -343,6 +343,8 @@ public class SipUserAgentServer {
 						.createSessionDescriptionFromString
 						(new String(request.getRawContent()));
 					try {
+						logger.debug("* UAS will process {} answer \n{}\n in context "
+							+ "of call {}! *", SessionType.REGULAR, answer, callId);
 						sessionPlugin.receiveAnswerToAcceptedOffer
 							(callId, SessionType.REGULAR, answer);
 						sendByeRightAway = false;
@@ -396,6 +398,8 @@ public class SipUserAgentServer {
 							.createSessionDescriptionFromString
 							(new String(request.getRawContent()));
 						try {
+							logger.debug("* UAS will process {} answer \n{}\n in context"
+								+ " of call {}! *", SessionType.EARLY, answer, callId);
 							sessionPlugin.receiveAnswerToAcceptedOffer
 								(callId, SessionType.EARLY, answer);
 							bus.post(new EarlyMediaSessionEstablished(callId));
@@ -703,6 +707,8 @@ public class SipUserAgentServer {
 			SessionDescription offer = null;
 			try {
 				offer = sessionPlugin.generateOffer(callId, type, method, localIp);
+				logger.debug("* UAC just generated {} offer \n{}\n in "
+					+ "context of call {}! *", type, offer, callId);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate {} offer to be inserted " +
 					"into {} response to {} request.", type, statusCode, method, unexpectedException);
@@ -752,6 +758,8 @@ public class SipUserAgentServer {
 			SessionDescription answer = null;
 			try {
 				answer = sessionPlugin.generateAnswer(callId, type, method, offer, localIp);
+				logger.debug("* UAS just generated {} answer \n{}\n to offer \n{}\n in "
+					+ "context of call {}! *", type, answer, offer, callId);
 			} catch (Throwable unexpectedException) {
 				logger.error("Bad plug-in crashed while trying to generate {} answer to be inserted " +
 					"into {} response to {} request.", type, statusCode, method, unexpectedException);

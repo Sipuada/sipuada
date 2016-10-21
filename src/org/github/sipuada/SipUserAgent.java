@@ -284,7 +284,6 @@ public class SipUserAgent implements SipListener {
 	}
 
 	private void listenForEarlyMediaSessions() {
-		logger.debug("LISTENING FOR MEDIA SESSIONS...");
 		Object earlyMediaSetupEventSubscriber = new Object() {
 
 			@Subscribe
