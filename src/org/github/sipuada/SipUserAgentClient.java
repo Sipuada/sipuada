@@ -802,7 +802,7 @@ public class SipUserAgentClient {
 
 	private boolean isDialogCreatingRequest(RequestMethod method) {
 		switch (method) {
-//			case INVITE:
+			case INVITE:
 			case OPTIONS:
 				return true;
 			default:
