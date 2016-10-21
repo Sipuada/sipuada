@@ -312,13 +312,13 @@ public class SipUserAgentServer {
 		String remoteDomain = fromHeader.getAddress().getURI().toString().split("@")[1];
 		if (newServerTransaction != null) {
 			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUser, remoteDomain));
-			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
-					sessionType, request, Response.UNSUPPORTED_MEDIA_TYPE)) {
-				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method, request,
-					newServerTransaction, false, false, sessionType);
-				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
-					+ "negotiation between callee and caller failed.", callId, false));
-			}
+//			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
+//					sessionType, request, Response.UNSUPPORTED_MEDIA_TYPE)) {
+//				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method, request,
+//					newServerTransaction, false, false, sessionType);
+//				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
+//					+ "negotiation between callee and caller failed.", callId, false));
+//			}
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
@@ -683,10 +683,10 @@ public class SipUserAgentServer {
 		}
 	}
 
-	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
-			String callId, SessionType type, Request request, int statusCode) {
-		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, type, request, statusCode, null);
-	}
+//	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
+//			String callId, SessionType type, Request request, int statusCode) {
+//		return putOfferOrAnswerIntoResponseIfApplicable(method, callId, type, request, statusCode, null);
+//	}
 
 	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
 			String callId, SessionType type, Request request, Response response) {
