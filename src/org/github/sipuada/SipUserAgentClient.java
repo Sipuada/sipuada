@@ -78,6 +78,8 @@ import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.header.ProxyAuthenticateHeader;
 import android.javax.sip.header.ProxyAuthorizationHeader;
 import android.javax.sip.header.ProxyRequireHeader;
+import android.javax.sip.header.RAckHeader;
+import android.javax.sip.header.RSeqHeader;
 import android.javax.sip.header.RequireHeader;
 import android.javax.sip.header.RetryAfterHeader;
 import android.javax.sip.header.RouteHeader;
@@ -290,6 +292,8 @@ public class SipUserAgentClient {
 			SupportedHeader supportedHeader = headerMaker
 				.createSupportedHeader(SessionType.EARLY.getDisposition());
 			additionalHeaders.add(supportedHeader);
+			supportedHeader = headerMaker.createSupportedHeader("100rel");
+			additionalHeaders.add(supportedHeader);
 		} catch (ParseException ignore) {}
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost, requestUri,
 				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
@@ -465,6 +469,156 @@ public class SipUserAgentClient {
 			additionalHeadersList.toArray(new Header[additionalHeadersList.size()]));
 	}
 
+	private boolean sendPrackRequest(final Dialog dialog, Request request, Response response) {
+		final String method = RequestMethod.PRACK.toString();
+		List<Header> additionalHeaders = new LinkedList<>();
+		RSeqHeader rSeqHeader = (RSeqHeader) response.getHeader(RSeqHeader.NAME);
+		CSeqHeader cSeqHeader = (CSeqHeader) response.getHeader(CSeqHeader.NAME);
+		RAckHeader rAckHeader;
+		try {
+			rAckHeader = headerMaker.createRAckHeader
+				(rSeqHeader.getSequenceNumber(), (int) cSeqHeader.getSeqNumber(),
+					cSeqHeader.getMethod());
+			additionalHeaders.add(rAckHeader);
+		} catch (InvalidArgumentException ignore) {
+		} catch (ParseException ignore) {}
+		URI addresseeUri = dialog.getRemoteParty().getURI();
+		URI requestUri = (URI) addresseeUri.clone();
+		CallIdHeader callIdHeader = dialog.getCallId();
+		long cseq = dialog.getLocalSeqNumber();
+		if (cseq == 0) {
+			cseq = localCSeq + 1;
+		}
+		if (localCSeq < cseq) {
+			localCSeq = cseq;
+		}
+		Address from = addressMaker.createAddress(dialog.getLocalParty().getURI());
+		String fromTag = dialog.getLocalTag();
+		Address to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
+		String toTag = dialog.getRemoteTag();
+		List<Address> canonRouteSet = new LinkedList<>();
+		Address remoteTarget = dialog.getRemoteTarget();
+		if (remoteTarget == null) {
+			ContactHeader contactHeader = (ContactHeader) response
+				.getHeader(ContactHeader.NAME);
+			if (contactHeader != null) {
+				remoteTarget = contactHeader.getAddress();
+			} else {
+				remoteTarget = dialog.getRemoteParty();
+			}
+		}
+		final URI remoteTargetUri = remoteTarget.getURI();
+		Iterator<?> routeHeaders = dialog.getRouteSet();
+		while (routeHeaders.hasNext()) {
+			RouteHeader routeHeader = (RouteHeader) routeHeaders.next();
+			canonRouteSet.add(routeHeader.getAddress());
+		}
+		List<Address> normalizedRouteSet = new LinkedList<>();
+		if (!canonRouteSet.isEmpty()) {
+			if (((SipURI)canonRouteSet.get(0).getURI()).hasLrParam()) {
+				requestUri = remoteTargetUri;
+				for (Address address : canonRouteSet) {
+					normalizedRouteSet.add(address);
+				}
+			}
+			else {
+				requestUri = canonRouteSet.get(0).getURI();
+				for (int i=1; i<canonRouteSet.size(); i++) {
+					normalizedRouteSet.add(canonRouteSet.get(i));
+				}
+				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
+				normalizedRouteSet.add(remoteTargetAddress);
+			}
+		}
+		else {
+			requestUri = (URI) remoteTargetUri.clone();
+		}
+		ViaHeader viaHeader = null;
+		try {
+			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
+			//viaHeader.setRPort(); // Don't allow rport as 'rport='. Must be 'rport' or 'rport=15324' for example. Use rport only for UDP.
+			FromHeader fromHeader = headerMaker.createFromHeader(from, fromTag);
+//			fromHeader.setParameter("transport", "tcp");
+			ToHeader toHeader = headerMaker.createToHeader(to, toTag);
+//			toHeader.setParameter("transport", "tcp");
+			final Request prackRequest = messenger.createRequest(requestUri, method.toString(),
+					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
+					fromHeader, toHeader, Collections.singletonList(viaHeader),
+					headerMaker.createMaxForwardsHeader(70));
+			if (!normalizedRouteSet.isEmpty()) {
+				for (Address routeAddress : normalizedRouteSet) {
+					RouteHeader routeHeader = headerMaker.createRouteHeader(routeAddress);
+					prackRequest.addHeader(routeHeader);
+				}
+			}
+			else {
+				prackRequest.removeHeader(RouteHeader.NAME);
+			}
+			for (int i=0; i<additionalHeaders.size(); i++) {
+				prackRequest.addHeader(additionalHeaders.get(i));
+			}
+			final ClientTransaction clientTransaction = provider
+				.getNewClientTransaction(prackRequest);
+			viaHeader.setBranch(clientTransaction.getBranchId());
+			final String callId = callIdHeader.getCallId();
+			if (putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
+				callId, SessionType.EARLY, request, response, prackRequest)) {
+				logger.info("UAC could provide suitable answer to {} offer, so, "
+					+ "sending {} to {} response to {} request (from {}:{})...",
+					SessionType.EARLY, RequestMethod.PRACK, response.getStatusCode(),
+					request.getMethod(), localIp, localPort);
+					logger.debug("Request Dump:\n{}\n", prackRequest);
+			} else {
+				//No need for caller to wait for remote responses.
+				return false;
+			}
+			new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					try {
+						if (doSendRequest(prackRequest, clientTransaction, dialog)) {
+							logger.info("{} request sent by {}:{} through {}.", method,
+									localIp, localPort, transport);
+						}
+						else {
+							logger.error("Could not send this {} request.", method);
+							reportRequestError(callId, clientTransaction,
+									"Request could not be parsed or contained invalid state.");
+						}
+					} catch (SipException requestCouldNotBeSent) {
+						logger.error("Could not send this {} request: {} ({}).",
+								method, requestCouldNotBeSent.getMessage(),
+								requestCouldNotBeSent.getCause().getMessage());
+						reportRequestError(callId, clientTransaction,
+								"Request could not be sent: " + String.format("%s (%s).",
+										requestCouldNotBeSent.getMessage(),
+										requestCouldNotBeSent.getCause().getMessage()));
+					}
+				}
+
+			}).start();
+			return true;
+		} catch (ParseException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create mandatory headers for " +
+					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
+					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+					requestCouldNotBeBuilt.getMessage());
+		} catch (TransactionUnavailableException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create client transaction to handle" +
+					" this {} request: {}.", method, requestCouldNotBeBuilt.getMessage());
+		} catch (InvalidArgumentException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create mandatory headers for " +
+					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
+					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+					requestCouldNotBeBuilt.getMessage());
+		}
+		//No need for caller to wait for remote responses.
+		return false;
+	}
+
 	private boolean sendRequest(RequestMethod method, Dialog dialog, Header... additionalHeaders) {
 		return sendRequest(method, dialog, null, null, additionalHeaders);
 	}
@@ -581,6 +735,7 @@ public class SipUserAgentClient {
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
+			//TODO maybe inject answer into PRACK here?!
 			if (isDialogCreatingRequest(method)) {
 				putOfferIntoRequestIfApplicable(method, callId, SessionType.REGULAR, request);
 			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
@@ -646,6 +801,9 @@ public class SipUserAgentClient {
 	private boolean isPayloadSenderRequest(RequestMethod method, String content,
 			ContentTypeHeader contentTypeHeader) {
 		switch (method) {
+			case INVITE:
+			case ACK:
+			case PRACK:
 			case MESSAGE:
 			case INFO:
 				return content != null && contentTypeHeader != null;
@@ -857,10 +1015,11 @@ public class SipUserAgentClient {
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		logger.debug("Attempting to handle response {}.", statusCode);
+		logger.debug("Response Dump: {{}}", response);
 		if (response != null) {
 			ListIterator<?> iterator = response.getHeaders(ViaHeader.NAME);
 			int viaHeaderCount = 0;
-			while (iterator.hasNext()) {
+			while (iterator != null && iterator.hasNext()) {
 				iterator.next();
 				viaHeaderCount++;
 			}
@@ -1057,7 +1216,7 @@ public class SipUserAgentClient {
 		Map<String, String> possiblyFailedAuthRealms = new HashMap<>();
 		ListIterator<?> usedAuthHeaders = request
 				.getHeaders(AuthorizationHeader.NAME);
-		while (usedAuthHeaders.hasNext()) {
+		while (usedAuthHeaders != null && usedAuthHeaders.hasNext()) {
 			AuthorizationHeader authHeader = (AuthorizationHeader)
 					usedAuthHeaders.next();
 			possiblyFailedAuthRealms.put(authHeader.getRealm(),
@@ -1066,7 +1225,7 @@ public class SipUserAgentClient {
 		Map<String, String> possiblyFailedProxyAuthRealms = new HashMap<>();
 		ListIterator<?> usedProxyAuthHeaders = request
 				.getHeaders(ProxyAuthorizationHeader.NAME);
-		while (usedProxyAuthHeaders.hasNext()) {
+		while (usedProxyAuthHeaders != null && usedProxyAuthHeaders.hasNext()) {
 			ProxyAuthorizationHeader authHeader = (ProxyAuthorizationHeader)
 					usedProxyAuthHeaders.next();
 			possiblyFailedProxyAuthRealms.put(authHeader.getRealm(),
@@ -1075,7 +1234,7 @@ public class SipUserAgentClient {
 		boolean worthAuthenticating = false;
 		ListIterator<?> wwwAuthenticateHeaders = response
 				.getHeaders(WWWAuthenticateHeader.NAME);
-		while (wwwAuthenticateHeaders.hasNext()) {
+		while (wwwAuthenticateHeaders != null && wwwAuthenticateHeaders.hasNext()) {
 			WWWAuthenticateHeader wwwAuthenticateHeader =
 					(WWWAuthenticateHeader) wwwAuthenticateHeaders.next();
 			String realm = wwwAuthenticateHeader.getRealm();
@@ -1089,7 +1248,7 @@ public class SipUserAgentClient {
 		}
 		ListIterator<?> proxyAuthenticateHeaders = response
 				.getHeaders(ProxyAuthenticateHeader.NAME);
-		while (proxyAuthenticateHeaders.hasNext()) {
+		while (proxyAuthenticateHeaders != null && proxyAuthenticateHeaders.hasNext()) {
 			ProxyAuthenticateHeader proxyAuthenticateHeader =
 					(ProxyAuthenticateHeader) proxyAuthenticateHeaders.next();
 			String realm = proxyAuthenticateHeader.getRealm();
@@ -1146,7 +1305,7 @@ public class SipUserAgentClient {
 		List<String> acceptedEncodings = new LinkedList<>();
 		ListIterator<?> acceptEncodingHeaders =
 				response.getHeaders(AcceptEncodingHeader.NAME);
-		if (acceptEncodingHeaders != null) {
+		if (acceptEncodingHeaders != null && acceptEncodingHeaders != null) {
 			while (acceptEncodingHeaders.hasNext()) {
 				AcceptEncodingHeader acceptEncodingHeader =
 						(AcceptEncodingHeader) acceptEncodingHeaders.next();
@@ -1192,30 +1351,28 @@ public class SipUserAgentClient {
 		Map<String, String> typeSubtypeToQValue = new HashMap<>();
 		Map<String, Set<String>> typeToSubTypes = new HashMap<>();
 		ListIterator<?> acceptHeaders = response.getHeaders(AcceptHeader.NAME);
-		if (acceptHeaders != null) {
-			while (acceptHeaders.hasNext()) {
-				AcceptHeader acceptHeader =
-						(AcceptHeader) acceptHeaders.next();
-				String contentType = acceptHeader.getContentType();
-				String contentSubType = acceptHeader.getContentSubType();
-				if (acceptHeader.allowsAllContentTypes()) {
-					shouldBypassContentTypesCheck = true;
-					break;
-				}
-				else if (acceptHeader.allowsAllContentSubTypes()) {
+		while (acceptHeaders != null && acceptHeaders.hasNext()) {
+			AcceptHeader acceptHeader =
+					(AcceptHeader) acceptHeaders.next();
+			String contentType = acceptHeader.getContentType();
+			String contentSubType = acceptHeader.getContentSubType();
+			if (acceptHeader.allowsAllContentTypes()) {
+				shouldBypassContentTypesCheck = true;
+				break;
+			}
+			else if (acceptHeader.allowsAllContentSubTypes()) {
+				typeToSubTypes.put(contentType, new HashSet<String>());
+			}
+			else {
+				if (!typeToSubTypes.containsKey(contentType)) {
 					typeToSubTypes.put(contentType, new HashSet<String>());
 				}
-				else {
-					if (!typeToSubTypes.containsKey(contentType)) {
-						typeToSubTypes.put(contentType, new HashSet<String>());
-					}
-					typeToSubTypes.get(contentType).add(contentSubType);
-				}
-				float qValue = acceptHeader.getQValue();
-				if (qValue != -1) {
-					typeSubtypeToQValue.put(String.format("%s/%s", contentType,
-							contentSubType), Float.toString(qValue));
-				}
+				typeToSubTypes.get(contentType).add(contentSubType);
+			}
+			float qValue = acceptHeader.getQValue();
+			if (qValue != -1) {
+				typeSubtypeToQValue.put(String.format("%s/%s", contentType,
+						contentSubType), Float.toString(qValue));
 			}
 		}
 		boolean overlappingContentTypesFound = false;
@@ -1224,42 +1381,41 @@ public class SipUserAgentClient {
 					= new LinkedList<>();
 			ListIterator<?> definedContentTypeHeaders =
 					request.getHeaders(ContentTypeHeader.NAME);
-			if (definedContentTypeHeaders != null) {
-				while (definedContentTypeHeaders.hasNext()) {
-					ContentTypeHeader contentTypeHeader = (ContentTypeHeader)
-							definedContentTypeHeaders.next();
-					boolean addThisContentType = false;
-					String contentType = contentTypeHeader
-							.getContentType();
-					String contentSubType = contentTypeHeader
-							.getContentSubType();
-					if (typeToSubTypes.containsKey(contentType)) {
-						Set<String> acceptedSubTypes =
-								typeToSubTypes.get(contentType);
-						if (acceptedSubTypes.isEmpty()) {
-							addThisContentType = true;
-						}
-						else {
-							for (String acceptedSubType : acceptedSubTypes) {
-								if (acceptedSubType.equals(contentSubType)) {
-									addThisContentType = true;
-									break;
-								}
+			while (definedContentTypeHeaders != null
+					&& definedContentTypeHeaders.hasNext()) {
+				ContentTypeHeader contentTypeHeader = (ContentTypeHeader)
+					definedContentTypeHeaders.next();
+				boolean addThisContentType = false;
+				String contentType = contentTypeHeader
+						.getContentType();
+				String contentSubType = contentTypeHeader
+						.getContentSubType();
+				if (typeToSubTypes.containsKey(contentType)) {
+					Set<String> acceptedSubTypes =
+							typeToSubTypes.get(contentType);
+					if (acceptedSubTypes.isEmpty()) {
+						addThisContentType = true;
+					}
+					else {
+						for (String acceptedSubType : acceptedSubTypes) {
+							if (acceptedSubType.equals(contentSubType)) {
+								addThisContentType = true;
+								break;
 							}
 						}
 					}
-					if (addThisContentType) {
-						String typeSubtype = String.format("%s/%s",
-								contentType, contentSubType);
-						if (typeSubtypeToQValue.containsKey(typeSubtype)) {
-							String qValue = typeSubtypeToQValue
-									.get(typeSubtype);
-							try {
-								contentTypeHeader.setParameter("q", qValue);
-							} catch (ParseException ignore) {}
-						}
-						overlappingContentTypes.add(contentTypeHeader);
+				}
+				if (addThisContentType) {
+					String typeSubtype = String.format("%s/%s",
+							contentType, contentSubType);
+					if (typeSubtypeToQValue.containsKey(typeSubtype)) {
+						String qValue = typeSubtypeToQValue
+								.get(typeSubtype);
+						try {
+							contentTypeHeader.setParameter("q", qValue);
+						} catch (ParseException ignore) {}
 					}
+					overlappingContentTypes.add(contentTypeHeader);
 				}
 			}
 			if (overlappingContentTypes.size() > 0) {
@@ -1540,7 +1696,7 @@ public class SipUserAgentClient {
 					boolean earlyMediaIsSupported = false;
 					@SuppressWarnings("unchecked")
 					ListIterator<Header> supportedHeaders = response.getHeaders(SupportedHeader.NAME);
-					while (supportedHeaders.hasNext()) {
+					while (supportedHeaders != null && supportedHeaders.hasNext()) {
 						SupportedHeader supportedHeader = (SupportedHeader) supportedHeaders.next();
 						if (supportedHeader.getOptionTag().toLowerCase()
 								.contains(SessionType.EARLY.getDisposition())) {
@@ -1549,37 +1705,19 @@ public class SipUserAgentClient {
 						}
 					}
 					if (earlyMediaIsSupported) {
-						try {
-							Request prackRequest = dialog.createPrack(response);
-							if (putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-								callId, SessionType.EARLY, request, response, prackRequest)) {
-								logger.info("UAC could provide suitable answer to {} offer, so, "
-									+ "sending {} to {} response to {} request (from {}:{})...",
-									SessionType.EARLY, RequestMethod.PRACK, response.getStatusCode(),
-									request.getMethod(), localIp, localPort);
-								logger.debug("Request Dump:\n{}\n", prackRequest);
-								try {
-									doSendRequest(prackRequest, clientTransaction, dialog);
-								} catch (RuntimeException lowLevelStackFailed) {
-									logger.error("{} to {} response to {} request could not be sent " +
-										"due to a JAINSIP-level failure.", RequestMethod.PRACK,
-										response.getStatusCode(), request.getMethod(),
-										lowLevelStackFailed);
-									throw new InternalJainSipException("Severe JAINSIP-level failure!",
-										lowLevelStackFailed);
-								}
-								logger.info("{} response to {} arrived, so {} sent.", statusCode,
-									RequestMethod.INVITE, RequestMethod.PRACK);
-								logger.info("Early media session established: {}.", callId);
-								bus.post(new CallInvitationRinging(callId, clientTransaction, true));
-							} else {
-								logger.error("{} response to {} arrived, but UAC cannot provide suitable "
-									+ "answer to {} offer, so treating response as 180 and aborting "
-									+ "early media session negotiation attempt.", statusCode,
-									request.getMethod(), SessionType.EARLY);
-								bus.post(new CallInvitationRinging(callId, clientTransaction));
-							}
-						} catch (SipException ignore) {}
+						if (sendPrackRequest(dialog, request, response)) {
+							logger.info("{} response to {} arrived, so {} sent.", statusCode,
+								RequestMethod.INVITE, RequestMethod.PRACK);
+							logger.info("Early media session established: {}.", callId);
+//								bus.post(new CallInvitationRinging(callId, clientTransaction, true));
+							//FIXME post event which represents establishment of an early media session!
+						} else {
+							logger.error("{} response to {} arrived, but UAC cannot provide suitable "
+								+ "answer to {} offer or PRACK could not be sent, so treating "
+								+ "response as 180 and aborting early media session negotiation attempt.",
+								statusCode, request.getMethod(), SessionType.EARLY);
+							bus.post(new CallInvitationRinging(callId, clientTransaction));
+						}
 					} else {
 						logger.error("{} response to {} arrived, but remote UAS hasn't indicated "
 							+ " support for {{}} negotiations, so treating response as 180 and aborting "
@@ -1663,7 +1801,7 @@ public class SipUserAgentClient {
 		} catch (Throwable unexpectedException) {
 			logger.error("Bad plug-in crashed while trying to generate {} answer " +
 				"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
-				"right away.", type, RequestMethod.ACK, response.getStatusCode(), method, unexpectedException);
+				"right away.", type, ackRequest.getMethod(), response.getStatusCode(), method, unexpectedException);
 			return false;
 		}
 		if (answer == null) {
@@ -1678,13 +1816,13 @@ public class SipUserAgentClient {
 		} catch (ParseException parseException) {
 			logger.error("Plug-in-generated {} answer {{}} to {} offer {{}} by {} could not be inserted into {} " +
 				"for {} response to {} request.", type, answer.toString(), type, offer.toString(),
-				sessionPlugin.getClass().getName(), RequestMethod.ACK, response.getStatusCode(),
+				sessionPlugin.getClass().getName(), ackRequest.getMethod(), response.getStatusCode(),
 				method, parseException);
 			return false;
 		}
 		logger.info("Plug-in-generated {} answer {{}} to {} offer {{}} by {} inserted into {} for {} response" +
 			" to {} request.", type, answer.toString(), type, offer.toString(), sessionPlugin.getClass().getName(),
-			RequestMethod.ACK, response.getStatusCode(), method);
+			ackRequest.getMethod(), response.getStatusCode(), method);
 		return true;
 	}
 
@@ -1741,7 +1879,7 @@ public class SipUserAgentClient {
 		ListIterator<?> iterator = original.getHeaders(ViaHeader.NAME);
 		String newBranchId = Utils.getInstance().generateBranchId();
 		derived.removeHeader(ViaHeader.NAME);
-		while (iterator.hasNext()) {
+		while (iterator != null && iterator.hasNext()) {
 			ViaHeader viaHeader = (ViaHeader) iterator.next();
 			if (viaHeader.getBranch() != null) {
 				try {
@@ -1783,6 +1921,7 @@ public class SipUserAgentClient {
 	private boolean doSendRequest(Request request,
 			ClientTransaction clientTransaction, Dialog dialog)
 			throws TransactionUnavailableException, SipException {
+		//TODO EH ESSE
 		return doSendRequest(request, clientTransaction, dialog, true);
 	}
 
@@ -1865,13 +2004,13 @@ public class SipUserAgentClient {
 		newClientTransaction.setApplicationData(attempt);
 		if (dialog != null) {
 			try {
-				logger.info("Sending {} request (from {}:{})...", request.getMethod(),
+				logger.info("Sending {} request within a dialog (from {}:{})...", request.getMethod(),
 						localIp, localPort);
 				logger.debug("Request Dump:\n{}\n", request);
 				try {
 					dialog.sendRequest(newClientTransaction);
 				} catch (RuntimeException lowLevelStackFailed) {
-					logger.error("{} request could not be sent due to a " +
+					logger.error("{} request within a dialog could not be sent due to a " +
 							"JAINSIP-level failure.", request.getMethod(),
 							lowLevelStackFailed);
 					throw new InternalJainSipException("Severe JAINSIP-level failure!",

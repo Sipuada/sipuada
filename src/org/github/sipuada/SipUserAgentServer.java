@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.eventbus.EventBus;
 
+import android.gov.nist.gnjvx.sip.Utils;
 import android.javax.sdp.SdpFactory;
 import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
@@ -48,6 +49,7 @@ import android.javax.sip.header.ExtensionHeader;
 import android.javax.sip.header.FromHeader;
 import android.javax.sip.header.Header;
 import android.javax.sip.header.HeaderFactory;
+import android.javax.sip.header.RequireHeader;
 import android.javax.sip.header.SupportedHeader;
 import android.javax.sip.header.ToHeader;
 import android.javax.sip.message.MessageFactory;
@@ -116,6 +118,9 @@ public class SipUserAgentServer {
 						break;
 					case ACK:
 						handleAckRequest(request, serverTransaction);
+						break;
+					case PRACK:
+						handlePrackRequest(request, serverTransaction);
 						break;
 					case BYE:
 						handleByeRequest(request, serverTransaction);
@@ -274,7 +279,7 @@ public class SipUserAgentServer {
 		boolean earlyMediaIsSupported = false;
 		@SuppressWarnings("unchecked")
 		ListIterator<Header> supportedHeaders = request.getHeaders(SupportedHeader.NAME);
-		while (supportedHeaders.hasNext()) {
+		while (supportedHeaders != null && supportedHeaders.hasNext()) {
 			SupportedHeader supportedHeader = (SupportedHeader) supportedHeaders.next();
 			if (supportedHeader.getOptionTag().toLowerCase()
 					.contains(SessionType.EARLY.getDisposition())) {
@@ -297,7 +302,7 @@ public class SipUserAgentServer {
 			provisionalResponse = Response.RINGING;
 			sessionType = SessionType.REGULAR;
 		}
-		ServerTransaction newServerTransaction = doSendResponse
+		ServerTransaction newServerTransaction = doSendProvisionalResponse
 			(provisionalResponse, method, request, serverTransaction, sessionType,
 			additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 		FromHeader fromHeader = (FromHeader) request.getHeader(FromHeader.NAME);
@@ -308,7 +313,7 @@ public class SipUserAgentServer {
 			if (!putOfferOrAnswerIntoResponseIfApplicable(method, callId,
 					sessionType, request, Response.UNSUPPORTED_MEDIA_TYPE)) {
 				doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method, request,
-					newServerTransaction, false, sessionType);
+					newServerTransaction, false, false, sessionType);
 				bus.post(new CallInvitationCanceled("Call invitation failed because media types "
 					+ "negotiation between callee and caller failed.", callId, false));
 			}
@@ -327,6 +332,18 @@ public class SipUserAgentServer {
 		String callId = callIdHeader.getCallId();
 		bus.post(new EstablishedCallStarted(callId, serverTransaction.getDialog()));
 		logger.info("New call established: {}.", callId);
+	}
+
+	private void handlePrackRequest(Request request, ServerTransaction serverTransaction) {
+		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
+		String callId = callIdHeader.getCallId();
+		if (doSendResponse(Response.OK, RequestMethod.PRACK,
+				request, serverTransaction) != null) {
+			logger.info("Early media session established: {}.", callId);
+			//FIXME post event which represents establishment of an early media session!
+			return;
+		}
+		throw new RequestCouldNotBeAddressed();
 	}
 
 	private void handleByeRequest(Request request, ServerTransaction serverTransaction) {
@@ -379,7 +396,7 @@ public class SipUserAgentServer {
 			String remoteDomain = fromHeader.getAddress().getURI().toString().split("@")[1];
 			Iterator<String> headerNamesIterator = request.getHeaderNames();
 			List<Header> additionalHeaders = new ArrayList<>();
-			while (headerNamesIterator.hasNext()) {
+			while (headerNamesIterator != null && headerNamesIterator.hasNext()) {
 				Iterator<Header> headers = request.getHeaders(headerNamesIterator.next());
 				while (headers.hasNext()) {
 					additionalHeaders.add(headers.next());
@@ -454,17 +471,17 @@ public class SipUserAgentServer {
 
 	private ServerTransaction doSendResponse(int statusCode, RequestMethod method,
 			Request request, ServerTransaction serverTransaction, Header... additionalHeaders) {
-		return doSendResponse(statusCode, method, request, serverTransaction, true, SessionType.REGULAR, additionalHeaders);
+		return doSendResponse(statusCode, method, request, serverTransaction, true, false, SessionType.REGULAR, additionalHeaders);
 	}
 
-	private ServerTransaction doSendResponse(int statusCode, RequestMethod method,
+	private ServerTransaction doSendProvisionalResponse(int statusCode, RequestMethod method,
 			Request request, ServerTransaction serverTransaction, SessionType type, Header... additionalHeaders) {
-		return doSendResponse(statusCode, method, request, serverTransaction, true, type, additionalHeaders);
+		return doSendResponse(statusCode, method, request, serverTransaction, true, true, type, additionalHeaders);
 	}
 
 	private ServerTransaction doSendResponse(int statusCode, RequestMethod method, Request request,
-			ServerTransaction serverTransaction, boolean addSessionPayload, SessionType type,
-			Header... additionalHeaders) {
+			ServerTransaction serverTransaction, boolean addSessionPayload, boolean responseIsProvisional,
+			SessionType type, Header... additionalHeaders) {
 		if (method == RequestMethod.UNKNOWN) {
 			logger.debug("[doSendResponse(int, RequestMethod, Request, " +
 				"ServerTransaction, Header...)] method forbidden for " +
@@ -493,7 +510,58 @@ public class SipUserAgentServer {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
 		String callId = callIdHeader.getCallId();
 		try {
-			Response response = messenger.createResponse(statusCode, request);
+			boolean reliableProvisionalResponseRequiredOrSupported = false;
+			@SuppressWarnings("unchecked")
+			ListIterator<Header> requireHeaders = request.getHeaders(RequireHeader.NAME);
+			while (requireHeaders != null && requireHeaders.hasNext()) {
+				RequireHeader requireHeader = (RequireHeader) requireHeaders.next();
+				if (requireHeader.getOptionTag().toLowerCase().trim().contains("100rel")) {
+					reliableProvisionalResponseRequiredOrSupported = true;
+				}
+			}
+			@SuppressWarnings("unchecked")
+			ListIterator<Header> supportedHeaders = request.getHeaders(SupportedHeader.NAME);
+			while (supportedHeaders != null && supportedHeaders.hasNext()) {
+				SupportedHeader supportedHeader = (SupportedHeader) supportedHeaders.next();
+				if (supportedHeader.getOptionTag().toLowerCase().trim().contains("100rel")) {
+					reliableProvisionalResponseRequiredOrSupported = true;
+				}
+			}
+			if (statusCode == Response.TRYING) {
+				reliableProvisionalResponseRequiredOrSupported = false;
+			}
+//			if (type == SessionType.EARLY && !reliableProvisionalResponseRequiredOrSupported) {
+//				statusCode = Response.BAD_EXTENSION;
+//			}
+			final Response response;
+			if (!responseIsProvisional || !reliableProvisionalResponseRequiredOrSupported) {
+				response = messenger.createResponse(statusCode, request);
+			} else {
+				response = newServerTransaction.getDialog()
+					.createReliableProvisionalResponse(statusCode);
+				ToHeader toHeader = (ToHeader) response.getHeader(ToHeader.NAME);
+				if (toHeader.getTag() == null || toHeader.getTag().trim().isEmpty()) {
+					toHeader.setTag(Utils.getInstance().generateTag());
+				}
+				response.setHeader(toHeader);
+//				RequireHeader requireHeader = headerMaker.createRequireHeader("100rel");
+//				response.addHeader(requireHeader);
+//		        @SuppressWarnings("unchecked")
+//				ListIterator<Header> recordRouteHeaders = request.getHeaders(RecordRouteHeader.NAME);
+//		        while (recordRouteHeaders != null && recordRouteHeaders.hasNext()) {
+//		        	RecordRouteHeader recordRouteHeader =
+//	        			(RecordRouteHeader) recordRouteHeaders.next();
+//		        	RecordRouteHeader clone = (RecordRouteHeader) recordRouteHeader.clone();
+//		            response.addHeader(clone);
+//		        }
+				SipURI contactUri = addressMaker.createSipURI(username, localIp);
+				contactUri.setPort(localPort);
+				contactUri.setTransportParam(transport.toUpperCase());
+				contactUri.setParameter("ob", null);
+				Address contactAddress = addressMaker.createAddress(contactUri);
+				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+				response.addHeader(contactHeader);
+			}
 			for (Header header : additionalHeaders) {
 				response.addHeader(header);
 			}
@@ -505,7 +573,7 @@ public class SipUserAgentServer {
 				if (!putOfferOrAnswerIntoResponseIfApplicable(method,
 						callId, type, request, response)) {
 					doSendResponse(Response.UNSUPPORTED_MEDIA_TYPE, method,
-						request, newServerTransaction, false, type, additionalHeaders);
+						request, newServerTransaction, false, false, type, additionalHeaders);
 					bus.post(new CallInvitationCanceled("Call invitation failed because media types "
 						+ "negotiation between callee and caller failed.", callId, false));
 					return null;
@@ -515,7 +583,12 @@ public class SipUserAgentServer {
 				localIp, localPort);
 			logger.debug("Response Dump:\n{}\n", response);
 			try {
-				newServerTransaction.sendResponse(response);
+				if (!responseIsProvisional || !reliableProvisionalResponseRequiredOrSupported) {
+					newServerTransaction.sendResponse(response);
+				} else {
+					newServerTransaction.getDialog().sendReliableProvisionalResponse(response);
+//					newServerTransaction.sendResponse(response);
+				}
 			} catch (RuntimeException lowLevelStackFailed) {
 				logger.error("{} response to {} request could not be sent due to a " +
 					"JAINSIP-level failure.", statusCode, method, lowLevelStackFailed);
