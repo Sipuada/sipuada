@@ -23,6 +23,7 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.EarlyMediaSessionEstablished;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.MessageNotSent;
@@ -469,7 +470,8 @@ public class SipUserAgentClient {
 			additionalHeadersList.toArray(new Header[additionalHeadersList.size()]));
 	}
 
-	private boolean sendPrackRequest(final Dialog dialog, Request request, Response response) {
+	private boolean sendPrackRequest(final Dialog dialog, final Request request,
+			final Response response) {
 		final String method = RequestMethod.PRACK.toString();
 		List<Header> additionalHeaders = new LinkedList<>();
 		RSeqHeader rSeqHeader = (RSeqHeader) response.getHeader(RSeqHeader.NAME);
@@ -565,9 +567,9 @@ public class SipUserAgentClient {
 				callId, SessionType.EARLY, request, response, prackRequest)) {
 				logger.info("UAC could provide suitable answer to {} offer, so, "
 					+ "sending {} to {} response to {} request (from {}:{})...",
-					SessionType.EARLY, RequestMethod.PRACK, response.getStatusCode(),
+					SessionType.EARLY, method, response.getStatusCode(),
 					request.getMethod(), localIp, localPort);
-					logger.debug("Request Dump:\n{}\n", prackRequest);
+				logger.debug("Request Dump:\n{}\n", prackRequest);
 			} else {
 				//No need for caller to wait for remote responses.
 				return false;
@@ -578,8 +580,13 @@ public class SipUserAgentClient {
 				public void run() {
 					try {
 						if (doSendRequest(prackRequest, clientTransaction, dialog)) {
-							logger.info("{} request sent by {}:{} through {}.", method,
-									localIp, localPort, transport);
+							logger.info("{} response to {} arrived, so {} "
+								+ "sent by {}:{} through {}.", response.getStatusCode(),
+								request.getMethod(), method, localIp, localPort, transport);
+							bus.post(new CallInvitationRinging(callId, clientTransaction, true));
+							bus.post(new EarlyMediaSessionEstablished(callId));
+							logger.info("Early media session established: {}.", callId);
+							return;
 						}
 						else {
 							logger.error("Could not send this {} request.", method);
@@ -595,6 +602,12 @@ public class SipUserAgentClient {
 										requestCouldNotBeSent.getMessage(),
 										requestCouldNotBeSent.getCause().getMessage()));
 					}
+					logger.error("{} response to {} arrived, but UAC could not send {} "
+						+ "containinng answer to {} offer, so treating response as 180 "
+						+ "and aborting early media session negotiation attempt.",
+						response.getStatusCode(), request.getMethod(),
+						method, SessionType.EARLY);
+					bus.post(new CallInvitationRinging(callId, clientTransaction));
 				}
 
 			}).start();
@@ -735,7 +748,6 @@ public class SipUserAgentClient {
 					.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
-			//TODO maybe inject answer into PRACK here?!
 			if (isDialogCreatingRequest(method)) {
 				putOfferIntoRequestIfApplicable(method, callId, SessionType.REGULAR, request);
 			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
@@ -790,7 +802,7 @@ public class SipUserAgentClient {
 
 	private boolean isDialogCreatingRequest(RequestMethod method) {
 		switch (method) {
-			case INVITE:
+//			case INVITE:
 			case OPTIONS:
 				return true;
 			default:
@@ -1015,7 +1027,7 @@ public class SipUserAgentClient {
 	private boolean tryHandlingResponseGenerically(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		logger.debug("Attempting to handle response {}.", statusCode);
-		logger.debug("Response Dump: {{}}", response);
+		logger.debug("Response Dump:\n{}\n", response);
 		if (response != null) {
 			ListIterator<?> iterator = response.getHeaders(ViaHeader.NAME);
 			int viaHeaderCount = 0;
@@ -1644,6 +1656,7 @@ public class SipUserAgentClient {
 
 	private void handleInviteResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
+		logger.info("{} response arrived.", statusCode);
 		Request request = clientTransaction.getRequest();
 		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		Dialog dialog = clientTransaction.getDialog();
@@ -1705,13 +1718,7 @@ public class SipUserAgentClient {
 						}
 					}
 					if (earlyMediaIsSupported) {
-						if (sendPrackRequest(dialog, request, response)) {
-							logger.info("{} response to {} arrived, so {} sent.", statusCode,
-								RequestMethod.INVITE, RequestMethod.PRACK);
-							logger.info("Early media session established: {}.", callId);
-//								bus.post(new CallInvitationRinging(callId, clientTransaction, true));
-							//FIXME post event which represents establishment of an early media session!
-						} else {
+						if (!sendPrackRequest(dialog, request, response)) {
 							logger.error("{} response to {} arrived, but UAC cannot provide suitable "
 								+ "answer to {} offer or PRACK could not be sent, so treating "
 								+ "response as 180 and aborting early media session negotiation attempt.",
@@ -1720,7 +1727,7 @@ public class SipUserAgentClient {
 						}
 					} else {
 						logger.error("{} response to {} arrived, but remote UAS hasn't indicated "
-							+ " support for {{}} negotiations, so treating response as 180 and aborting "
+							+ "support for {{}} negotiations, so treating response as 180 and aborting "
 							+ "early media session negotiation attempt.", statusCode,
 							request.getMethod(), SessionType.EARLY.getDisposition());
 						bus.post(new CallInvitationRinging(callId, clientTransaction));
@@ -1734,7 +1741,6 @@ public class SipUserAgentClient {
 			} else {
 				bus.post(new CallInvitationWaiting(callId, clientTransaction));
 			}
-			logger.info("{} response arrived.", statusCode);
 		}
 	}
 

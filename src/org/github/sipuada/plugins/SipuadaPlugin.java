@@ -2,7 +2,6 @@ package org.github.sipuada.plugins;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.SipUserAgent;
-import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 
 import android.javax.sdp.SessionDescription;
 

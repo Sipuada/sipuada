@@ -97,8 +97,9 @@ public class SipuadaTest {
 			}
 
 			@Override
-			public void onCallInvitationRinging(String localUser, String localUserDomain, String callId) {
-				logger.debug("onCallInvitationRinging: [localUser={{}}, localUserDomain={{}}, callId={{}}].", localUser, localUserDomain, callId);
+			public void onCallInvitationRinging(String localUser, String localUserDomain, String callId, boolean shouldExpectEarlyMedia) {
+				logger.debug("onCallInvitationRinging: [localUser={{}}, localUserDomain={{}}, callId={{}}, shouldExpectEarlyMeadia={{}}].",
+					localUser, localUserDomain, callId, shouldExpectEarlyMedia);
 			}
 
 			@Override

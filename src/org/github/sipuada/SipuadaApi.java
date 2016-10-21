@@ -57,7 +57,8 @@ public interface SipuadaApi {
 
 		void onWaitingForCallInvitationAnswer(String localUser, String localDomain, String callId);
 
-		void onCallInvitationRinging(String localUser, String localDomain, String callId);
+		void onCallInvitationRinging(String localUser, String localDomain, String callId,
+			boolean shouldExpectEarlyMedia);
 
 		void onCallInvitationDeclined(String localUser, String localDomain, String reason);
 

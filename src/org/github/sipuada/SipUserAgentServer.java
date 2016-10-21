@@ -12,9 +12,11 @@ import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
 import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
+import org.github.sipuada.events.EarlyMediaSessionEstablished;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.FinishEstablishedCall;
 import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
@@ -329,18 +331,91 @@ public class SipUserAgentServer {
 
 	private void handleAckRequest(Request request, ServerTransaction serverTransaction) {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
-		String callId = callIdHeader.getCallId();
+		final String callId = callIdHeader.getCallId();
+		boolean sendByeRightAway = false;
+		if (request.getContent() != null && request.getContentDisposition().getDispositionType()
+				.toLowerCase().trim().equals(SessionType.REGULAR.getDisposition())) {
+			sendByeRightAway = true;
+			try {
+				SipuadaPlugin sessionPlugin = sessionPlugins.get(RequestMethod.INVITE);
+				if (sessionPlugin != null) {
+					SessionDescription answer = SdpFactory.getInstance()
+						.createSessionDescriptionFromString
+						(new String(request.getRawContent()));
+					try {
+						sessionPlugin.receiveAnswerToAcceptedOffer
+							(callId, SessionType.REGULAR, answer);
+						sendByeRightAway = false;
+					} catch (Throwable unexpectedException) {
+						logger.error("Bad plug-in crashed while receiving {} answer "
+							+ "that arrived alongside {} to 2xx response to {} request."
+							+ " The UAS will ask the UAC to terminate the dialog right away.",
+							SessionType.REGULAR, RequestMethod.ACK, RequestMethod.INVITE,
+							unexpectedException);
+					}
+				} else {
+					sendByeRightAway = false;
+				}
+			} catch (SdpParseException parseException) {
+				logger.error("{} answer arrived in {} to 2xx response to {} request, "
+					+ "but could not be properly parsed, so it was discarded. "
+					+ "The UAS will ask the UAC to terminate the dialog right away.",
+					SessionType.REGULAR, RequestMethod.ACK, RequestMethod.INVITE,
+					parseException);
+			}
+		}
 		bus.post(new EstablishedCallStarted(callId, serverTransaction.getDialog()));
 		logger.info("New call established: {}.", callId);
+		if (sendByeRightAway) {
+			new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					try {
+						Thread.sleep(3000);
+					} catch (InterruptedException ignore) {}
+					bus.post(new FinishEstablishedCall
+						("Media types negotiation failed.", callId));
+				}
+
+			}).start();
+		}
 	}
 
 	private void handlePrackRequest(Request request, ServerTransaction serverTransaction) {
 		CallIdHeader callIdHeader = (CallIdHeader) request.getHeader(CallIdHeader.NAME);
-		String callId = callIdHeader.getCallId();
+		final String callId = callIdHeader.getCallId();
 		if (doSendResponse(Response.OK, RequestMethod.PRACK,
 				request, serverTransaction) != null) {
-			logger.info("Early media session established: {}.", callId);
-			//FIXME post event which represents establishment of an early media session!
+			if (request.getContent() != null && request.getContentDisposition().getDispositionType()
+					.toLowerCase().trim().equals(SessionType.EARLY.getDisposition())) {
+				try {
+					SipuadaPlugin sessionPlugin = sessionPlugins.get(RequestMethod.INVITE);
+					if (sessionPlugin != null) {
+						SessionDescription answer = SdpFactory.getInstance()
+							.createSessionDescriptionFromString
+							(new String(request.getRawContent()));
+						try {
+							sessionPlugin.receiveAnswerToAcceptedOffer
+								(callId, SessionType.EARLY, answer);
+							bus.post(new EarlyMediaSessionEstablished(callId));
+							logger.info("Early media session established: {}.", callId);
+						} catch (Throwable unexpectedException) {
+							logger.error("Bad plug-in crashed while receiving {} answer "
+								+ "that arrived alongside {} to 1xx response to {} request."
+								+ " The UAS will terminate the early media session right away.",
+								SessionType.EARLY, RequestMethod.PRACK, RequestMethod.INVITE,
+								unexpectedException);
+						}
+					}
+				} catch (SdpParseException parseException) {
+					logger.error("{} answer arrived in {} to 1xx response to {} request, "
+						+ "but could not be properly parsed, so it was discarded. "
+						+ "The UAS will terminate the early media session right away.",
+						SessionType.EARLY, RequestMethod.PRACK, RequestMethod.INVITE,
+						parseException);
+				}
+			}
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
@@ -530,9 +605,6 @@ public class SipUserAgentServer {
 			if (statusCode == Response.TRYING) {
 				reliableProvisionalResponseRequiredOrSupported = false;
 			}
-//			if (type == SessionType.EARLY && !reliableProvisionalResponseRequiredOrSupported) {
-//				statusCode = Response.BAD_EXTENSION;
-//			}
 			final Response response;
 			if (!responseIsProvisional || !reliableProvisionalResponseRequiredOrSupported) {
 				response = messenger.createResponse(statusCode, request);
@@ -544,16 +616,6 @@ public class SipUserAgentServer {
 					toHeader.setTag(Utils.getInstance().generateTag());
 				}
 				response.setHeader(toHeader);
-//				RequireHeader requireHeader = headerMaker.createRequireHeader("100rel");
-//				response.addHeader(requireHeader);
-//		        @SuppressWarnings("unchecked")
-//				ListIterator<Header> recordRouteHeaders = request.getHeaders(RecordRouteHeader.NAME);
-//		        while (recordRouteHeaders != null && recordRouteHeaders.hasNext()) {
-//		        	RecordRouteHeader recordRouteHeader =
-//	        			(RecordRouteHeader) recordRouteHeaders.next();
-//		        	RecordRouteHeader clone = (RecordRouteHeader) recordRouteHeader.clone();
-//		            response.addHeader(clone);
-//		        }
 				SipURI contactUri = addressMaker.createSipURI(username, localIp);
 				contactUri.setPort(localPort);
 				contactUri.setTransportParam(transport.toUpperCase());
@@ -587,7 +649,6 @@ public class SipUserAgentServer {
 					newServerTransaction.sendResponse(response);
 				} else {
 					newServerTransaction.getDialog().sendReliableProvisionalResponse(response);
-//					newServerTransaction.sendResponse(response);
 				}
 			} catch (RuntimeException lowLevelStackFailed) {
 				logger.error("{} response to {} request could not be sent due to a " +

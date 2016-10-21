@@ -24,9 +24,12 @@ import org.github.sipuada.events.CallInvitationDeclined;
 import org.github.sipuada.events.CallInvitationFailed;
 import org.github.sipuada.events.CallInvitationRinging;
 import org.github.sipuada.events.CallInvitationWaiting;
+import org.github.sipuada.events.EarlyMediaSessionEstablished;
+import org.github.sipuada.events.EarlyMediaSessionFinished;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
 import org.github.sipuada.events.EstablishedCallStarted;
+import org.github.sipuada.events.FinishEstablishedCall;
 import org.github.sipuada.events.MessageNotSent;
 import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.events.MessageSent;
@@ -277,6 +280,91 @@ public class SipUserAgent implements SipListener {
 
 		};
 		internalEventBus.register(eventBusSubscriber);
+		listenForEarlyMediaSessions();
+	}
+
+	private void listenForEarlyMediaSessions() {
+		logger.debug("LISTENING FOR MEDIA SESSIONS...");
+		Object earlyMediaSetupEventSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(EarlyMediaSessionEstablished event) {
+				final SipuadaPlugin sessionPlugin = registeredPlugins.get(RequestMethod.INVITE);
+				final String callId = event.getCallId();
+				Object earlyMediaTearDownEventSubscriber = new Object() {
+
+					@Subscribe
+					public void onEvent(CallInvitationFailed event) {
+						if (event.getCallId().equals(callId)) {
+							internalEventBus.post(new EarlyMediaSessionFinished(callId));
+						}
+					}
+
+					@Subscribe
+					public void onEvent(CallInvitationDeclined event) {
+						if (event.getCallId().equals(callId)) {
+							internalEventBus.post(new EarlyMediaSessionFinished(callId));
+						}
+					}
+
+					@Subscribe
+					public void onEvent(CallInvitationCanceled event) {
+						if (event.getCallId().equals(callId)) {
+							internalEventBus.post(new EarlyMediaSessionFinished(callId));
+						}
+					}
+
+					@Subscribe
+					public void onEvent(CallInvitationAccepted event) {
+						if (event.getCallId().equals(callId)) {
+							internalEventBus.post(new EarlyMediaSessionFinished(callId));
+						}
+					}
+
+					@Subscribe
+					public void onEvent(EstablishedCallStarted event) {
+						if (event.getCallId().equals(callId)) {
+							internalEventBus.post(new EarlyMediaSessionFinished(callId));
+						}
+					}
+
+					@Subscribe
+					public void onEvent(EarlyMediaSessionFinished event) {
+						if (event.getCallId().equals(callId)) {
+							internalEventBus.unregister(this);
+							try {
+								boolean sessionProperlyTerminated = sessionPlugin != null
+									&& sessionPlugin.performSessionTermination
+									(callId, SessionType.EARLY);
+								if (!sessionProperlyTerminated) {
+									logger.error("Plug-in signaled session termination "
+										+ "failure in context of call {}.", callId);
+								}
+							} catch (Throwable unexpectedException) {
+								logger.error("Bad plug-in crashed while trying "
+									+ "to perform session termination in context of call {}.",
+									callId, unexpectedException);
+							}
+						}
+					}
+
+				};
+				internalEventBus.register(earlyMediaTearDownEventSubscriber);
+				try {
+					boolean sessionProperlySetup = sessionPlugin != null && sessionPlugin
+						.performSessionSetup(callId, SessionType.EARLY, SipUserAgent.this);
+					if (!sessionProperlySetup) {
+						logger.error(String.format("Plug-in signaled session setup failure"
+							+ " in context of call {}.", callId));
+					}
+				} catch (Throwable unexpectedException) {
+					logger.error(String.format("Bad plug-in crashed while trying to perform"
+						+ " session setup in context of call {}.", callId), unexpectedException);
+				}
+			}
+
+		};
+		internalEventBus.register(earlyMediaSetupEventSubscriber);
 	}
 
 	private void inviteOperationIsAnswerable(String eventBusSubscriberId,
@@ -463,7 +551,8 @@ public class SipUserAgent implements SipListener {
 				if (event.getCallId().equals(callId)) {
 					inviteOperationIsCancelable(eventBusSubscriberId,
 							callId, transaction);
-					callback.onCallInvitationRinging(username, primaryHost, callId);
+					callback.onCallInvitationRinging(username, primaryHost, callId,
+						event.isEarlyMediaSessionEstablished());
 				}
 			}
 
@@ -726,7 +815,7 @@ public class SipUserAgent implements SipListener {
 	}
 
 	private void callEstablished(final String eventBusSubscriberId,
-			final String callId, Dialog dialog) {
+			final String callId, final Dialog dialog) {
 		callIdToActiveUserAgent.put(callId, this);
 		synchronized (activeUserAgentCallIds) {
 			if (!activeUserAgentCallIds.containsKey(this)) {
@@ -745,6 +834,14 @@ public class SipUserAgent implements SipListener {
 		establishedCalls.get(eventBusSubscriberId).add(dialog);
 		final SipuadaPlugin sessionPlugin = registeredPlugins.get(RequestMethod.INVITE);
 		Object eventBusSubscriber = new Object() {
+
+			@Subscribe
+			public void onEvent(FinishEstablishedCall event) {
+				if (event.getCallId().equals(callId)) {
+					uac.sendByeRequest(dialog, event.getReason() != null
+						&& !event.getReason().trim().isEmpty(), event.getReason());
+				}
+			}
 
 			@Subscribe
 			public void onEvent(EstablishedCallFailed event) {
