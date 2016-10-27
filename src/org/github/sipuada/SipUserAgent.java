@@ -891,22 +891,41 @@ public class SipUserAgent implements SipListener {
 		};
 		internalEventBus.register(eventBusSubscriber);
 		if (sessionPlugin != null) {
-			try {
-				boolean sessionProperlySetup = sessionPlugin
-					.performSessionSetup(callId, SessionType.REGULAR, this);
-				if (!sessionProperlySetup) {
-					String error = "Plug-in signaled session setup failure in context of call";
-					logger.error(String.format("%s {}.", error), callId);
-					listener.onCallFailure(username, primaryHost,
-						String.format("%s %s.", error, callId), callId);
-				}
-			} catch (Throwable unexpectedException) {
-				String error = "Bad plug-in crashed while trying to perform" +
-					" session setup in context of call";
-				logger.error(String.format("%s {}.", error), callId, unexpectedException);
-				listener.onCallFailure(username, primaryHost,
-					String.format("%s %s.", error, callId), callId);
+			final int delayToPerformSessionSetup;
+			if (sessionPlugin.isSessionOngoing(callId, SessionType.EARLY)) {
+				delayToPerformSessionSetup = 1200;
+			} else {
+				delayToPerformSessionSetup = 0;
 			}
+			new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					try {
+						Thread.sleep(delayToPerformSessionSetup);
+						try {
+							boolean sessionProperlySetup = sessionPlugin
+								.performSessionSetup(callId, SessionType.REGULAR,
+								SipUserAgent.this);
+							if (!sessionProperlySetup) {
+								String error = "Plug-in signaled session setup failure"
+									+ " in context of call";
+								logger.error(String.format("%s {}.", error), callId);
+								listener.onCallFailure(username, primaryHost,
+									String.format("%s %s.", error, callId), callId);
+							}
+						} catch (Throwable unexpectedException) {
+							String error = "Bad plug-in crashed while trying to perform" +
+								" session setup in context of call";
+							logger.error(String.format("%s {}.", error),
+								callId, unexpectedException);
+							listener.onCallFailure(username, primaryHost,
+								String.format("%s %s.", error, callId), callId);
+						}
+					} catch (InterruptedException ignore) {}
+				}
+
+			}).start();
 		}
 	}
 

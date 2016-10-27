@@ -1,6 +1,5 @@
 package org.github.sipuada.plugins;
 
-import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.SipUserAgent;
 
 import android.javax.sdp.SessionDescription;
@@ -29,8 +28,7 @@ public interface SipuadaPlugin {
 	 * @return a SessionDescription representing an offer or null if the plug-in
 	 * wishes to propose no offer to a request of given method.
 	 */
-	SessionDescription generateOffer(String callId, SessionType type,
-			RequestMethod method, String localAddress);
+	SessionDescription generateOffer(String callId, String localAddress);
 
 	/**
 	 * Feeds the accepted answer to a given offer back to the plug-in that generated
@@ -53,7 +51,7 @@ public interface SipuadaPlugin {
 	 * or null if the plug-in could not elaborate a valid answer to it.
 	 */
 	SessionDescription generateAnswer(String callId, SessionType type,
-			RequestMethod method, SessionDescription offer, String localAddress);
+		SessionDescription offer, String localAddress);
 
 	/**
 	 * Perform session setup since offer/answer sent alongside
@@ -64,6 +62,12 @@ public interface SipuadaPlugin {
 	 * @return true if the plug-in could setup the session, false otherwise.
 	 */
 	boolean performSessionSetup(String callId, SessionType type, SipUserAgent userAgent);
+
+	/**
+	 * Checks if there's an ongoing session of given type associated with given callId.
+	 * @return true if plug-in has an ongoing session associated with given callId and type.
+	 */
+	boolean isSessionOngoing(String callId, SessionType type);
 
 	/**
 	 * Perform session termination since offer/answer sent alongside
