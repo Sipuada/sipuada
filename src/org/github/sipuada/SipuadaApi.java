@@ -7,7 +7,8 @@ public interface SipuadaApi {
 	interface SipuadaListener {
 
 		boolean onCallInvitationArrived(String localUser, String localDomain,
-			String callId, String remoteUser, String remoteDomain);
+			String callId, String remoteUser, String remoteDomain,
+			boolean shouldExpectEarlyMedia);
 
 		void onCallInvitationCanceled(String localUser, String localDomain,
 			String reason, String callId);

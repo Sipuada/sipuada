@@ -6,17 +6,17 @@ public class CallInvitationRinging {
 	
 	private final String callId;
 	private final ClientTransaction clientTransaction;
-	private final boolean earlyMediaSessionEstablished;
+	private final boolean shouldExpectEarlyMedia;
 
 	public CallInvitationRinging(String callId, ClientTransaction transaction) {
 		this(callId, transaction, false);
 	}
 
 	public CallInvitationRinging(String callId, ClientTransaction transaction,
-			boolean earlyMediaSessionEstablished) {
+			boolean shouldExpectEarlyMedia) {
 		this.callId = callId;
 		this.clientTransaction = transaction;
-		this.earlyMediaSessionEstablished = earlyMediaSessionEstablished;
+		this.shouldExpectEarlyMedia = shouldExpectEarlyMedia;
 	}
 
 	public String getCallId() {
@@ -27,8 +27,8 @@ public class CallInvitationRinging {
 		return clientTransaction;
 	}
 
-	public boolean isEarlyMediaSessionEstablished() {
-		return earlyMediaSessionEstablished;
+	public boolean shouldExpectEarlyMedia() {
+		return shouldExpectEarlyMedia;
 	}
 
 }

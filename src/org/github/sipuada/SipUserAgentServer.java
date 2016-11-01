@@ -315,7 +315,8 @@ public class SipUserAgentServer {
 		String remoteUser = fromHeader.getAddress().getURI().toString().split("@")[0].split(":")[1];
 		String remoteDomain = fromHeader.getAddress().getURI().toString().split("@")[1];
 		if (newServerTransaction != null) {
-			bus.post(new CallInvitationArrived(callId, newServerTransaction, remoteUser, remoteDomain));
+			bus.post(new CallInvitationArrived(callId, newServerTransaction,
+				remoteUser, remoteDomain, provisionalResponse == Response.SESSION_PROGRESS));
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
@@ -363,6 +364,8 @@ public class SipUserAgentServer {
 //					parseException);
 //			}
 //		}
+		logger.debug("$ About to perform OFFER/ANSWER exchange step "
+			+ "expecting to setup regular session! $");
 		boolean sendByeRightAway = /*sessionPlugins.get(RequestMethod.INVITE) != null
 			&& */!sessionManager.performOfferAnswerExchangeStep
 				(callId, SessionType.REGULAR, requestsHandled.get(callId),
@@ -388,6 +391,8 @@ public class SipUserAgentServer {
 	private void handlePrackRequest(Request prackRequest, ServerTransaction serverTransaction) {
 		CallIdHeader callIdHeader = (CallIdHeader) prackRequest.getHeader(CallIdHeader.NAME);
 		final String callId = callIdHeader.getCallId();
+		Request originalRequest = requestsHandled.get(callId);
+		Response originalResponse = responsesSent.get(callId);
 		if (doSendResponse(Response.OK, RequestMethod.PRACK,
 				prackRequest, serverTransaction) != null) {
 //			if (request.getContent() != null && request.getContentDisposition().getDispositionType()
@@ -421,9 +426,10 @@ public class SipUserAgentServer {
 //						parseException);
 //				}
 //			}
+			logger.debug("$ About to perform OFFER/ANSWER exchange step "
+				+ "expecting to setup early media session! $");
 			if (sessionManager.performOfferAnswerExchangeStep
-				(callId, SessionType.EARLY, requestsHandled.get(callId),
-					responsesSent.get(callId), prackRequest)) {
+					(callId, SessionType.EARLY, originalRequest, originalResponse, prackRequest)) {
 				bus.post(new EarlyMediaSessionEstablished(callId));
 				logger.info("Early media session established: {}.", callId);
 			}
@@ -694,6 +700,8 @@ public class SipUserAgentServer {
 
 	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
 			String callId, SessionType type, Request request, Response response) {
+		logger.debug("$ About to perform OFFER/ANSWER exchange step "
+			+ "expecting to put offer into Res or put answer into Res! $");
 		return sessionManager.performOfferAnswerExchangeStep(callId, type, request, response, null);
 //		if (request.getContent() == null || !request.getContentDisposition()
 //				.getDispositionType().toLowerCase().trim().equals(type.getDisposition())) {

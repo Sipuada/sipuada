@@ -41,6 +41,7 @@ public class SessionManager {
 
 	public boolean performOfferAnswerExchangeStep(String callId, SessionType type,
 			Request request, Response response, Request ackRequest) {
+		logger.debug("$ Performing OFFER/ANSWER exchange step {}/{}! $", callId, type);
 		SipuadaPlugin sessionPlugin = null;
 		if (request != null) {
 			RequestMethod requestMethod = RequestMethod.UNKNOWN;
@@ -62,6 +63,8 @@ public class SessionManager {
 			contentDispositionMatters, dispositionType);
 		boolean ackRequestHasSdp = messageHasSdpOfInterest(ackRequest,
 			contentDispositionMatters, dispositionType);
+		logger.debug("$ Messages: Req: {{}}, Res: {{}}, Ack: {{}}! $",
+			requestHasSdp, responseHasSdp, ackRequestHasSdp);
 		if (!requestHasSdp && !responseHasSdp && !ackRequestHasSdp) {
 			//if UAC: OFFER at Request only
 			//if UAS: OFFER at Response only
@@ -150,7 +153,7 @@ public class SessionManager {
 		if (sessionPlugin == null) {
 			logger.info("No plug-in available to generate offer "
 				+ "to be inserted into {}.", offerMessageIdentifier);
-			return false;
+			return true;
 		}
 		SessionDescription offer = null;
 		try {
@@ -279,6 +282,32 @@ public class SessionManager {
 				answerMessageIdentifier, role, parseException);
 		}
 		return false;
+	}
+
+	public static boolean performSessionSetup(SipuadaPlugin sessionPlugin,
+			String callId, SessionType sessionType, SipUserAgent sipUserAgent) {
+		if (sessionPlugin == null) {
+			return true;
+		}
+		boolean veredict = true;
+		for (SessionType type : SessionType.values()) {
+			if (sessionPlugin.isSessionOngoing(callId, type)) {
+				veredict &= performSessionTermination(sessionPlugin, callId, type);
+			}
+		}
+		return veredict && sessionPlugin.performSessionSetup
+				(callId, sessionType, sipUserAgent);
+	}
+
+	public static boolean performSessionTermination(SipuadaPlugin sessionPlugin,
+			String callId, SessionType sessionType) {
+		if (sessionPlugin == null) {
+			return true;
+		}
+		if (!sessionPlugin.isSessionOngoing(callId, sessionType)) {
+			return true;
+		}
+		return sessionPlugin.performSessionTermination(callId, sessionType);
 	}
 
 }

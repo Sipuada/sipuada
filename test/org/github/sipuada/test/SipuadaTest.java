@@ -18,9 +18,10 @@ public class SipuadaTest {
 
 			@Override
 			public boolean onCallInvitationArrived(String localUser, String localUserDomain, String callId,
-					String remoteUsername, String remoteHost) {
+					String remoteUsername, String remoteHost, boolean shouldExpectEarlyMedia) {
 				logger.debug("onCallInvitationArrived: [localUser={{}}, localUserDomain={{}}, callId={{}};" +
-					" remoteUsername={{}}; remoteHost={{}}].", localUser, localUserDomain, callId, remoteUsername, remoteHost);
+					" remoteUsername={{}}; remoteHost={{}}; shouldExpectEarlyMedia={{}}].", localUser,
+					localUserDomain, callId, remoteUsername, remoteHost, shouldExpectEarlyMedia);
 				return false;
 			}
 

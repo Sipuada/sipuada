@@ -8,13 +8,15 @@ public class CallInvitationArrived {
 	private final ServerTransaction serverTransaction;
 	private final String remoteUser;
 	private final String remoteDomain;
+	private final boolean shouldExpectEarlyMedia;
 
 	public CallInvitationArrived(String callId, ServerTransaction transaction,
-			String remoteUser, String remoteDomain) {
+			String remoteUser, String remoteDomain, boolean shouldExpectEarlyMedia) {
 		this.callId = callId;
 		this.serverTransaction = transaction;
 		this.remoteUser = remoteUser;
 		this.remoteDomain = remoteDomain;
+		this.shouldExpectEarlyMedia = shouldExpectEarlyMedia;
 	}
 
 	public String getCallId() {
@@ -31,6 +33,10 @@ public class CallInvitationArrived {
 
 	public String getRemoteDomain() {
 		return remoteDomain;
+	}
+
+	public boolean shouldExpectEarlyMedia() {
+		return shouldExpectEarlyMedia;
 	}
 
 }

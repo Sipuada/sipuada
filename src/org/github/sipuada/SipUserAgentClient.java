@@ -825,6 +825,8 @@ public class SipUserAgentClient {
 
 	private void putOfferIntoRequestIfApplicable(RequestMethod method,
 			String callId, SessionType type, Request request) {
+		logger.debug("$ About to perform OFFER/ANSWER exchange step "
+			+ "expecting to put offer into Req! $");
 		sessionManager.performOfferAnswerExchangeStep
 			(callId, type, request, null, null);
 //		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
@@ -1749,6 +1751,8 @@ public class SipUserAgentClient {
 
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
 			SessionType type, Request request, Response response, Request ackRequest) {
+		logger.debug("$ About to perform OFFER/ANSWER exchange step "
+			+ "expecting put answer into Ack or parse answer from Res! $");
 		return sessionManager.performOfferAnswerExchangeStep
 			(callId, type, request, response, ackRequest);
 //		if (request.getContent() != null && request.getContentDisposition()

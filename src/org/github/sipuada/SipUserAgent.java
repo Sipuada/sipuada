@@ -257,8 +257,8 @@ public class SipUserAgent implements SipListener {
 
 				};
 				internalEventBus.register(inviteCancelerEventBusSubscriber);
-				boolean currentlyBusy = listener.onCallInvitationArrived(username, primaryHost,
-					callId, event.getRemoteUser(), event.getRemoteDomain());
+				boolean currentlyBusy = listener.onCallInvitationArrived(username, primaryHost, callId,
+					event.getRemoteUser(), event.getRemoteDomain(), event.shouldExpectEarlyMedia());
 				if (currentlyBusy) {
 					logger.info("Callee is currently busy.");
 					answerInviteRequest(callId, false);
@@ -330,11 +330,18 @@ public class SipUserAgent implements SipListener {
 					@Subscribe
 					public void onEvent(EarlyMediaSessionFinished event) {
 						if (event.getCallId().equals(callId)) {
-							internalEventBus.unregister(this);
 							try {
-								boolean sessionProperlyTerminated = sessionPlugin != null
-									&& sessionPlugin.performSessionTermination
-									(callId, SessionType.EARLY);
+								internalEventBus.unregister(this);
+							} catch (IllegalArgumentException exception) {
+								if (sessionPlugin != null && !sessionPlugin
+										.isSessionOngoing(callId, SessionType.EARLY)) {
+									return;
+								}
+							}
+							try {
+								boolean sessionProperlyTerminated
+									= SessionManager.performSessionTermination
+										(sessionPlugin, callId, SessionType.EARLY);
 								if (!sessionProperlyTerminated) {
 									logger.error("Plug-in signaled session termination "
 										+ "failure in context of call {}.", callId);
@@ -350,15 +357,15 @@ public class SipUserAgent implements SipListener {
 				};
 				internalEventBus.register(earlyMediaTearDownEventSubscriber);
 				try {
-					boolean sessionProperlySetup = sessionPlugin != null && sessionPlugin
-						.performSessionSetup(callId, SessionType.EARLY, SipUserAgent.this);
+					boolean sessionProperlySetup = SessionManager.performSessionSetup
+						(sessionPlugin, callId, SessionType.EARLY, SipUserAgent.this);
 					if (!sessionProperlySetup) {
 						logger.error(String.format("Plug-in signaled session setup failure"
 							+ " in context of call {}.", callId));
 					}
 				} catch (Throwable unexpectedException) {
-					logger.error(String.format("Bad plug-in crashed while trying to perform"
-						+ " session setup in context of call {}.", callId), unexpectedException);
+					logger.error("Bad plug-in crashed while trying to perform"
+						+ " session setup in context of call {}.", callId, unexpectedException);
 				}
 			}
 
@@ -538,8 +545,7 @@ public class SipUserAgent implements SipListener {
 			public void onEvent(CallInvitationWaiting event) {
 				ClientTransaction transaction = event.getClientTransaction();
 				if (event.getCallId().equals(callId)) {
-					inviteOperationIsCancelable(eventBusSubscriberId,
-							callId, transaction);
+					inviteOperationIsCancelable(eventBusSubscriberId, callId, transaction);
 					callback.onWaitingForCallInvitationAnswer(username, primaryHost, callId);
 				}
 			}
@@ -548,10 +554,9 @@ public class SipUserAgent implements SipListener {
 			public void onEvent(CallInvitationRinging event) {
 				ClientTransaction transaction = event.getClientTransaction();
 				if (event.getCallId().equals(callId)) {
-					inviteOperationIsCancelable(eventBusSubscriberId,
-							callId, transaction);
+					inviteOperationIsCancelable(eventBusSubscriberId, callId, transaction);
 					callback.onCallInvitationRinging(username, primaryHost, callId,
-						event.isEarlyMediaSessionEstablished());
+						event.shouldExpectEarlyMedia());
 				}
 			}
 
@@ -847,19 +852,18 @@ public class SipUserAgent implements SipListener {
 				if (event.getCallId().equals(callId)) {
 					wipeEstablishedCall(callId, eventBusSubscriberId);
 					internalEventBus.unregister(this);
-					if (sessionPlugin != null) {
-						try {
-							boolean sessionProperlyTerminated = sessionPlugin
-								.performSessionTermination(callId, SessionType.REGULAR);
-							if (!sessionProperlyTerminated) {
-								logger.error("Plug-in signaled session termination failure " +
-									"in context of call {}.", callId);
-							}
-						} catch (Throwable unexpectedException) {
-							logger.error("Bad plug-in crashed while trying " +
-								"to perform session termination in context of call {}.",
-								callId, unexpectedException);
+					try {
+						boolean sessionProperlyTerminated = SessionManager
+							.performSessionTermination(sessionPlugin,
+								callId, SessionType.REGULAR);
+						if (!sessionProperlyTerminated) {
+							logger.error("Plug-in signaled session termination failure "
+								+ "in context of call {}.", callId);
 						}
+					} catch (Throwable unexpectedException) {
+						logger.error("Bad plug-in crashed while trying "
+							+ "to perform session termination in context of call {}.",
+							callId, unexpectedException);
 					}
 					listener.onCallFailure(username, primaryHost, event.getReason(), callId);
 				}
@@ -870,19 +874,18 @@ public class SipUserAgent implements SipListener {
 				if (event.getCallId().equals(callId)) {
 					wipeEstablishedCall(callId, eventBusSubscriberId);
 					internalEventBus.unregister(this);
-					if (sessionPlugin != null) {
-						try {
-							boolean sessionProperlyTerminated = sessionPlugin
-								.performSessionTermination(callId, SessionType.REGULAR);
-							if (!sessionProperlyTerminated) {
-								logger.error("Plug-in signaled session termination failure " +
-									"in context of call {}.", callId);
-							}
-						} catch (Throwable unexpectedException) {
-							logger.error("Bad plug-in crashed while trying " +
-								"to perform session termination in context of call {}.",
-								callId, unexpectedException);
+					try {
+						boolean sessionProperlyTerminated = SessionManager
+							.performSessionTermination(sessionPlugin,
+								callId, SessionType.REGULAR);
+						if (!sessionProperlyTerminated) {
+							logger.error("Plug-in signaled session termination failure "
+								+ "in context of call {}.", callId);
 						}
+					} catch (Throwable unexpectedException) {
+						logger.error("Bad plug-in crashed while trying "
+							+ "to perform session termination in context of call {}.",
+							callId, unexpectedException);
 					}
 					listener.onCallFinished(username, primaryHost, callId);
 				}
@@ -904,9 +907,9 @@ public class SipUserAgent implements SipListener {
 					try {
 						Thread.sleep(delayToPerformSessionSetup);
 						try {
-							boolean sessionProperlySetup = sessionPlugin
-								.performSessionSetup(callId, SessionType.REGULAR,
-								SipUserAgent.this);
+							boolean sessionProperlySetup = SessionManager
+								.performSessionSetup(sessionPlugin, callId,
+									SessionType.REGULAR, SipUserAgent.this);
 							if (!sessionProperlySetup) {
 								String error = "Plug-in signaled session setup failure"
 									+ " in context of call";
@@ -915,12 +918,12 @@ public class SipUserAgent implements SipListener {
 									String.format("%s %s.", error, callId), callId);
 							}
 						} catch (Throwable unexpectedException) {
-							String error = "Bad plug-in crashed while trying to perform" +
-								" session setup in context of call";
-							logger.error(String.format("%s {}.", error),
-								callId, unexpectedException);
+							logger.error("Bad plug-in crashed while trying to perform "
+								+ "session setup in context of call {}.", callId,
+								unexpectedException);
 							listener.onCallFailure(username, primaryHost,
-								String.format("%s %s.", error, callId), callId);
+								"Bad plug-in crashed while trying to perform session "
+								+ "setup in context of call " + callId + ".", callId);
 						}
 					} catch (InterruptedException ignore) {}
 				}
