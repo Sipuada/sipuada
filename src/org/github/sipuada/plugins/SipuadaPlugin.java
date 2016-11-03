@@ -23,8 +23,7 @@ public interface SipuadaPlugin {
 	}
 
 	/**
-	 * Generates offer to go along
-	 * a session-creating request of given method.
+	 * Generates offer to go along a session-creating request.
 	 * @return a SessionDescription representing an offer or null if the plug-in
 	 * wishes to propose no offer to a request of given method.
 	 */
@@ -45,10 +44,9 @@ public interface SipuadaPlugin {
 	void receiveAnswerToAcceptedOffer(String callId, SessionType type, SessionDescription answer);
 
 	/**
-	 * Generates an answer to an offer to go along a response
-	 * to a session-creating request of given method.
-	 * @return a SessionDescription representing the answer to an offer
-	 * or null if the plug-in could not elaborate a valid answer to it.
+	 * Generates an answer to an offer to go along a response to a session-creating request.
+	 * @return a SessionDescription representing the answer to an offer or null if the
+	 * plug-in could not elaborate a valid answer to it.
 	 */
 	SessionDescription generateAnswer(String callId, SessionType type,
 		SessionDescription offer, String localAddress);

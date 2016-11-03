@@ -9,7 +9,7 @@ import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import android.javax.sdp.SdpFactory;
+import android.javax.sdp.SdpFactoryImpl;
 import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
 import android.javax.sip.header.ContentTypeHeader;
@@ -207,7 +207,7 @@ public class SessionManager {
 		}
 		SessionDescription offer;
 		try {
-			offer = SdpFactory.getInstance().createSessionDescriptionFromString
+			offer = SdpFactoryImpl.getInstance().createSessionDescriptionFromString
 				(new String(offerMessage.getRawContent()));
 		} catch (SdpParseException parseException) {
 			logger.error("Offer arrived in {}, but could not be properly parsed,"
@@ -263,7 +263,7 @@ public class SessionManager {
 					+ " has arrived within {}.", answerMessageIdentifier);
 				return false;
 			}
-			SessionDescription answer = SdpFactory.getInstance()
+			SessionDescription answer = SdpFactoryImpl.getInstance()
 				.createSessionDescriptionFromString(new String(answerMessage.getRawContent()));
 			try {
 				logger.debug("{}'s plug-in will process answer \n{}\n in context"

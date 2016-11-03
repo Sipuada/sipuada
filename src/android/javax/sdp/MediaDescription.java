@@ -10,8 +10,8 @@ import java.io.*;
 import java.util.*;
 
 // issued by Miguel Freitas - work-around
-import android.gov.nist.gnjvx.sdp.fields.PreconditionFields;
-import android.gov.nist.gnjvx.sdp.fields.AttributeField;
+import android.gov.nist.javax.sdp.fields.PreconditionFields;
+import android.gov.nist.javax.sdp.fields.AttributeField;
 // end //
 
 
