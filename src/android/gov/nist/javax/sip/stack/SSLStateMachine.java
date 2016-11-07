@@ -25,10 +25,6 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
@@ -40,6 +36,9 @@ import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLPeerUnverifiedException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This is a helper state machine that negotiates the SSL connection automatically
@@ -55,7 +54,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
  */
 public class SSLStateMachine {
 
-	private static StackLogger logger = CommonLogger.getLogger(SSLStateMachine.class);
+	private static Logger logger = LoggerFactory.getLogger(SSLStateMachine.class);
 	public final static ByteBuffer EMPTY_BUFFER = ByteBuffer.wrap(new byte[] {});
 
 	protected SSLEngine sslEngine;
@@ -77,12 +76,7 @@ public class SSLStateMachine {
 	public void wrap(ByteBuffer src, ByteBuffer dst, 
 			MessageSendCallback callback) throws IOException {
 		synchronized (wrapLock) {
-
-
-			if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-				logger.logDebug("Wrapping " + src + ", buffers size " + pendingOutboundBuffers.size());
-			}
-
+			logger.debug("Wrapping " + src + ", buffers size " + pendingOutboundBuffers.size());
 			// Null src means we just have no ne data but still want to push any previously queued data
 			if(src != null) {
 				pendingOutboundBuffers.offer(new MessageSendItem(src, callback));
@@ -99,23 +93,17 @@ public class SSLStateMachine {
 				SSLEngineResult result;
 				try {
 					result = sslEngine.wrap(currentBuffer.message, dst);
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Wrap result " + result + " buffers size " + pendingOutboundBuffers.size());
-					}
+					logger.debug("Wrap result " + result + " buffers size " + pendingOutboundBuffers.size());
 				} finally {
 					if(!currentBuffer.message.hasRemaining()) {
 						pendingOutboundBuffers.remove();
-						if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-							logger.logDebug("REMOVED item from encryption queue because it has no more data, all is done, buffers size now is "
-								+ pendingOutboundBuffers.size() + " current buffer is " + currentBuffer);
-						}
+						logger.debug("REMOVED item from encryption queue because it has no more data, all is done, buffers size now is "
+							+ pendingOutboundBuffers.size() + " current buffer is " + currentBuffer);
 					}
 				}
 				int remaining = currentBuffer.message.remaining();
 
-				if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-					logger.logDebug("Remaining " + remaining +  " queue size is " + pendingOutboundBuffers.size());
-				}
+				logger.debug("Remaining " + remaining +  " queue size is " + pendingOutboundBuffers.size());
 
 				if(result.bytesProduced() > 0) {
 					// produced > 0 means encryption was successful and we have something to send over the wire
@@ -154,9 +142,7 @@ public class SSLStateMachine {
 										((NioTlsMessageChannel)channel).getHandshakeCompletedListener().setPeerCertificates(sslEngine.getSession().getPeerCertificates());
 									} catch (SSLPeerUnverifiedException e) {
 										// no op if -Dgov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled is used, no peer certificates will be available
-										if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-											logger.logDebug("sslEngine.getSession().getPeerCertificates() are not available, which is normal if running with gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled");
-										}
+										logger.debug("sslEngine.getSession().getPeerCertificates() are not available, which is normal if running with gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled");
 									}
 								}
 								((NioTlsMessageChannel)channel).getHandshakeCompletedListener().setLocalCertificates(sslEngine.getSession().getLocalCertificates());
@@ -183,10 +169,8 @@ public class SSLStateMachine {
 		try {
 			loop:while(true) {
 				result = sslEngine.wrap(EMPTY_BUFFER, encryptedDataBuffer);
-				if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-					logger.logDebug("NonAppWrap result " + result + " buffers size "
-							+ pendingOutboundBuffers.size());
-				}
+				logger.debug("NonAppWrap result " + result + " buffers size "
+						+ pendingOutboundBuffers.size());
 				if (result.bytesProduced() > 0) {
 					// any output here is internal TLS metadata such as handshakes
 					encryptedDataBuffer.flip();
@@ -199,9 +183,7 @@ public class SSLStateMachine {
 
 				switch (result.getHandshakeStatus()) {
 				case FINISHED:
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Handshake complete!");
-					}
+					logger.debug("Handshake complete!");
 					// Added for https://java.net/jira/browse/JSIP-483 
 					if(channel instanceof NioTlsMessageChannel) {
 						((NioTlsMessageChannel)channel).setHandshakeCompleted(true);
@@ -212,9 +194,7 @@ public class SSLStateMachine {
 									((NioTlsMessageChannel)channel).getHandshakeCompletedListener().setPeerCertificates(sslEngine.getSession().getPeerCertificates());
 								} catch (SSLPeerUnverifiedException e) {
 									// no op if -Dgov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled is used, no peer certificates will be available
-									if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-										logger.logDebug("sslEngine.getSession().getPeerCertificates() are not available, which is normal if running with gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled");
-									}
+									logger.debug("sslEngine.getSession().getPeerCertificates() are not available, which is normal if running with gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled");
 								}
 							}
 							((NioTlsMessageChannel)channel).getHandshakeCompletedListener().setLocalCertificates(sslEngine.getSession().getLocalCertificates());
@@ -256,25 +236,18 @@ public class SSLStateMachine {
 			// Prepare the buffer for reading
 			tlsRecordBuffer.flip();
 
-			if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-				logger.logDebug("Allocated record buffer for reading " + tlsRecordBuffer + " for src = " + src);
-			}
+			logger.debug("Allocated record buffer for reading " + tlsRecordBuffer + " for src = " + src);
 		}
 	}
 	private void clearBuffer() {
 		tlsRecordBuffer = null;
-		if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("Buffer cleared");
-		}
+		logger.debug("Buffer cleared");
 	}
 	private ByteBuffer normalizeTlsRecordBuffer(ByteBuffer src) {
 		if(tlsRecordBuffer == null) {
 			return src;
 		} else {
-			if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-				logger.logDebug("Normalize buffer " + src + " into record buffer " 
-						+ tlsRecordBuffer);
-			}
+			logger.debug("Normalize buffer " + src + " into record buffer " + tlsRecordBuffer);
 
 			// Reverse flip() to prepare the buffer to writing in append mode
 			tlsRecordBuffer.position(tlsRecordBuffer.limit());
@@ -291,52 +264,38 @@ public class SSLStateMachine {
 	private void unwrap(ByteBuffer src, ByteBuffer dst) throws Exception {
 		synchronized (unwrapLock) {
 
-
 			loop:while(true) {
 				src = normalizeTlsRecordBuffer(src);
-				if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-					logger.logDebug("Unwrap src " + src + " dst " 
-							+ dst);
-				}
+				logger.debug("Unwrap src " + src + " dst " + dst);
 				SSLEngineResult result = null;
 				try {
 					result = sslEngine.unwrap(src, dst);
 				} catch (Exception e) {
 					// https://java.net/jira/browse/JSIP-464 
 					// Make sure to throw the exception so the result variable is not null below which makes the stack hang
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("An Exception occured while trying to unwrap the message " + e);
-					}
+					logger.debug("An Exception occured while trying to unwrap the message " + e);
 					throw e;
 				}
-				if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-					logger.logDebug("Unwrap result " + result + " buffers size " 
-							+ pendingOutboundBuffers.size() + " src=" + src + " dst=" + dst);
-				}
+				logger.debug("Unwrap result " + result + " buffers size " 
+					+ pendingOutboundBuffers.size() + " src=" + src + " dst=" + dst);
 
 				if(result.getStatus().equals(Status.BUFFER_UNDERFLOW)) {
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Buffer underflow, wait for the next inbound chunk of data to feed the SSL engine");
-					}
+					logger.debug("Buffer underflow, wait for the next inbound chunk of data to feed the SSL engine");
 					startBuffer(src);
 					break;
 				} else {
 					clearBuffer();
 				}
 				if(result.getStatus().equals(Status.BUFFER_OVERFLOW)) {
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Buffer overflow , must prepare the buffer again."
-								+ " outNetBuffer remaining: " +  dst.remaining()
-								+ " outNetBuffer postion: " +  dst.position()
-								+ " Packet buffer size: " + sslEngine.getSession().getPacketBufferSize()
-								+ " new buffer size: " + sslEngine.getSession().getPacketBufferSize() + dst.position());
-					}
+					logger.debug("Buffer overflow , must prepare the buffer again."
+						+ " outNetBuffer remaining: " +  dst.remaining()
+						+ " outNetBuffer postion: " +  dst.position()
+						+ " Packet buffer size: " + sslEngine.getSession().getPacketBufferSize()
+						+ " new buffer size: " + sslEngine.getSession().getPacketBufferSize() + dst.position());
 					ByteBuffer newBuf = channel.prepareAppDataBuffer(sslEngine.getSession().getPacketBufferSize());
 					dst = newBuf;
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug(" new outNetBuffer remaining: " +  dst.remaining()
-								+ " new outNetBuffer postion: " +  dst.position());
-					}
+					logger.debug(" new outNetBuffer remaining: " +  dst.remaining()
+						+ " new outNetBuffer postion: " +  dst.position());
 					continue;
 				}
 				if(result.bytesProduced()>0) {
@@ -349,9 +308,7 @@ public class SSLStateMachine {
 				}
 				switch(result.getHandshakeStatus()) {
 				case NEED_UNWRAP:
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Unwrap has remaining: " + src.hasRemaining() + " buffer " + src);
-					}
+					logger.debug("Unwrap has remaining: " + src.hasRemaining() + " buffer " + src);
 					if(src.hasRemaining()) {
 						break;
 					} else {
@@ -364,17 +321,12 @@ public class SSLStateMachine {
 					runDelegatedTasks(result);
 					break;
 				case FINISHED:
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Handshaking just finnished, but has remaining. Will try to wrap the queues app items.");
-					}
+					logger.debug("Handshaking just finnished, but has remaining. Will try to wrap the queues app items.");
 					wrapRemaining();
 					if(src.hasRemaining()) {
 						break;
 					} else {
-						if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-							this.logger.logDebug(
-									"Handshake passed");
-						}
+						logger.debug("Handshake passed");
 						// Added for https://java.net/jira/browse/JSIP-483 
 						// allow application to enforce policy by validating the
 						// certificate
@@ -387,9 +339,7 @@ public class SSLStateMachine {
 										((NioTlsMessageChannel)channel).getHandshakeCompletedListener().setPeerCertificates(sslEngine.getSession().getPeerCertificates());
 									} catch (SSLPeerUnverifiedException e) {
 										// no op if -Dgov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled is used, no peer certificates will be available
-										if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-											logger.logDebug("sslEngine.getSession().getPeerCertificates() are not available, which is normal if running with gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled");
-										}
+										logger.debug("sslEngine.getSession().getPeerCertificates() are not available, which is normal if running with gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE=Disabled");
 									}
 								}
 								((NioTlsMessageChannel)channel).getHandshakeCompletedListener().setLocalCertificates(sslEngine.getSession().getLocalCertificates());
@@ -404,19 +354,13 @@ public class SSLStateMachine {
 							} catch (SecurityException ex) {
 								throw new IOException(ex.getMessage());
 							}
-
-							if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-								this.logger.logDebug(
-										"TLS Security policy passed");
-							}
+							logger.debug("TLS Security policy passed");
 						}
 						break loop;
 					}
 				case NOT_HANDSHAKING:
 					wrapRemaining();
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Not handshaking, but has remaining: " + src.hasRemaining() + " buffer " + src);
-					}
+					logger.debug("Not handshaking, but has remaining: " + src.hasRemaining() + " buffer " + src);
 					if(src.hasRemaining()) {
 						break;
 					} else {
@@ -430,10 +374,7 @@ public class SSLStateMachine {
 	}
 
 	private void runDelegatedTasks(SSLEngineResult result) throws IOException {
-		if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("Running delegated task for " + result);
-		}
-
+		logger.debug("Running delegated task for " + result);
 		/*
 		 *  Delegated tasks are just invisible steps inside the sslEngine state machine.
 		 *  Call them every time they have NEED_TASK otherwise the sslEngine won't make progress
@@ -444,9 +385,7 @@ public class SSLStateMachine {
 				runnable.run();
 			}
 			HandshakeStatus hsStatus = sslEngine.getHandshakeStatus();
-			if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-				logger.logDebug("Handshake status after delegated tasks " + hsStatus);
-			}
+			logger.debug("Handshake status after delegated tasks " + hsStatus);
 			if (hsStatus == HandshakeStatus.NEED_TASK) {
 				throw new IOException(
 						"handshake shouldn't need additional tasks");

@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.eventbus.EventBus;
 
-import android.gov.nist.gnjvx.sip.Utils;
+import android.gov.nist.javax.sip.Utils;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.RequestEvent;
 import android.javax.sip.ServerTransaction;
@@ -102,7 +102,9 @@ public class SipUserAgentServer {
 		RequestMethod method = RequestMethod.UNKNOWN;
 		try {
 			method = RequestMethod.valueOf(request.getMethod());
-		} catch (IllegalArgumentException ignore) {}
+		} catch (IllegalArgumentException ignore) {
+			ignore.printStackTrace();
+		}
 		logger.debug("Request arrived to UAS with method {}.", method);
 		handleRequest(method, request, serverTransaction);
 	}
@@ -158,7 +160,9 @@ public class SipUserAgentServer {
 					AllowHeader allowHeader = headerMaker
 							.createAllowHeader(acceptedMethod.toString());
 					allowedMethods.add(allowHeader);
-				} catch (ParseException ignore) {}
+				} catch (ParseException ignore) {
+					ignore.printStackTrace();
+				}
 			}
 			if (doSendResponse(Response.METHOD_NOT_ALLOWED, method,
 					request, serverTransaction, allowedMethods
@@ -279,7 +283,9 @@ public class SipUserAgentServer {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		boolean earlyMediaIsSupported = false;
 		@SuppressWarnings("unchecked")
@@ -303,7 +309,9 @@ public class SipUserAgentServer {
 				SupportedHeader supportedHeader = headerMaker
 					.createSupportedHeader(SessionType.EARLY.getDisposition());
 				additionalHeaders.add(supportedHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		} else {
 			provisionalResponse = Response.RINGING;
 			sessionType = SessionType.REGULAR;
@@ -379,7 +387,9 @@ public class SipUserAgentServer {
 				public void run() {
 					try {
 						Thread.sleep(3000);
-					} catch (InterruptedException ignore) {}
+					} catch (InterruptedException ignore) {
+						ignore.printStackTrace();
+					}
 					bus.post(new FinishEstablishedCall
 						("Media types negotiation failed.", callId));
 				}
@@ -467,7 +477,9 @@ public class SipUserAgentServer {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				allowHeaders.add(allowHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		ServerTransaction newServerTransaction = doSendResponse(Response.OK, RequestMethod.MESSAGE, request,
 			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()]));
@@ -476,7 +488,9 @@ public class SipUserAgentServer {
 			if (contentTypeHeader == null) {
 				try {
 					contentTypeHeader = headerMaker.createContentTypeHeader("text", "plain");
-				} catch (ParseException ignore) {}
+				} catch (ParseException ignore) {
+					ignore.printStackTrace();
+				}
 			}
 			byte[] rawContent = request.getRawContent();
 			String content = "";
@@ -526,12 +540,16 @@ public class SipUserAgentServer {
 		try {
 			contactUri.setTransportParam(transport.toUpperCase());
 			contactUri.setParameter("ob", null);
-		} catch (ParseException ignore) {}
+		} catch (ParseException ignore) {
+			ignore.printStackTrace();
+		}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 //		try {
 //			contactHeader.setExpires(60);
-//		} catch (ParseException ignore) {}
+//		} catch (ParseException ignore) {
+//			ignore.printStackTrace();
+//		}
 		additionalHeaders.add(contactHeader);
 
 		for (RequestMethod acceptedMethod : SipUserAgent.ACCEPTED_METHODS) {
@@ -539,7 +557,9 @@ public class SipUserAgentServer {
 				AllowHeader allowHeader = headerMaker
 						.createAllowHeader(acceptedMethod.toString());
 				additionalHeaders.add(allowHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		if (doSendResponse(Response.OK, method, request, serverTransaction,
 				additionalHeaders.toArray(new Header[additionalHeaders.size()])) != null) {
@@ -678,7 +698,9 @@ public class SipUserAgentServer {
 			logger.info("{} response sent.", statusCode);
 			return newServerTransaction;
 		} catch (ParseException ignore) {
+			ignore.printStackTrace();
 		} catch (InvalidArgumentException ignore) {
+			ignore.printStackTrace();
 		} catch (SipException responseCouldNotBeSent) {
 			logger.debug("{} response could not be sent to {} request: {} {}.",
 				statusCode, method, responseCouldNotBeSent.getMessage(),

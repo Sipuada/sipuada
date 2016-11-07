@@ -1,4 +1,4 @@
-package gov.nist.core;
+package android.gov.nist.core;
 
 /*
  * Copyright 1999-2004 The Apache Software Foundation

@@ -6,26 +6,9 @@ import java.util.Iterator;
 import java.util.ListIterator;
 import java.util.Timer;
 
-/*
- *
- * This code has been contributed with permission from:
- *
- * SIP Communicator, the OpenSource Java VoIP and Instant Messaging client but has been significantly changed.
- * It is donated to the JAIN-SIP project as it is common code that many sip clients
- * need to perform class and others will consitute a set of utility functions
- * that will implement common operations that ease the life of the developer.
- *
- * Acknowledgements:
- * ----------------
- *
- * Fredrik Wickstrom reported that dialog cseq counters are not incremented
- * when resending requests. He later uncovered additional problems and
- * proposed a way to fix them (his proposition was taken into account).
- */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
 import android.gov.nist.javax.sip.header.SIPHeader;
 import android.gov.nist.javax.sip.message.SIPRequest;
 import android.gov.nist.javax.sip.stack.SIPClientTransaction;
@@ -61,7 +44,7 @@ import android.javax.sip.message.Response;
  */
 
 public class AuthenticationHelperImpl implements AuthenticationHelper {
-	private static StackLogger logger = CommonLogger.getLogger(AuthenticationHelperImpl.class);
+	private static Logger logger = LoggerFactory.getLogger(AuthenticationHelperImpl.class);
     /**
      * Credentials cached so far.
      */
@@ -139,9 +122,7 @@ public class AuthenticationHelperImpl implements AuthenticationHelper {
             throws SipException, NullPointerException {
         try {
           
-            if ( logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                 logger.logDebug("handleChallenge: " + challenge);
-           
+        	logger.debug("handleChallenge: " + challenge);
 
             SIPRequest challengedRequest = ((SIPRequest) challengedTransaction.getRequest());
 
@@ -239,9 +220,8 @@ public class AuthenticationHelperImpl implements AuthenticationHelper {
                     UserCredentialHash credHash =
                         ((SecureAccountManager)this.accountManager).getCredentialHash(challengedTransaction,realm);
                     if ( credHash == null ) {
-                        logger.logDebug("Could not find creds");
-                        throw new SipException(
-                        "Cannot find user creds for the given user name and realm");
+                        logger.debug("Could not find creds");
+                        throw new SipException("Cannot find user creds for the given user name and realm");
                     }
                     URI uri = reoriginatedRequest.getRequestURI();
                     sipDomain = credHash.getSipDomain();
@@ -267,11 +247,7 @@ public class AuthenticationHelperImpl implements AuthenticationHelper {
                                 reoriginatedRequest.getRawContent()), authHeader, userCreds);
                 }
                 
-                if ( logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug(
-                            "Created authorization header: " + authorization.toString());
-                }
-              
+                logger.debug("Created authorization header: " + authorization.toString());
 
                 if (cacheTime != 0) {
                     String callId = challengedRequest.getCallId().getCallId();
@@ -280,24 +256,16 @@ public class AuthenticationHelperImpl implements AuthenticationHelper {
                 }
                 reoriginatedRequest.addHeader(authorization);
             }
-
-           
-            if ( logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "Returning authorization transaction." + retryTran);
-            }
-          
+            logger.debug("Returning authorization transaction." + retryTran);
             return retryTran;
         } catch (SipException ex) {
             throw ex;
         } catch (Exception ex) {
-            logger.logError("Unexpected exception ", ex);
+            logger.error("Unexpected exception ", ex);
             throw new SipException("Unexpected exception ", ex);
         }
     }
-    
-    
-   
+
 
     /**
      * Generates an authorisation header in response to wwwAuthHeader.
@@ -461,9 +429,7 @@ public class AuthenticationHelperImpl implements AuthenticationHelper {
         Collection<AuthorizationHeader> authHeaders = this.cachedCredentials
                 .getCachedAuthorizationHeaders(callId);
         if (authHeaders == null) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) 
-        		logger.logDebug(
-                    "Could not find authentication headers for " + callId);
+    		logger.debug("Could not find authentication headers for " + callId);
             return;
         }
 

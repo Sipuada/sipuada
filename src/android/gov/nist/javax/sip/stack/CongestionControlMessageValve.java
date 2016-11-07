@@ -27,12 +27,12 @@ package android.gov.nist.javax.sip.stack;
 
 import java.io.IOException;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.StackLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.javax.sip.SipStackImpl;
 import android.gov.nist.javax.sip.message.SIPRequest;
 import android.gov.nist.javax.sip.message.SIPResponse;
-
 import android.javax.sip.SipStack;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
@@ -54,7 +54,7 @@ import android.javax.sip.message.Response;
  *
  */
 public class CongestionControlMessageValve implements SIPMessageValve{
-	private static StackLogger logger = CommonLogger.getLogger(CongestionControlMessageValve.class);
+	private static Logger logger = LoggerFactory.getLogger(CongestionControlMessageValve.class);
 	protected SipStackImpl sipStack;
     // High water mark for ServerTransaction Table
     // after which requests are dropped.
@@ -83,7 +83,7 @@ public class CongestionControlMessageValve implements SIPMessageValve{
 					try {
 						messageChannel.sendMessage(response);
 					} catch (IOException e) {
-						logger.logError("Failed to send congestion control error response" + response, e);
+						logger.error("Failed to send congestion control error response" + response, e);
 					}
 				}
 				return false; // Do not pass this request to the pipeline
@@ -98,13 +98,13 @@ public class CongestionControlMessageValve implements SIPMessageValve{
 	}
 
 	public void destroy() {
-		logger.logInfo("Destorying the congestion control valve " + this);
+		logger.info("Destorying the congestion control valve " + this);
 		
 	}
 
 	public void init(SipStack stack) {
 		sipStack = (SipStackImpl) stack;
-		logger.logInfo("Initializing congestion control valve");
+		logger.info("Initializing congestion control valve");
 		String serverTransactionsString = sipStack.getConfigurationProperties().getProperty("gov.nist.javax.sip.MAX_SERVER_TRANSACTIONS", "10000");
 		serverTransactionTableHighwaterMark = new Integer(serverTransactionsString);
 		String dropResponseStatusString = sipStack.getConfigurationProperties().getProperty("DROP_RESPONSE_STATUS", "503");

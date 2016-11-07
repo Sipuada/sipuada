@@ -28,21 +28,26 @@
  *******************************************************************************/
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.SipStackImpl;
-
-import javax.net.ssl.SSLHandshakeException;
-import javax.net.ssl.SSLSocket;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.*;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+import java.net.SocketException;
 import java.util.Enumeration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLSocket;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.javax.sip.SipStackImpl;
 
 /*
  * TLS support Added by Daniel J.Martinez Manzano <dani@dif.um.es>
@@ -62,7 +67,7 @@ import java.util.concurrent.TimeUnit;
 
 public class IOHandler {
 	
-	private static StackLogger logger = CommonLogger.getLogger(IOHandler.class);
+	private static Logger logger = LoggerFactory.getLogger(IOHandler.class);
 
     private SipStackImpl sipStack;
 
@@ -93,9 +98,7 @@ public class IOHandler {
     }
 
     protected void putSocket(String key, Socket sock) {
-    	if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            logger.logDebug("adding socket for key " + key);
-        }
+        logger.debug("adding socket for key " + key);
         socketTable.put(key, sock);
     }
 
@@ -110,9 +113,7 @@ public class IOHandler {
         if ( s != null ) {
         	s.release();
         }
-        if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            logger.logDebug("removed Socket and Semaphore for key " + key);
-        }
+        logger.debug("removed Socket and Semaphore for key " + key);
     }
 
     /**
@@ -204,12 +205,8 @@ public class IOHandler {
 
             SSLSocket sslsock = (SSLSocket) clientSock;
 
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "inaddr = " + dst);
-                logger.logDebug(
-                        "port = " + dstPort);
-            }
+            logger.debug("inaddr = " + dst);
+            logger.debug("port = " + dstPort);
 
             HandshakeCompletedListenerImpl listner
                     = new HandshakeCompletedListenerImpl(channel, sslsock);
@@ -222,10 +219,7 @@ public class IOHandler {
             listner.startHandshakeWatchdog();
             sslsock.startHandshake();
             channel.setHandshakeCompleted(true);
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                this.logger.logDebug(
-                        "Handshake passed");
-            }
+            logger.debug("Handshake passed");
 
             // allow application to enforce policy by validating the
             // certificate
@@ -237,10 +231,8 @@ public class IOHandler {
                 throw new IOException(ex.getMessage());
             }
 
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                this.logger.logDebug(
-                        "TLS Security policy passed");
-            }
+            logger.debug(
+                "TLS Security policy passed");
 
             putSocket(key, clientSock);
         }
@@ -271,18 +263,10 @@ public class IOHandler {
         int max_retry = isClient ? 2 : 1;
         // Server uses TCP transport. TCP client sockets are cached
         int length = bytes.length;
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug(
-                    "sendBytes " + transport + " local inAddr "
-                    		+ senderAddress.getHostAddress() + " remote inAddr "
-                            + receiverAddress.getHostAddress() + " port = "
-                            + contactPort + " length = " + length + " isClient " + isClient );
-
-        }
-        if (logger.isLoggingEnabled(LogLevels.TRACE_INFO)
-                && sipStack.isLogStackTraceOnMessageSend()) {
-            logger.logStackTrace(StackLogger.TRACE_INFO);
-        }
+        logger.debug("sendBytes " + transport + " local inAddr "
+    		+ senderAddress.getHostAddress() + " remote inAddr "
+            + receiverAddress.getHostAddress() + " port = "
+            + contactPort + " length = " + length + " isClient " + isClient );
         if (transport.compareToIgnoreCase(TCP) == 0) {
             String key = makeKey(receiverAddress, contactPort);
             // This should be in a synchronized block ( reported by
@@ -295,12 +279,10 @@ public class IOHandler {
                 clientSock = getSocket(key);
                 while (retry_count < max_retry) {
                     if (clientSock == null) {
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                            logger.logDebug(
-                                    "inaddr = " + receiverAddress);
-                            logger.logDebug(
-                                    "port = " + contactPort);
-                        }
+                        logger.debug(
+                            "inaddr = " + receiverAddress);
+                        logger.debug(
+                            "port = " + contactPort);
                         // note that the IP Address for stack may not be
                         // assigned.
                         // sender address is the address of the listening point.
@@ -311,7 +293,7 @@ public class IOHandler {
                         	clientSock = sipStack.getNetworkLayer().createSocket(
                         			receiverAddress, contactPort, senderAddress);
                         } catch (SocketException e) { // We must catch the socket timeout exceptions here, any SocketException not just ConnectException
-                        	logger.logError("Problem connecting " +
+                        	logger.error("Problem connecting " +
                         			receiverAddress + " " + contactPort + " " + senderAddress + " for message " + new String(bytes, "UTF-8"));
                         	// new connection is bad.
                         	// remove from our table the socket and its semaphore
@@ -319,9 +301,7 @@ public class IOHandler {
                         	throw new SocketException(e.getClass() + " " + e.getMessage() + " " + e.getCause() + " Problem connecting " +
                         			receiverAddress + " " + contactPort + " " + senderAddress + " for message " + new String(bytes, "UTF-8"));
                         }
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                        	logger.logDebug("local inaddr = " + clientSock.getLocalAddress().getHostAddress());
-                        }
+                    	logger.debug("local inaddr = " + clientSock.getLocalAddress().getHostAddress());
                         OutputStream outputStream = clientSock
                                 .getOutputStream();
                         writeChunks(outputStream, bytes, length);
@@ -334,11 +314,9 @@ public class IOHandler {
                             writeChunks(outputStream, bytes, length);
                             break;
                         } catch (IOException ex) {
-                            if (logger
-                                    .isLoggingEnabled(LogWriter.TRACE_WARN))
-                                logger.logWarning(
-                                        "IOException occured retryCount "
-                                                + retry_count);                            
+                            logger.warn(
+                                "IOException occured retryCount "
+                                    + retry_count);                            
                             try {
                                 clientSock.close();
                             } catch (Exception e) {
@@ -362,32 +340,23 @@ public class IOHandler {
                     }
                 }
             } catch (IOException ex) {
-                if (logger.isLoggingEnabled(LogWriter.TRACE_ERROR)) {
-                    logger.logError(
-                            "Problem sending: sendBytes " + transport
-                                    + " inAddr "
-                                    + receiverAddress.getHostAddress()
-                                    + " port = " + contactPort +
-                            " remoteHost " + messageChannel.getPeerAddress() +
-                            " remotePort " + messageChannel.getPeerPort() +
-                            " peerPacketPort "
-                                    + messageChannel.getPeerPacketSourcePort() + " isClient " + isClient);
-                }
+                logger.error(
+                    "Problem sending: sendBytes " + transport
+                        + " inAddr "
+                        + receiverAddress.getHostAddress()
+                        + " port = " + contactPort +
+                    " remoteHost " + messageChannel.getPeerAddress() +
+                    " remotePort " + messageChannel.getPeerPort() +
+                    " peerPacketPort "
+                        + messageChannel.getPeerPacketSourcePort() + " isClient " + isClient);
                 removeSocket(key);                                
             } finally {
                 leaveIOCriticalSection(key);
             }
 
             if (clientSock == null) {
-
-                if (logger.isLoggingEnabled(LogWriter.TRACE_ERROR)) {
-                    logger.logError(
-                            this.socketTable.toString());
-                    logger.logError(
-                            "Could not connect to " + receiverAddress + ":"
-                                    + contactPort);
-                }
-
+                logger.error(this.socketTable.toString());
+                logger.error("Could not connect to " + receiverAddress + ":" + contactPort);
                 throw new IOException("Could not connect to " + receiverAddress
                         + ":" + contactPort);
             } else {
@@ -411,13 +380,10 @@ public class IOHandler {
                                 .createSSLSocket(receiverAddress, contactPort,
                                         senderAddress);
                         SSLSocket sslsock = (SSLSocket) clientSock;
-
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                            logger.logDebug(
-                                    "inaddr = " + receiverAddress);
-                            logger.logDebug(
-                                    "port = " + contactPort);
-                        }
+                        logger.debug(
+                            "inaddr = " + receiverAddress);
+                        logger.debug(
+                            "port = " + contactPort);
                         HandshakeCompletedListenerImpl listner = new HandshakeCompletedListenerImpl((TLSMessageChannel)messageChannel, clientSock);
                         ((TLSMessageChannel) messageChannel)
                                 .setHandshakeCompletedListener(listner);
@@ -428,10 +394,7 @@ public class IOHandler {
                         listner.startHandshakeWatchdog();
                         sslsock.startHandshake();
                         ((TLSMessageChannel)messageChannel).setHandshakeCompleted(true);
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                            this.logger.logDebug(
-                                    "Handshake passed");
-                        }
+                        logger.debug("Handshake passed");
                         // allow application to enforce policy by validating the
                         // certificate
 
@@ -445,10 +408,8 @@ public class IOHandler {
                             throw new IOException(ex.getMessage());
                         }
 
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                            this.logger.logDebug(
-                                    "TLS Security policy passed");
-                        }
+                        logger.debug(
+                            "TLS Security policy passed");
                         OutputStream outputStream = clientSock
                                 .getOutputStream();
                         writeChunks(outputStream, bytes, length);
@@ -461,15 +422,13 @@ public class IOHandler {
                             writeChunks(outputStream, bytes, length);
                             break;
                         } catch (IOException ex) {
-                            if (logger.isLoggingEnabled())
-                                logger.logException(ex);
+                            logger.error("IOException", ex);
                             // old connection is bad.
                             // remove from our table.
                             removeSocket(key);
 
                             try {
-                                logger.logDebug(
-                                        "Closing socket");
+                                logger.debug("Closing socket");
                                 clientSock.close();
                             } catch (Exception e) {
                             }
@@ -533,9 +492,7 @@ public class IOHandler {
             creationSemaphore = socketCreationMap.putIfAbsent(key, newCreationSemaphore);
             if(creationSemaphore == null) {
                 creationSemaphore = newCreationSemaphore;       
-                if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                    logger.logDebug("new Semaphore added for key " + key);
-                }
+                logger.debug("new Semaphore added for key " + key);
             }
         }
         
@@ -554,11 +511,8 @@ public class IOHandler {
      * Close all the cached connections.
      */
     public void closeAll() {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger
-                    .logDebug(
-                            "Closing " + socketTable.size()
-                                    + " sockets from IOHandler");
+        logger.debug("Closing " + socketTable.size()
+        	+ " sockets from IOHandler");
         for (Enumeration<Socket> values = socketTable.elements(); values
                 .hasMoreElements();) {
             Socket s = (Socket) values.nextElement();

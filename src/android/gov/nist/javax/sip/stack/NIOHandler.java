@@ -42,10 +42,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.javax.sip.SipStackImpl;
 /**
  * Low level Input output to a socket. Caches TCP connections and takes care of
@@ -60,7 +59,7 @@ import android.gov.nist.javax.sip.SipStackImpl;
 
 public class NIOHandler {
 	
-	private static StackLogger logger = CommonLogger.getLogger(NIOHandler.class);
+	private static Logger logger = LoggerFactory.getLogger(NIOHandler.class);
 
     private SipStackImpl sipStack;
     
@@ -94,9 +93,7 @@ public class NIOHandler {
     		return;
     	
     	synchronized(socketTable) {
-    		if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-    			logger.logDebug("adding socket for key " + key);
-    		}
+			logger.debug("adding socket for key " + key);
     		socketTable.put(key, sock);
     	}
     }
@@ -111,17 +108,13 @@ public class NIOHandler {
     	synchronized(socketTable) {
     		socketTable.remove(key);
     		keyedSemaphore.remove(key);
-    		if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-    			logger.logDebug("removed Socket and Semaphore for key " + key);
-    		}
+			logger.debug("removed Socket and Semaphore for key " + key);
     	}
     }
     
     protected void removeSocket(SocketChannel channel) {
-    	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("Trying to remove cached socketChannel without key"
-					+ this + " socketChannel = " + channel);
-		}
+		logger.debug("Trying to remove cached socketChannel without key"
+			+ this + " socketChannel = " + channel);
     	LinkedList<String> keys = new LinkedList<String>();
     	synchronized(socketTable) {
     		Set<Entry<String, SocketChannel>> e = socketTable.entrySet();
@@ -132,10 +125,8 @@ public class NIOHandler {
     			}
     		}
     		for(String key : keys) {
-    			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-    				logger.logDebug("Removing cached socketChannel without key"
-    						+ this + " socketChannel = " + channel + " key = " + key);
-    			}
+				logger.debug("Removing cached socketChannel without key"
+					+ this + " socketChannel = " + channel + " key = " + key);
     			removeSocket(key);
     		}
     	}
@@ -185,18 +176,9 @@ public class NIOHandler {
         int max_retry = isClient ? 2 : 1;
         // Server uses TCP transport. TCP client sockets are cached
         int length = bytes.length;
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug(
-                    "sendBytes " + transport + " inAddr "
-                            + receiverAddress.getHostAddress() + " port = "
-                            + contactPort + " length = " + length + " isClient " + isClient );
-
-        }
-        if (logger.isLoggingEnabled(LogLevels.TRACE_INFO)
-        		&& sipStack.isLogStackTraceOnMessageSend()) {
-        	logger.logStackTrace(StackLogger.TRACE_INFO);
-        }
-        
+        logger.debug("sendBytes " + transport + " inAddr "
+            + receiverAddress.getHostAddress() + " port = "
+            + contactPort + " length = " + length + " isClient " + isClient );
         String key = makeKey(receiverAddress, contactPort);
         // This should be in a synchronized block ( reported by
         // Jayashenkhar ( lucent ).
@@ -214,12 +196,8 @@ public class NIOHandler {
         			newSocket = true;
         		}
         		if (clientSock == null) {
-        			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-        				logger.logDebug(
-        						"inaddr = " + receiverAddress);
-        				logger.logDebug(
-        						"port = " + contactPort);
-        			}
+    				logger.debug("inaddr = " + receiverAddress);
+    				logger.debug("port = " + contactPort);
         			// note that the IP Address for stack may not be
         			// assigned.
         			// sender address is the address of the listening point.
@@ -238,8 +216,8 @@ public class NIOHandler {
         				//sipStack.getNetworkLayer().createSocket(
         				//		receiverAddress, contactPort, senderAddress); TODO: sender address needed
         			} catch (SocketException e) { // We must catch the socket timeout exceptions here, any SocketException not just ConnectException
-        				logger.logError("Problem connecting " +
-        						receiverAddress + " " + contactPort + " " + senderAddress + " for message " + (messageChannel.isSecure()?"<<<ENCRYPTED MESSAGE>>>":new String(bytes, "UTF-8")));
+        				logger.error("Problem connecting " +
+    						receiverAddress + " " + contactPort + " " + senderAddress + " for message " + (messageChannel.isSecure()?"<<<ENCRYPTED MESSAGE>>>":new String(bytes, "UTF-8")));
         				// new connection is bad.
         				// remove from our table the socket and its semaphore
         				removeSocket(key);
@@ -254,17 +232,15 @@ public class NIOHandler {
         	}
 
         } catch (IOException ex) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_ERROR)) {
-        		logger.logError(
-        				"Problem sending: sendBytes " + transport
-        				+ " inAddr "
-        				+ receiverAddress.getHostAddress()
-        				+ " port = " + contactPort +
-        				" remoteHost " + messageChannel.getPeerAddress() +
-        				" remotePort " + messageChannel.getPeerPort() +
-        				" peerPacketPort "
-        				+ messageChannel.getPeerPacketSourcePort() + " isClient " + isClient);
-        	}
+    		logger.error(
+				"Problem sending: sendBytes " + transport
+				+ " inAddr "
+				+ receiverAddress.getHostAddress()
+				+ " port = " + contactPort +
+				" remoteHost " + messageChannel.getPeerAddress() +
+				" remotePort " + messageChannel.getPeerPort() +
+				" peerPacketPort "
+				+ messageChannel.getPeerPacketSourcePort() + " isClient " + isClient);
 
         	removeSocket(key);
 
@@ -297,25 +273,17 @@ public class NIOHandler {
         		key = makeKey(receiverAddress, contactPort);
         		clientSock = this.getSocket(key);
         		if (clientSock == null || !clientSock.isConnected() || !clientSock.isOpen()) {
-        			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-        				logger.logDebug(
-        						"inaddr = " + receiverAddress +
-        						" port = " + contactPort);
-        			}
+    				logger.debug("inaddr = " + receiverAddress + " port = " + contactPort);
         			clientSock = messageProcessor.blockingConnect(new InetSocketAddress(receiverAddress, contactPort), senderAddress, 10000);
         			newSocket = true;
         			messageChannel.peerPort = contactPort;
         			putSocket(key, clientSock);
         		} 
 
-        		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-        			logger.logDebug(
-        					"sending to " + key );
-        		}
-
+    			logger.debug("sending to " + key );
 
         	} else {
-        		logger.logError("IOException occured at " , ex);
+        		logger.error("IOException occured at " , ex);
         		throw ex;
         	}
 
@@ -337,13 +305,8 @@ public class NIOHandler {
 
         if (clientSock == null) {
 
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_ERROR)) {
-        		logger.logError(
-        				this.socketTable.toString());
-        		logger.logError(
-        				"Could not connect to " + receiverAddress + ":"
-        						+ contactPort);
-        	}
+    		logger.error(this.socketTable.toString());
+    		logger.error("Could not connect to " + receiverAddress + ":" + contactPort);
 
         	throw new IOException("Could not connect to " + receiverAddress
         			+ ":" + contactPort);
@@ -356,12 +319,7 @@ public class NIOHandler {
      * Close all the cached connections.
      */
     public void closeAll() {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger
-                    .logDebug(
-                            "Closing " + socketTable.size()
-                                    + " sockets from IOHandler");
-        
+        logger.debug("Closing " + socketTable.size() + " sockets from IOHandler");
         for (Enumeration<SocketChannel> values = socketTable.elements(); values
                 .hasMoreElements();) {
         	SocketChannel s = (SocketChannel) values.nextElement();
@@ -377,20 +335,15 @@ public class NIOHandler {
     	stopped.set(true);
     	try {
         	// Reworked the method for https://java.net/jira/browse/JSIP-471
-			if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-				logger.logDebug("keys to check for inactivity removal " + NioTcpMessageChannel.channelMap.keySet());
-				logger.logDebug("existing socket in NIOHandler " + socketTable.keySet());
-			}
+			logger.debug("keys to check for inactivity removal " + NioTcpMessageChannel.channelMap.keySet());
+			logger.debug("existing socket in NIOHandler " + socketTable.keySet());
 			Iterator<Entry<SocketChannel, NioTcpMessageChannel>> entriesIterator = NioTcpMessageChannel.channelMap.entrySet().iterator();
 			while(entriesIterator.hasNext()) {
 				Entry<SocketChannel, NioTcpMessageChannel> entry = entriesIterator.next();
 				SocketChannel socketChannel = entry.getKey();
 				NioTcpMessageChannel messageChannel = entry.getValue();
-				
-				if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-					logger.logDebug("stop() : Removing socket " + messageChannel.key 
-							+ " socketChannel = " + socketChannel);
-				}
+				logger.debug("stop() : Removing socket " + messageChannel.key 
+					+ " socketChannel = " + socketChannel);
 				messageChannel.close();
 				NioTcpMessageChannel.channelMap.remove(socketChannel);
 				entriesIterator = NioTcpMessageChannel.channelMap.entrySet().iterator();
@@ -410,8 +363,7 @@ public class NIOHandler {
     	try {
     		channel = getSocket(key);
     		if(channel != null && (!channel.isConnected() || !channel.isOpen())) {
-    			if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-    				logger.logDebug("Channel disconnected " + channel);
+				logger.debug("Channel disconnected " + channel);
     			channel = null;
     		}
     		if(channel == null) { // this is where the threads will race
@@ -419,17 +371,15 @@ public class NIOHandler {
 	    			SocketAddress sockAddr = new InetSocketAddress(inetAddress, port);
 	    			channel = messageProcessor.blockingConnect((InetSocketAddress) sockAddr, this.messageProcessor
 	    					.getIpAddress(), 10000);
-	    			if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-	    				logger.logDebug("create channel = " + channel + "  " + inetAddress + " " + port);
+    				logger.debug("create channel = " + channel + "  " + inetAddress + " " + port);
 	    			if(channel != null && channel.isConnected()) {
 	    				putSocket(NIOHandler.makeKey(inetAddress, port), channel);
-	    				if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-	    					logger.logDebug("channel cached channel = " + channel);
+    					logger.debug("channel cached channel = " + channel);
 	    			}
     			} catch (SocketException e) { // We must catch the socket timeout exceptions here, any SocketException not just ConnectException
     				// https://github.com/RestComm/jain-sip/issues/76
-    				logger.logError("Problem connecting " +
-    						inetAddress + " " + port + " " + this.messageProcessor.getIpAddress());
+    				logger.error("Problem connecting " +
+						inetAddress + " " + port + " " + this.messageProcessor.getIpAddress());
     				// new connection is bad.
     				// remove from our table the socket and its semaphore
     				removeSocket(key);
@@ -440,8 +390,7 @@ public class NIOHandler {
     		return channel;
     	} finally {
     		keyedSemaphore.leaveIOCriticalSection(key);
-    		if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-				logger.logDebug("Returning socket " + key + " channel = " + channel);
+			logger.debug("Returning socket " + key + " channel = " + channel);
     	}
     }
 }

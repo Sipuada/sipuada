@@ -26,17 +26,17 @@
 package android.gov.nist.javax.sip.stack;
 
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.StackLogger;
-
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SocketChannel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class NioWebSocketMessageProcessor extends NioTcpMessageProcessor {
 
-    private static StackLogger logger = CommonLogger.getLogger(NioWebSocketMessageProcessor.class);
-    
+    private static Logger logger = LoggerFactory.getLogger(NioWebSocketMessageProcessor.class);
+
     public NioWebSocketMessageProcessor(InetAddress ipAddress,
 			SIPTransactionStack sipStack, int port) {
 		super(ipAddress, sipStack, port);		

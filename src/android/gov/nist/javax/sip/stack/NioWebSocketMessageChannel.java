@@ -25,26 +25,20 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.Host;
-import android.gov.nist.core.HostPort;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.header.RecordRoute;
-import android.gov.nist.javax.sip.message.SIPMessage;
-import android.gov.nist.javax.sip.message.SIPRequest;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.text.ParseException;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.javax.sip.message.SIPMessage;
+import android.gov.nist.javax.sip.message.SIPRequest;
 import android.javax.sip.address.SipURI;
-import android.javax.sip.address.URI;
 import android.javax.sip.header.ContactHeader;
 import android.javax.sip.header.RecordRouteHeader;
 import android.javax.sip.header.ViaHeader;
@@ -53,8 +47,7 @@ import android.javax.sip.message.Request;
 
 public class NioWebSocketMessageChannel extends NioTcpMessageChannel{
 
-	private static StackLogger logger = CommonLogger
-			.getLogger(NioWebSocketMessageChannel.class);
+	private static Logger logger = LoggerFactory.getLogger(NioWebSocketMessageChannel.class);
 	
 	private WebSocketCodec codec = new WebSocketCodec(true, true);
 	
@@ -92,9 +85,7 @@ public class NioWebSocketMessageChannel extends NioTcpMessageChannel{
 	
 	@Override
 	protected void sendMessage(final byte[] msg, final boolean isClient) throws IOException {
-		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("sendMessage isClient  = " + isClient + " this = " + this);
-		}
+		logger.debug("sendMessage isClient  = " + isClient + " this = " + this);
 		lastActivityTimeStamp = System.currentTimeMillis();
 		
 		NIOHandler nioHandler = ((NioTcpMessageProcessor) messageProcessor).nioHandler;
@@ -107,10 +98,8 @@ public class NioWebSocketMessageChannel extends NioTcpMessageChannel{
 	
 	protected void sendNonWebSocketMessage(byte[] msg, boolean isClient) throws IOException {
 
-		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("sendMessage isClient  = " + isClient + " this = " + this);
-		}
-		
+		logger.debug("sendMessage isClient  = " + isClient + " this = " + this);
+
 		lastActivityTimeStamp = System.currentTimeMillis();		
 		NIOHandler nioHandler = ((NioTcpMessageProcessor) messageProcessor).nioHandler;
 		if(this.socketChannel != null && this.socketChannel.isConnected() && this.socketChannel.isOpen()) {
@@ -226,7 +215,7 @@ public class NioWebSocketMessageChannel extends NioTcpMessageChannel{
 					byte[] response = new WebSocketHttpHandshake().createHttpResponse(s);
 					sendNonWebSocketMessage(response, false);
 				} else {
-					logger.logDebug("HTTP Response. We are websocket client.\n" + httpInput);
+					logger.debug("HTTP Response. We are websocket client.\n" + httpInput);
 				}
 			}
 			if(remaining != null) addBytes(remaining);
@@ -240,7 +229,7 @@ public class NioWebSocketMessageChannel extends NioTcpMessageChannel{
 				// Chrome waits for us to close the socket when it sends a close opcode https://code.google.com/p/chromium/issues/detail?id=388243#c15
 				if(codec.isCloseOpcodeReceived()) {
 					
-					logger.logDebug("Websocket close, sending polite close response");
+					logger.debug("Websocket close, sending polite close response");
 					ByteBuffer byteBuff = ByteBuffer.wrap(new byte[]{(byte) 0x88,(byte)0x00});
 					socketChannel.write(byteBuff);// We must skip in the queue, don't use sendNonWebSocketMessage(new byte[]{(byte) 0x88,(byte)0x00}, false);
 					return;
@@ -250,7 +239,7 @@ public class NioWebSocketMessageChannel extends NioTcpMessageChannel{
 					return; // the codec can't parse a full websocket frame, we will try again when have more data
 				}
 				nioParser.addBytes(decodedMsg);
-				logger.logDebug("Nio websocket bytes were added " + decodedMsg.length);
+				logger.debug("Nio websocket bytes were added " + decodedMsg.length);
 
 			} while (decodedMsg != null);
 			
@@ -329,7 +318,7 @@ public class NioWebSocketMessageChannel extends NioTcpMessageChannel{
 				uri.setHost(getPeerAddress());
 			}
 		} catch (ParseException e) {
-			logger.logError("Cant parse address", e);
+			logger.error("Cant parse address", e);
 		}
 		uri.setPort(getPeerPort());
 	}

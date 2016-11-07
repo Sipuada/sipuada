@@ -1,10 +1,11 @@
 package android.gov.nist.javax.sip.clientauthutils;
 
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+
+import org.slf4j.Logger;
+
+import android.gov.nist.core.StackLogger;
 
 /**
  * The class takes standard Http Authentication details and returns a response according to the
@@ -39,14 +40,12 @@ public class MessageDigestAlgorithm {
     static String calculateResponse(String algorithm, String hashUserNameRealmPasswd,
             String nonce_value, String nc_value, String cnonce_value,
             String method, String digest_uri_value, String entity_body, String qop_value,
-            StackLogger stackLogger)  {
-        if (stackLogger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            stackLogger.logDebug("trying to authenticate using : " + algorithm + ", "+
-                    hashUserNameRealmPasswd + ", " + nonce_value + ", "
-                    + nc_value + ", " + cnonce_value + ", " + method + ", " + digest_uri_value
-                    + ", " + entity_body + ", " + qop_value);
-        }
-        
+            Logger stackLogger)  {
+        stackLogger.debug("trying to authenticate using : " + algorithm + ", "+
+                hashUserNameRealmPasswd + ", " + nonce_value + ", "
+                + nc_value + ", " + cnonce_value + ", " + method + ", " + digest_uri_value
+                + ", " + entity_body + ", " + qop_value);
+
         if (hashUserNameRealmPasswd == null || method == null
                 || digest_uri_value == null || nonce_value == null)
             throw new NullPointerException(
@@ -115,14 +114,12 @@ public class MessageDigestAlgorithm {
     static String calculateResponse(String algorithm, String username_value, String realm_value,
             String passwd, String nonce_value, String nc_value, String cnonce_value,
             String method, String digest_uri_value, String entity_body, String qop_value,
-            StackLogger stackLogger) {
-        if (stackLogger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            stackLogger.logDebug("trying to authenticate using : " + algorithm + ", "
-                    + username_value + ", " + realm_value + ", "
-                    + (passwd != null && passwd.trim().length() > 0) + ", " + nonce_value + ", "
-                    + nc_value + ", " + cnonce_value + ", " + method + ", " + digest_uri_value
-                    + ", " + entity_body + ", " + qop_value);
-        }
+            Logger stackLogger) {
+        stackLogger.debug("trying to authenticate using : " + algorithm + ", "
+                + username_value + ", " + realm_value + ", "
+                + (passwd != null && passwd.trim().length() > 0) + ", " + nonce_value + ", "
+                + nc_value + ", " + cnonce_value + ", " + method + ", " + digest_uri_value
+                + ", " + entity_body + ", " + qop_value);
 
         if (username_value == null || realm_value == null || passwd == null || method == null
                 || digest_uri_value == null || nonce_value == null)

@@ -1,4 +1,4 @@
-package gov.nist.core;
+package android.gov.nist.core;
 
 public interface LogLevels {
     /*

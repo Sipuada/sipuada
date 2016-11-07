@@ -26,7 +26,7 @@
 /*******************************************************************************
  * Product of NIST/ITL Advanced Networking Technologies Division (ANTD).        *
  *******************************************************************************/
-package gov.nist.core;
+package android.gov.nist.core;
 
 import java.util.*;
 import java.io.Serializable;

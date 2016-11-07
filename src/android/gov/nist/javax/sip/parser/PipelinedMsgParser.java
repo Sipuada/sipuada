@@ -28,6 +28,17 @@
  ******************************************************************************/
 package android.gov.nist.javax.sip.parser;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.text.ParseException;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Semaphore;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  *
  * Lamine Brahimi and Yann Duponchel (IBM Zurich) noticed that the parser was
@@ -36,31 +47,12 @@ package android.gov.nist.javax.sip.parser;
  * life goes slower but more reliably.
  *
  */
-import android.gov.nist.core.CommonLogger;
 import android.gov.nist.core.InternalErrorHandler;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
 import android.gov.nist.javax.sip.header.ContentLength;
 import android.gov.nist.javax.sip.message.SIPMessage;
-import android.gov.nist.javax.sip.stack.BlockingQueueDispatchAuditor;
 import android.gov.nist.javax.sip.stack.ConnectionOrientedMessageChannel;
 import android.gov.nist.javax.sip.stack.QueuedMessageDispatchBase;
 import android.gov.nist.javax.sip.stack.SIPTransactionStack;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.text.ParseException;
-import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * This implements a pipelined message parser suitable for use with a stream -
@@ -80,7 +72,7 @@ import java.util.concurrent.TimeUnit;
  * @see SIPMessageListener
  */
 public final class PipelinedMsgParser implements Runnable {
-	private static StackLogger logger = CommonLogger.getLogger(PipelinedMsgParser.class);
+	private static Logger logger = LoggerFactory.getLogger(PipelinedMsgParser.class);
 
 	private static final String CRLF = "\r\n";
 
@@ -274,29 +266,23 @@ public final class PipelinedMsgParser implements Runnable {
             try {                                                                                
                 semaphore.acquire();                                        
             } catch (InterruptedException e) {
-                logger.logError("Semaphore acquisition for callId " + callId + " interrupted", e);
+                logger.error("Semaphore acquisition for callId " + callId + " interrupted", e);
             }
             // once acquired we get the first message to process
             SIPMessage message = messagesForCallID.poll();
-            if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            	logger.logDebug("semaphore acquired for message " + message);
-            }
-            
+        	logger.debug("semaphore acquired for message " + message);
+
             try {
                 sipMessageListener.processMessage(message);
             } catch (Exception e) {
-            	logger.logError("Error occured processing message", e);    
+            	logger.error("Error occured processing message", e);    
                 // We do not break the TCP connection because other calls use the same socket here
             } finally {                                        
                 if(messagesForCallID.size() <= 0) {
                     messagesOrderingMap.remove(callId);
-                    if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                    	logger.logDebug("CallIDOrderingStructure removed for message " + callId);
-                    }
+                	logger.debug("CallIDOrderingStructure removed for message " + callId);
                 }
-                if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                	logger.logDebug("releasing semaphore for message " + message);
-                }
+            	logger.debug("releasing semaphore for message " + message);
                 //release the semaphore so that another thread can process another message from the call id queue in the correct order
                 // or a new message from another call id queue
                 semaphore.release(); 
@@ -309,9 +295,7 @@ public final class PipelinedMsgParser implements Runnable {
                 	sipStack.sipEventInterceptor.afterMessage(message);
                 }
             }
-            if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            	logger.logDebug("dispatch task done on " + message + " threadname " + mythread.getName());
-            }
+        	logger.debug("dispatch task done on " + message + " threadname " + mythread.getName());
         }
 		public long getReceptionTime() {
 			return time;
@@ -326,7 +310,7 @@ public final class PipelinedMsgParser implements Runnable {
     public void run() {
 
         Pipeline inputStream = this.rawInputStream;
-        final StackLogger stackLogger = logger;
+        final Logger stackLogger = logger;
         // inputStream = new MyFilterInputStream(this.rawInputStream);
         // I cannot use buffered reader here because we may need to switch
         // encodings to read the message body.
@@ -337,9 +321,7 @@ public final class PipelinedMsgParser implements Runnable {
                 // this.messageSize = 0;
                 StringBuilder inputBuffer = new StringBuilder();
 
-                if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                	logger.logDebug("Starting to parse.");
-                }
+            	logger.debug("Starting to parse.");
 
                 String line1;
                 String line2 = null;
@@ -349,32 +331,26 @@ public final class PipelinedMsgParser implements Runnable {
                         line1 = readLine(inputStream);
                         // ignore blank lines.
                         if (line1.equals("\n")) {
-                        	if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                            	logger.logDebug("Discarding blank line");
-                            }
+                        	logger.debug("Discarding blank line");
                             continue;
                         } else if(CRLF.equals(line1)) {
                         	if(isPreviousLineCRLF) {
                         		// Handling keepalive ping (double CRLF) as defined per RFC 5626 Section 4.4.1
                             	// sending pong (single CRLF)
-                            	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                                    logger.logDebug("KeepAlive Double CRLF received, sending single CRLF as defined per RFC 5626 Section 4.4.1");
-                                    logger.logDebug("~~~ setting isPreviousLineCRLF=false");
-                                }
+                                logger.debug("KeepAlive Double CRLF received, sending single CRLF as defined per RFC 5626 Section 4.4.1");
+                                logger.debug("~~~ setting isPreviousLineCRLF=false");
 
                                 isPreviousLineCRLF = false;
 
                             	try {
             						sipMessageListener.sendSingleCLRF();
             					} catch (Exception e) {						
-            						logger.logError("A problem occured while trying to send a single CLRF in response to a double CLRF", e);
+            						logger.error("A problem occured while trying to send a single CLRF in response to a double CLRF", e);
             					}                	
                             	continue;
                         	} else {
 	                        	isPreviousLineCRLF = true;
-	                        	if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-	                            	logger.logDebug("Received CRLF");
-	                            }
+                            	logger.debug("Received CRLF");
 	                        	if(sipMessageListener != null && 
 	                        			sipMessageListener instanceof ConnectionOrientedMessageChannel) {
 	                        		((ConnectionOrientedMessageChannel)sipMessageListener).cancelPingKeepAliveTimeoutTaskIfStarted();
@@ -387,23 +363,16 @@ public final class PipelinedMsgParser implements Runnable {
                         // we only wait if the thread is still in a running state and hasn't been close from somewhere else
                     	// or we are leaking because the thread is waiting forever
                     	if(PostParseExecutorServices.getPostParseExecutor() != null && isRunning){
-                    		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                                logger.logDebug("waiting for messagesOrderingMap " + this + " threadname " + mythread.getName());
+                            logger.debug("waiting for messagesOrderingMap " + this + " threadname " + mythread.getName());
                             synchronized (messagesOrderingMap) {
                                 try {
                                     messagesOrderingMap.wait(64000);
                                 } catch (InterruptedException e) {}                                
                             }  
-                            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                                logger.logDebug("got notified for messagesOrderingMap " + this + " threadname " + mythread.getName());                            
+                            logger.debug("got notified for messagesOrderingMap " + this + " threadname " + mythread.getName());                            
                         }
                         this.rawInputStream.stopTimer();
-                        if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                        	logger.logDebug("thread ending for threadname " + mythread.getName());
-                        }
-                        if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                        	logger.logStackTrace(LogLevels.TRACE_DEBUG);
-                        }                        
+                    	logger.debug("thread ending for threadname " + mythread.getName());
                         return;
                     }
                 }
@@ -412,9 +381,7 @@ public final class PipelinedMsgParser implements Runnable {
                 // Guard against bad guys.
                 this.rawInputStream.startTimer();
                 int bytesRead = 0;
-                if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                	logger.logDebug("Reading Input stream.");
-                }
+            	logger.debug("Reading Input stream.");
                 while (true) {
                     try {
                         line2 = readLine(inputStream);
@@ -427,23 +394,16 @@ public final class PipelinedMsgParser implements Runnable {
                         // we only wait if the thread is still in a running state and hasn't been close from somewhere else
                     	// or we are leaking because the thread is waiting forever
                     	if(PostParseExecutorServices.getPostParseExecutor() != null && isRunning){
-                    		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                                logger.logDebug("waiting for messagesOrderingMap " + this + " threadname " + mythread.getName());
+                            logger.debug("waiting for messagesOrderingMap " + this + " threadname " + mythread.getName());
                             synchronized (messagesOrderingMap) {
                                 try {
                                     messagesOrderingMap.wait(64000);
                                 } catch (InterruptedException e) {}                                
                             }  
-                            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                                logger.logDebug("got notified for messagesOrderingMap " + this + " threadname " + mythread.getName());                            
+                            logger.debug("got notified for messagesOrderingMap " + this + " threadname " + mythread.getName());                            
                         }
                         this.rawInputStream.stopTimer();
-                        if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                        	logger.logDebug("thread ending for threadname " + mythread.getName());
-                        }
-                        if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                        	logger.logStackTrace(LogLevels.TRACE_DEBUG);
-                        }                        
+                    	logger.debug("thread ending for threadname " + mythread.getName());
                         return;
                     }
                 }
@@ -456,9 +416,7 @@ public final class PipelinedMsgParser implements Runnable {
                 SIPMessage sipMessage = null;
 
                 try {
-                    if (stackLogger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                        stackLogger.logDebug("About to parse : " + inputBuffer.toString());
-                    }
+                    stackLogger.debug("About to parse : " + inputBuffer.toString());
                     sipMessage = smp.parseSIPMessage(inputBuffer.toString().getBytes(), false, false, sipMessageListener);
                     if (sipMessage == null) {
                         this.rawInputStream.stopTimer();
@@ -466,13 +424,11 @@ public final class PipelinedMsgParser implements Runnable {
                     }
                 } catch (ParseException ex) {
                     // Just ignore the parse exception.
-                    stackLogger.logError("Detected a parse error", ex);
+                    stackLogger.error("Detected a parse error", ex);
                     continue;
                 }
 
-                if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                	logger.logDebug("Completed parsing message");
-                }
+            	logger.debug("Completed parsing message");
                 String clString = sipMessage.getHeaderAsFormattedString(ContentLength.NAME);
                 if(clString.length()>30) throw new RuntimeException("Bad content lenght header " + clString);
                 ContentLength cl = (ContentLength) sipMessage
@@ -486,9 +442,7 @@ public final class PipelinedMsgParser implements Runnable {
                     contentLength = 0;
                 }
 
-                if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                	logger.logDebug("Content length = " + contentLength);
-                }
+            	logger.debug("Content length = " + contentLength);
                 
                 if(maxMessageSize > 0 && contentLength > maxMessageSize) throw new RuntimeException("Max content size Exceeded! :" + contentLength + " allowed max size is " + maxMessageSize);
 
@@ -516,7 +470,7 @@ public final class PipelinedMsgParser implements Runnable {
                                 break;
                             }
                         } catch (IOException ex) {
-                            stackLogger.logError("Exception Reading Content",ex);
+                            stackLogger.error("Exception Reading Content",ex);
                             break;
                         } finally {
                             // Stop my starvation timer.
@@ -558,9 +512,7 @@ public final class PipelinedMsgParser implements Runnable {
                                 orderingStructure = messagesOrderingMap.putIfAbsent(callId, newCallIDOrderingStructure);
                                 if(orderingStructure == null) {
                                     orderingStructure = newCallIDOrderingStructure;       
-                                    if (stackLogger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                                        stackLogger.logDebug("new CallIDOrderingStructure added for message " + sipMessage);
-                                    }
+                                    stackLogger.debug("new CallIDOrderingStructure added for message " + sipMessage);
                                 }
                             }
                             final CallIDOrderingStructure callIDOrderingStructure = orderingStructure;                                 
@@ -621,13 +573,11 @@ public final class PipelinedMsgParser implements Runnable {
 
     public void close() {
         isRunning = false;
-    	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("Closing pipelinedmsgparser " + this + " threadname " + mythread.getName());
+        logger.debug("Closing pipelinedmsgparser " + this + " threadname " + mythread.getName());
         try {
             this.rawInputStream.close();            
         } catch (IOException ex) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger.logDebug("Couldn't close the rawInputStream " + this + " threadname " + mythread.getName() + " already closed ? " + rawInputStream.isClosed());
+            logger.debug("Couldn't close the rawInputStream " + this + " threadname " + mythread.getName() + " already closed ? " + rawInputStream.isClosed());
             // Ignore.
         }                
         if(PostParseExecutorServices.getPostParseExecutor() != null){
@@ -651,8 +601,7 @@ public final class PipelinedMsgParser implements Runnable {
         synchronized (messagesOrderingMap) {
             messagesOrderingMap.notifyAll();
         }
-    	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("cleaned the messagesOrderingMap " + this + " threadname " + mythread.getName());
+        logger.debug("cleaned the messagesOrderingMap " + this + " threadname " + mythread.getName());
     }
 }
 /*

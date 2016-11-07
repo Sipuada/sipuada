@@ -23,9 +23,9 @@
 * .
 *
 */
-package gov.nist.core.net;
+package android.gov.nist.core.net;
 
-import gov.nist.javax.sip.SipStackImpl;
+import android.gov.nist.javax.sip.SipStackImpl;
 
 import java.io.IOException;
 import java.net.ConnectException;

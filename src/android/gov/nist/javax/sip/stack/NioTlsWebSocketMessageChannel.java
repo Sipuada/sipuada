@@ -35,19 +35,16 @@ import java.security.cert.CertificateException;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSession;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.ServerLogger;
-import android.gov.nist.core.StackLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.javax.sip.SipStackImpl;
 import android.gov.nist.javax.sip.message.SIPMessage;
 import android.gov.nist.javax.sip.stack.SSLStateMachine.MessageSendCallback;
 
 public class NioTlsWebSocketMessageChannel extends NioWebSocketMessageChannel implements NioTlsChannelInterface {
 
-	private static StackLogger logger = CommonLogger
-			.getLogger(NioTlsWebSocketMessageChannel.class);
+	private static Logger logger = LoggerFactory.getLogger(NioTlsWebSocketMessageChannel.class);
 	
 	SSLStateMachine sslStateMachine;
 
@@ -175,11 +172,9 @@ public class NioTlsWebSocketMessageChannel extends NioWebSocketMessageChannel im
 	
 	public void sendEncryptedData(byte[] msg) throws IOException { 
 		// bypass the encryption for already encrypted data or TLS metadata
-		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("sendEncryptedData " + " this = " + this + " peerPort = " + peerPort + " addr = " + peerAddress);
-		}
+		logger.debug("sendEncryptedData " + " this = " + this + " peerPort = " + peerPort + " addr = " + peerAddress);
 		lastActivityTimeStamp = System.currentTimeMillis();
-		
+
 		NIOHandler nioHandler = ((NioTcpMessageProcessor) messageProcessor).nioHandler;
 		if(this.socketChannel != null && this.socketChannel.isConnected() && this.socketChannel.isOpen()) {
 			nioHandler.putSocket(NIOHandler.makeKey(this.peerAddress, this.peerPort), this.socketChannel);
@@ -256,9 +251,6 @@ public class NioTlsWebSocketMessageChannel extends NioWebSocketMessageChannel im
 		// https://java.net/jira/browse/JSIP-497 fix transport for WSS
 		final byte[] msg = sipMessage.encodeAsBytes(this.getTransport());
 		sendMessage(msg, receiverAddress, receiverPort, this.client);
-		
-		if (logger.isLoggingEnabled(ServerLogger.TRACE_MESSAGES))
-			logMessage(sipMessage, receiverAddress, receiverPort, System.currentTimeMillis());
     }
 
 	public void sendHttpMessage(final byte message[], final InetAddress receiverAddress,
@@ -285,10 +277,8 @@ public class NioTlsWebSocketMessageChannel extends NioWebSocketMessageChannel im
 	        SSLSession session = sslStateMachine.sslEngine.getSession();
 	        appBufferMax = session.getApplicationBufferSize();
 	        netBufferMax = session.getPacketBufferSize();
-	        
-	        if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	        	logger.logDebug("appBufferMax=" + appBufferMax + " netBufferMax=" + netBufferMax);
-	        }
+
+        	logger.debug("appBufferMax=" + appBufferMax + " netBufferMax=" + netBufferMax);
 	    }
 	
 	public NioTlsWebSocketMessageChannel(InetAddress inetAddress, int port,
@@ -305,20 +295,15 @@ public class NioTlsWebSocketMessageChannel extends NioWebSocketMessageChannel im
 	
 	@Override
 	protected void addBytes(byte[] bytes) throws Exception {
-		if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("Adding WSS bytes for decryption " + bytes.length);
-		}
+		logger.debug("Adding WSS bytes for decryption " + bytes.length);
 		if(bytes.length <= 0) return;
 		ByteBuffer buffer = ByteBuffer.wrap(bytes);
 		sslStateMachine.unwrap(buffer);
 	}
-	
+
 	@Override
 	protected void sendNonWebSocketMessage(byte[] msg, final boolean isClient) throws IOException {
-
-		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-			logger.logDebug("sendMessage isClient  = " + isClient + " this = " + this);
-		}
+		logger.debug("sendMessage isClient  = " + isClient + " this = " + this);
 		lastActivityTimeStamp = System.currentTimeMillis();
 
 		NIOHandler nioHandler = ((NioTcpMessageProcessor) messageProcessor).nioHandler;
@@ -352,29 +337,26 @@ public class NioTlsWebSocketMessageChannel extends NioWebSocketMessageChannel im
 	public void onNewSocket(byte[] message) {
 		super.onNewSocket(message);
 		try {
-			if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-				String last = null;
-				if(message != null) {
-					last = new String(message, "UTF-8");
-				}
-				logger.logDebug("New socket for " + this + " last message = " + last);
+			String last = null;
+			if(message != null) {
+				last = new String(message, "UTF-8");
 			}
+			logger.debug("New socket for " + this + " last message = " + last);
 			init(true);
 			createBuffers();
 			sendMessage(message, false);
 		} catch (Exception e) {
-			logger.logError("Cant reinit", e);
+			logger.error("Cant reinit", e);
 		}
 	}
 
 	private void checkSocketState() throws IOException {
 		if (socketChannel != null && (!socketChannel.isConnected() || !socketChannel.isOpen())) {
-			if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-				logger.logDebug("Need to reset SSL engine for socket " + socketChannel);
+			logger.debug("Need to reset SSL engine for socket " + socketChannel);
 			try {
 				init(sslStateMachine.sslEngine.getUseClientMode());
 			} catch (Exception ex) {
-				logger.logError("Cannot reset SSL engine", ex);
+				logger.error("Cannot reset SSL engine", ex);
 				throw new IOException(ex);
 			}
 		}

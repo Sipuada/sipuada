@@ -28,12 +28,6 @@
  ******************************************************************************/
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.HostPort;
-import android.gov.nist.core.InternalErrorHandler;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
@@ -41,6 +35,12 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Collection;
 import java.util.Iterator;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.HostPort;
+import android.gov.nist.core.InternalErrorHandler;
 
 /*
  * Acknowledgement: Jeff Keyser suggested that a Stop mechanism be added to this. Niklas Uhrberg
@@ -63,7 +63,7 @@ import java.util.Iterator;
  */
 public class TCPMessageProcessor extends ConnectionOrientedMessageProcessor implements Runnable {
 	
-	private static StackLogger logger = CommonLogger.getLogger(TCPMessageProcessor.class);
+	private static Logger logger = LoggerFactory.getLogger(TCPMessageProcessor.class);
 
     /**
      * Constructor.
@@ -122,22 +122,18 @@ public class TCPMessageProcessor extends ConnectionOrientedMessageProcessor impl
                 }
 
                 Socket newsock = sock.accept();
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug("Accepting new connection!");
-                }
+                logger.debug("Accepting new connection!");
                 // Note that for an incoming message channel, the
                 // thread is already running
 
                 TCPMessageChannel newChannel = new TCPMessageChannel(newsock, sipStack, this, "TCPMessageChannelThread-" + nConnections);
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                    logger.logDebug(Thread.currentThread() + " adding incoming channel " + newChannel.getKey() + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
+                logger.debug(Thread.currentThread() + " adding incoming channel " + newChannel.getKey() + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
                 incomingMessageChannels.put(newChannel.getKey(), newChannel);
             } catch (SocketException ex) {
                 this.isRunning = false;
             } catch (IOException ex) {
                 // Problem accepting connection.
-                if (logger.isLoggingEnabled())
-                    logger.logException(ex);
+                logger.error("IOException", ex);
                 continue;
             } catch (Exception ex) {
                 InternalErrorHandler.handleException(ex);
@@ -191,10 +187,8 @@ public class TCPMessageProcessor extends ConnectionOrientedMessageProcessor impl
                     targetHostPort.getPort(), sipStack, this);
             this.messageChannels.put(key, retval);
             retval.isCached = true;
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("key " + key);
-                logger.logDebug("Creating " + retval);
-            }
+            logger.debug("key " + key);
+            logger.debug("Creating " + retval);
             return retval;
         }
     }    
@@ -209,10 +203,8 @@ public class TCPMessageProcessor extends ConnectionOrientedMessageProcessor impl
                 TCPMessageChannel retval = new TCPMessageChannel(host, port, sipStack, this);
                 this.messageChannels.put(key, retval);
                 retval.isCached = true;
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug("key " + key);
-                    logger.logDebug("Creating " + retval);
-                }
+                logger.debug("key " + key);
+                logger.debug("Creating " + retval);
                 return retval;
             }
         } catch (UnknownHostException ex) {

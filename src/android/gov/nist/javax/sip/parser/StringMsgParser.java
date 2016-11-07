@@ -30,7 +30,16 @@
 
 package android.gov.nist.javax.sip.parser;
 
-import android.gov.nist.core.CommonLogger;
+import java.io.UnsupportedEncodingException;
+import java.text.ParseException;
+/*
+ * Acknowledgement: 1/12/2007: Yanick Belanger rewrote the parsing loops to make them
+ * simpler and quicker.
+ */
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.core.Host;
 import android.gov.nist.core.HostNameParser;
 import android.gov.nist.core.StackLogger;
@@ -47,15 +56,6 @@ import android.gov.nist.javax.sip.header.StatusLine;
 import android.gov.nist.javax.sip.message.SIPMessage;
 import android.gov.nist.javax.sip.message.SIPRequest;
 import android.gov.nist.javax.sip.message.SIPResponse;
-
-import java.io.UnsupportedEncodingException;
-import java.text.ParseException;
-/*
- * Acknowledgement: 1/12/2007: Yanick Belanger rewrote the parsing loops to make them
- * simpler and quicker.
- */
-
-import javax.xml.bind.DatatypeConverter;
 
 /**
  * Parse SIP message and parts of SIP messages such as URI's etc from memory and
@@ -82,7 +82,7 @@ public class StringMsgParser implements MessageParser {
 
     protected static boolean computeContentLengthFromMessage = false;
     
-    private static StackLogger logger = CommonLogger.getLogger(StringMsgParser.class);
+    private static Logger logger = LoggerFactory.getLogger(StringMsgParser.class);
 
     /**
      * @since v0.9
@@ -120,9 +120,7 @@ public class StringMsgParser implements MessageParser {
         }
         catch (ArrayIndexOutOfBoundsException e) {
             // Array contains only control char, return null.
-        	if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            	logger.logDebug("handled only control char so returning null");
-            }
+        	logger.debug("handled only control char so returning null");
             return null;
         }
 

@@ -28,11 +28,12 @@ package android.gov.nist.javax.sip;
 import java.io.IOException;
 import java.text.ParseException;
 
-import android.gov.nist.core.CommonLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.core.Host;
 import android.gov.nist.core.HostPort;
 import android.gov.nist.core.InternalErrorHandler;
-import android.gov.nist.core.StackLogger;
 import android.gov.nist.javax.sip.address.AddressImpl;
 import android.gov.nist.javax.sip.address.SipUri;
 import android.gov.nist.javax.sip.header.Contact;
@@ -57,7 +58,7 @@ import android.javax.sip.header.ViaHeader;
  *
  */
 public class ListeningPointImpl implements android.javax.sip.ListeningPoint, android.gov.nist.javax.sip.ListeningPointExt {
-	private static StackLogger logger = CommonLogger.getLogger(ListeningPointImpl.class);
+	private static Logger logger = LoggerFactory.getLogger(ListeningPointImpl.class);
 
     protected String transport;
 

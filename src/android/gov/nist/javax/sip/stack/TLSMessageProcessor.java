@@ -40,12 +40,6 @@
  ******************************************************************************/
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.HostPort;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.SipStackImpl;
-
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
@@ -56,6 +50,13 @@ import java.util.Iterator;
 
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLServerSocket;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.HostPort;
+import android.gov.nist.core.StackLogger;
+import android.gov.nist.javax.sip.SipStackImpl;
 
 /**
  * Sit in a loop waiting for incoming tls connections and start a new thread to handle each new
@@ -69,7 +70,7 @@ import javax.net.ssl.SSLServerSocket;
  */
 public class TLSMessageProcessor extends ConnectionOrientedMessageProcessor implements Runnable {
 	
-	private static StackLogger logger = CommonLogger.getLogger(TLSMessageProcessor.class);
+	private static Logger logger = LoggerFactory.getLogger(TLSMessageProcessor.class);
     
 	/**
      * Constructor.
@@ -116,10 +117,8 @@ public class TLSMessageProcessor extends ConnectionOrientedMessageProcessor impl
             ((SSLServerSocket) this.sock).setWantClientAuth(false);
         }     
 
-        if(logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            logger.logDebug("SSLServerSocket want client auth " + ((SSLServerSocket) this.sock).getWantClientAuth());
-            logger.logDebug("SSLServerSocket need client auth " + ((SSLServerSocket) this.sock).getNeedClientAuth());
-        }
+        logger.debug("SSLServerSocket want client auth " + ((SSLServerSocket) this.sock).getWantClientAuth());
+        logger.debug("SSLServerSocket need client auth " + ((SSLServerSocket) this.sock).getNeedClientAuth());
         
         this.isRunning = true;
         thread.start();
@@ -154,34 +153,30 @@ public class TLSMessageProcessor extends ConnectionOrientedMessageProcessor impl
                     }
                     this.nConnections++;
                 }
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug(" waiting to accept new connection!");
-                }
-                
+                logger.debug(" waiting to accept new connection!");
+
                 newsock = sock.accept();
                
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug("Accepting new connection!");
-                }
+                logger.debug("Accepting new connection!");
 
             } catch (SocketException ex) {
                 if ( this.isRunning ) {
-                  logger.logError(
+                  logger.error(
                     "Fatal - SocketException occured while Accepting connection", ex);
                   	this.isRunning = false;
                   	break;
                 }
             } catch (SSLException ex) {
                 this.isRunning = false;
-                logger.logError(
+                logger.error(
                         "Fatal - SSSLException occured while Accepting connection", ex);
                 break;
             } catch (IOException ex) {
                 // Problem accepting connection.
-                logger.logError("Problem Accepting Connection", ex);
+                logger.error("Problem Accepting Connection", ex);
 				continue;
             } catch (Exception ex) {
-                logger.logError("Unexpected Exception!", ex);
+                logger.error("Unexpected Exception!", ex);
                 continue;
             }
             
@@ -192,14 +187,13 @@ public class TLSMessageProcessor extends ConnectionOrientedMessageProcessor impl
 	            	// lyolik: even if SocketException is thrown (could be a result of bad handshake, 
 	            	// it's not a reason to stop execution
 		            TLSMessageChannel newChannel = new TLSMessageChannel(newsock, sipStack, this, "TLSMessageChannelThread-" + nConnections);
-		            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-		                 logger.logDebug(Thread.currentThread() + " adding incoming channel " + newChannel.getKey());
+	                 logger.debug(Thread.currentThread() + " adding incoming channel " + newChannel.getKey());
 		            // https://code.google.com/p/jain-sip/issues/detail?id=14 add it only if the handshake has been completed successfully
 		            if(newChannel.isHandshakeCompleted()) {
 		                incomingMessageChannels.put(newChannel.getKey(), newChannel);
 		            }
 	            } catch (Exception ex) {
-	                logger.logError("A problem occured while Accepting connection", ex);
+	                logger.error("A problem occured while Accepting connection", ex);
 	            }
             }
         }
@@ -243,10 +237,8 @@ public class TLSMessageProcessor extends ConnectionOrientedMessageProcessor impl
                     targetHostPort.getPort(), sipStack, this);
             this.messageChannels.put(key, retval);
             retval.isCached = true;
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("key " + key);
-                logger.logDebug("Creating " + retval);
-            }
+            logger.debug("key " + key);
+            logger.debug("Creating " + retval);
             return retval;
         }
     }
@@ -261,10 +253,8 @@ public class TLSMessageProcessor extends ConnectionOrientedMessageProcessor impl
                 TLSMessageChannel retval = new TLSMessageChannel(host, port, sipStack, this);
                 this.messageChannels.put(key, retval);
                 retval.isCached = true;
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug("key " + key);
-                    logger.logDebug("Creating " + retval);
-                }
+                logger.debug("key " + key);
+                logger.debug("Creating " + retval);
                 return retval;
             }
         } catch (UnknownHostException ex) {

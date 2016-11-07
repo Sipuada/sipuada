@@ -31,9 +31,9 @@
  *
  *Bug fixes for corner cases were contributed by Thomas Froment.
  */
-package gov.nist.core;
+package android.gov.nist.core;
 
-import gov.nist.javax.sdp.parser.Lexer;
+import android.gov.nist.javax.sdp.parser.Lexer;
 
 import java.text.ParseException;
 

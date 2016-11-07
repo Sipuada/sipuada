@@ -28,17 +28,6 @@
  ******************************************************************************/
 package android.gov.nist.javax.sip.parser;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.header.CallID;
-import android.gov.nist.javax.sip.header.ContentLength;
-import android.gov.nist.javax.sip.message.SIPMessage;
-import android.gov.nist.javax.sip.stack.ConnectionOrientedMessageChannel;
-import android.gov.nist.javax.sip.stack.QueuedMessageDispatchBase;
-import android.gov.nist.javax.sip.stack.SIPTransactionStack;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,6 +37,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.javax.sip.header.CallID;
+import android.gov.nist.javax.sip.header.ContentLength;
+import android.gov.nist.javax.sip.message.SIPMessage;
+import android.gov.nist.javax.sip.stack.ConnectionOrientedMessageChannel;
+import android.gov.nist.javax.sip.stack.QueuedMessageDispatchBase;
+import android.gov.nist.javax.sip.stack.SIPTransactionStack;
 
 /**
  * This is a FSM that can parse a single stream of messages with they bodies and 
@@ -62,7 +61,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class NioPipelineParser {
 	
-	private static StackLogger logger = CommonLogger.getLogger(NioPipelineParser.class);
+	private static Logger logger = LoggerFactory.getLogger(NioPipelineParser.class);
 
 	private static final String CRLF = "\r\n";
 
@@ -140,18 +139,14 @@ public class NioPipelineParser {
             try {                                                                                
                 boolean acquired = semaphore.tryAcquire(30, TimeUnit.SECONDS);
                 if(!acquired) {
-                	if (logger.isLoggingEnabled(StackLogger.TRACE_WARN)) {
-                		logger.logWarning("Semaphore acquisition for callId " + callId + " wasn't successful so don't process message, returning");
-                	}
+            		logger.warn("Semaphore acquisition for callId " + callId + " wasn't successful so don't process message, returning");
                 	// https://java.net/jira/browse/JSIP-499 don't process the message if the semaphore wasn't acquired
                 	return;
                 } else {
-	                if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-	                	logger.logDebug("semaphore acquired for message " + callId + " acquired");
-	                }
+                	logger.debug("semaphore acquired for message " + callId + " acquired");
                 }
             } catch (InterruptedException e) {
-            	logger.logError("Semaphore acquisition for callId " + callId + " interrupted, couldn't process message, returning", e);
+            	logger.error("Semaphore acquisition for callId " + callId + " interrupted, couldn't process message, returning", e);
             	// https://java.net/jira/browse/JSIP-499 don't process the message if the semaphore wasn't acquired
             	return;
             }
@@ -162,16 +157,12 @@ public class NioPipelineParser {
             try {
             	synchronized(smp) {
             		unparsedMessage = messagesForCallID.peek();
-            		if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            			logger.logDebug( "\nUnparsed message before parser is:\n" + unparsedMessage);
-            		}
+        			logger.debug( "\nUnparsed message before parser is:\n" + unparsedMessage);
         			parsedSIPMessage = smp.parseSIPMessage(unparsedMessage.lines.getBytes(), false, false, null);        		
         			if(parsedSIPMessage == null) {
         				// https://java.net/jira/browse/JSIP-503
-        				if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                			logger.logDebug( "parsed message is null, probably because of end of stream, empty packets or socket closed "
-                					+ "and we got CRLF to terminate cleanly, not processing message");
-                		}
+            			logger.debug( "parsed message is null, probably because of end of stream, empty packets or socket closed "
+            					+ "and we got CRLF to terminate cleanly, not processing message");
         			} else if(unparsedMessage.body.length > 0) {
         				parsedSIPMessage.setMessageContent(unparsedMessage.body);
         			}
@@ -191,11 +182,9 @@ public class NioPipelineParser {
             } catch (ParseException e) {
             	// https://java.net/jira/browse/JSIP-499 move the ParseException here so the finally block 
             	// is called, the semaphore released and map cleaned up if need be
-            	if (logger.isLoggingEnabled(StackLogger.TRACE_WARN)) {
-            		logger.logWarning("Problem parsing message " + unparsedMessage);
-            	}
+        		logger.warn("Problem parsing message " + unparsedMessage);
     		}catch (Exception e) {
-            	logger.logError("Error occured processing message " + message, e);
+            	logger.error("Error occured processing message " + message, e);
                 // We do not break the TCP connection because other calls use the same socket here
             } finally {            
             	if(!messagePolled) {
@@ -206,13 +195,9 @@ public class NioPipelineParser {
             	}
                 if(messagesForCallID.size() <= 0) {
                     messagesOrderingMap.remove(callId);
-                    if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                    	logger.logDebug("CallIDOrderingStructure removed for callId " + callId);
-                    }
+                	logger.debug("CallIDOrderingStructure removed for callId " + callId);
                 }
-                if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                	logger.logDebug("releasing semaphore for message " + parsedSIPMessage);
-                }
+            	logger.debug("releasing semaphore for message " + parsedSIPMessage);
                 //release the semaphore so that another thread can process another message from the call id queue in the correct order
                 // or a new message from another call id queue
                 semaphore.release(); 
@@ -227,9 +212,7 @@ public class NioPipelineParser {
                 	sipStack.sipEventInterceptor.afterMessage(parsedSIPMessage);
                 }
             }
-            if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-            	logger.logDebug("dispatch task done on " + parsedSIPMessage);
-            }
+        	logger.debug("dispatch task done on " + parsedSIPMessage);
         }
 		public long getReceptionTime() {
 			return time;
@@ -288,23 +271,19 @@ public class NioPipelineParser {
 				if(isPreviousLineCRLF) {
             		// Handling keepalive ping (double CRLF) as defined per RFC 5626 Section 4.4.1
                 	// sending pong (single CRLF)
-                	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                        logger.logDebug("KeepAlive Double CRLF received, sending single CRLF as defined per RFC 5626 Section 4.4.1");
-                        logger.logDebug("~~~ setting isPreviousLineCRLF=false");
-                    }
+                    logger.debug("KeepAlive Double CRLF received, sending single CRLF as defined per RFC 5626 Section 4.4.1");
+                    logger.debug("~~~ setting isPreviousLineCRLF=false");
 
                 	crlfReceived = false;
 
                 	try {
 						sipMessageListener.sendSingleCLRF();
 					} catch (Exception e) {						
-						logger.logError("A problem occured while trying to send a single CLRF in response to a double CLRF", e);
+						logger.error("A problem occured while trying to send a single CLRF in response to a double CLRF", e);
 					}                	                	
             	} else {
             		crlfReceived = true;
-                	if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                    	logger.logDebug("Received CRLF");
-                    }
+                	logger.debug("Received CRLF");
                 	if(sipMessageListener != null && 
                 			sipMessageListener instanceof ConnectionOrientedMessageChannel) {
                 		((ConnectionOrientedMessageChannel)sipMessageListener).cancelPingKeepAliveTimeoutTaskIfStarted();
@@ -315,9 +294,7 @@ public class NioPipelineParser {
 					readingHeaderLines = false;
 					partialLineRead = false;
 					message.append(CRLF); // the parser needs CRLF at the end, otherwise fails TODO: Is that a bug?
-					if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-						logger.logDebug("Content Length parsed is " + contentLength);
-					}
+					logger.debug("Content Length parsed is " + contentLength);
 
 					contentReadSoFar = 0;
 					messageBody = new byte[contentLength];
@@ -362,9 +339,7 @@ public class NioPipelineParser {
                     orderingStructure = messagesOrderingMap.putIfAbsent(callId, newCallIDOrderingStructure);
                     if(orderingStructure == null) {
                         orderingStructure = newCallIDOrderingStructure;       
-                        if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                            logger.logDebug("new CallIDOrderingStructure added for message " + message);
-                        }
+                        logger.debug("new CallIDOrderingStructure added for message " + message);
                     }
                 }
                 final CallIDOrderingStructure callIDOrderingStructure = orderingStructure;                                 
@@ -381,7 +356,7 @@ public class NioPipelineParser {
 						sipMessage = smp.parseSIPMessage(msgLines.getBytes(), false, false, null);
 						sipMessage.setMessageContent(msgBodyBytes);
 					} catch (ParseException e) {
-						logger.logError("Parsing problem", e);
+						logger.error("Parsing problem", e);
 					}
 				}
 				this.contentLength = 0;
@@ -395,7 +370,7 @@ public class NioPipelineParser {
 		try {
 			sipMessageListener.processMessage(message);
 		} catch (Exception e) {
-			logger.logError("Can't process message", e);
+			logger.error("Can't process message", e);
 		}
 	}
 	

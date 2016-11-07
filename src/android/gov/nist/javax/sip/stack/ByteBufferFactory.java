@@ -25,11 +25,10 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-
 import java.nio.ByteBuffer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Contributed by Alexander Saveliev, Avistar Communications for Issue http://java.net/jira/browse/JSIP-430
@@ -38,7 +37,7 @@ import java.nio.ByteBuffer;
  */
 public class ByteBufferFactory {
 
-    private static StackLogger logger = CommonLogger.getLogger(ByteBufferFactory.class);
+    private static Logger logger = LoggerFactory.getLogger(ByteBufferFactory.class);
 
     private static ByteBufferFactory instance = new ByteBufferFactory();
 
@@ -49,21 +48,17 @@ public class ByteBufferFactory {
     }
 
     public ByteBuffer allocateDirect(int capacity) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logTrace("Allocating direct buffer " + capacity);
+        logger.trace("Allocating direct buffer " + capacity);
         return useDirect ? ByteBuffer.allocateDirect(capacity) : ByteBuffer.allocate(capacity);
     }
 
     public ByteBuffer allocate(int capacity) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logTrace("Allocating buffer " + capacity);
+        logger.trace("Allocating buffer " + capacity);
         return ByteBuffer.allocate(capacity);
     }
 
-
     public void setUseDirect(boolean useDirect) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logTrace("Direct buffers are " + (useDirect ? "enabled" : "disabled"));
+        logger.trace("Direct buffers are " + (useDirect ? "enabled" : "disabled"));
         this.useDirect = useDirect;
     }
 }

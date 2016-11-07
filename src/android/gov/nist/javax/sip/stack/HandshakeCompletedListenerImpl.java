@@ -18,9 +18,6 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.StackLogger;
-
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.channels.SocketChannel;
@@ -29,9 +26,12 @@ import java.security.cert.Certificate;
 import javax.net.ssl.HandshakeCompletedEvent;
 import javax.net.ssl.HandshakeCompletedListener;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class HandshakeCompletedListenerImpl implements HandshakeCompletedListener {
-	private static StackLogger logger = CommonLogger.getLogger(HandshakeCompletedListenerImpl.class);          
-	
+	private static Logger logger = LoggerFactory.getLogger(HandshakeCompletedListenerImpl.class);          
+
     private HandshakeCompletedEvent handshakeCompletedEvent;
     private final Object eventWaitObject = new Object();
 
@@ -92,7 +92,7 @@ public class HandshakeCompletedListenerImpl implements HandshakeCompletedListene
 
     public void startHandshakeWatchdog() {
         if (this.watchdog != null) {
-        	logger.logInfo("starting watchdog for socket " + watchdog.socket + " on sslhandshake " + sipStack.getSslHandshakeTimeout());
+        	logger.info("starting watchdog for socket " + watchdog.socket + " on sslhandshake " + sipStack.getSslHandshakeTimeout());
         	sipStack.getTimer().schedule(watchdog, sipStack.getSslHandshakeTimeout());
         }
     }
@@ -152,13 +152,13 @@ public class HandshakeCompletedListenerImpl implements HandshakeCompletedListene
     	
 		@Override
 		public void runTask() {
-			logger.logInfo("closing socket " + socket + " on sslhandshaketimeout");
+			logger.info("closing socket " + socket + " on sslhandshaketimeout");
 			 try {
                  socket.close();
              } catch (IOException ex) {
-                 logger.logInfo("couldn't close socket on sslhandshaketimeout");
+                 logger.info("couldn't close socket on sslhandshaketimeout");
              }
-			 logger.logInfo("socket closed " + socket + " on sslhandshaketimeout");
+			 logger.info("socket closed " + socket + " on sslhandshaketimeout");
 		}
     	
     }

@@ -25,11 +25,18 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.text.ParseException;
+import java.util.Iterator;
+import java.util.concurrent.Semaphore;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.core.InternalErrorHandler;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.ServerLogger;
-import android.gov.nist.core.StackLogger;
 import android.gov.nist.javax.sip.IOExceptionEventExt;
 import android.gov.nist.javax.sip.IOExceptionEventExt.Reason;
 import android.gov.nist.javax.sip.SipListenerExt;
@@ -44,15 +51,6 @@ import android.gov.nist.javax.sip.message.SIPResponse;
 import android.gov.nist.javax.sip.parser.Pipeline;
 import android.gov.nist.javax.sip.parser.PipelinedMsgParser;
 import android.gov.nist.javax.sip.parser.SIPMessageListener;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.InetAddress;
-import java.net.Socket;
-import java.text.ParseException;
-import java.util.Iterator;
-import java.util.concurrent.Semaphore;
-
 import android.javax.sip.ListeningPoint;
 import android.javax.sip.SipListener;
 import android.javax.sip.address.Hop;
@@ -65,7 +63,7 @@ import android.javax.sip.message.Response;
 public abstract class ConnectionOrientedMessageChannel extends MessageChannel implements
 	SIPMessageListener, Runnable, RawMessageChannel {
 	
-	private static StackLogger logger = CommonLogger.getLogger(ConnectionOrientedMessageChannel.class);
+	private static Logger logger = LoggerFactory.getLogger(ConnectionOrientedMessageChannel.class);
 	protected SIPTransactionStack sipStack;
 	
 	protected Socket mySock;
@@ -169,8 +167,8 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
      */
     public void sendMessage(final SIPMessage sipMessage) throws IOException {
 
-        if ( logger.isLoggingEnabled(LogWriter.TRACE_DEBUG) && !sipMessage.isNullRequest() ) {
-            logger.logDebug("sendMessage:: " + sipMessage.getFirstLine() + " cseq method = " + sipMessage.getCSeq().getMethod());
+        if (!sipMessage.isNullRequest() ) {
+            logger.debug("sendMessage:: " + sipMessage.getFirstLine() + " cseq method = " + sipMessage.getCSeq().getMethod());
         }
 
         for (MessageProcessor messageProcessor : getSIPStack()
@@ -186,23 +184,14 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                         try {
                             processMessage((SIPMessage) sipMessage.clone());
                         } catch (Exception ex) {
-                            if (logger
-                                    .isLoggingEnabled(ServerLogger.TRACE_ERROR)) {
-                                logger
-                                        .logError(
-                                                "Error self routing message cause by: ",
-                                                ex);
-                            }
+                            logger.error("Error self routing message cause by: ", ex);
                         }
                     }
                 };
                 getSIPStack().getSelfRoutingThreadpoolExecutor().execute(
                         processMessageTask);
-
-                if (logger.isLoggingEnabled(
-                        LogWriter.TRACE_DEBUG))
-                    logger.logDebug(
-                            "Self routing message");
+                logger.debug(
+                    "Self routing message");
                 return;
             }
 
@@ -225,9 +214,7 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
 	            	} else {
 	            		this.peerPortAdvertisedInHeaders = via.getPort();
 	            	}
-	            	if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                	logger.logDebug("1.Storing peerPortAdvertisedInHeaders = " + peerPortAdvertisedInHeaders + " for via port = " + via.getPort() + " via rport = " + via.getRPort() + " and peer port = " + peerPort + " for this channel " + this + " key " + key);
-	                }	 
+                	logger.debug("1.Storing peerPortAdvertisedInHeaders = " + peerPortAdvertisedInHeaders + " for via port = " + via.getPort() + " via rport = " + via.getRPort() + " and peer port = " + peerPort + " for this channel " + this + " key " + key);
         		}
         	}
         }
@@ -243,9 +230,7 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
         sipMessage.setLocalAddress(this.getMessageProcessor().getIpAddress());
         sipMessage.setLocalPort(this.getPort());
 
-        if (logger.isLoggingEnabled(
-                ServerLogger.TRACE_MESSAGES))
-            logMessage(sipMessage, peerAddress, peerPort, time);
+        logMessage(sipMessage, peerAddress, peerPort, time);
     }
 
 	protected abstract void sendMessage(byte[] msg, boolean b) throws IOException;
@@ -255,11 +240,8 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
         try {
             processMessage(sipMessage);
         } catch (Exception e) {
-            if (logger.isLoggingEnabled(
-                    ServerLog.TRACE_ERROR)) {
-                logger.logError(
-                        "ERROR processing self routing", e);
-            }
+            logger.error(
+        		"ERROR processing self routing", e);
         }
     }
 	
@@ -280,12 +262,9 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                     || sipMessage.getCallId() == null
                     || sipMessage.getCSeq() == null
                     || sipMessage.getViaHeaders() == null) {
-                
-                if (logger.isLoggingEnabled()) {
-                    String badmsg = sipMessage.encode();
-                    logger.logError("bad message " + badmsg);
-                    logger.logError(">>> Dropped Bad Msg");
-                }
+                String badmsg = sipMessage.encode();
+                logger.error("bad message " + badmsg);
+                logger.error(">>> Dropped Bad Msg");
                 return;
             }
         	
@@ -309,25 +288,19 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                 this.peerProtocol = v.getTransport();
                 //if(peerPortAdvertisedInHeaders <= 0) {
                 	int hopPort = v.getPort();
-                	if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    	logger.logDebug("hop port = " + hopPort + " for request " + sipMessage + " for this channel " + this + " key " + key);
-                    }                	
+                	logger.debug("hop port = " + hopPort + " for request " + sipMessage + " for this channel " + this + " key " + key);
                 	if(hopPort <= 0) {    
                 		// if port is 0 we assume the default port for TCP
                 		this.peerPortAdvertisedInHeaders = 5060;
                 	} else {
                 		this.peerPortAdvertisedInHeaders = hopPort;
                 	}
-                	if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    	logger.logDebug("3.Storing peerPortAdvertisedInHeaders = " + peerPortAdvertisedInHeaders + " for this channel " + this + " key " + key);
-                    }
+                	logger.debug("3.Storing peerPortAdvertisedInHeaders = " + peerPortAdvertisedInHeaders + " for this channel " + this + " key " + key);
                 //}
                 // may be needed to reconnect, when diff than peer address
                 if(peerAddressAdvertisedInHeaders == null) {
                 	peerAddressAdvertisedInHeaders = hop.getHost();
-                	if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    	logger.logDebug("3.Storing peerAddressAdvertisedInHeaders = " + peerAddressAdvertisedInHeaders + " for this channel " + this + " key " + key);
-                    }
+                	logger.debug("3.Storing peerAddressAdvertisedInHeaders = " + peerAddressAdvertisedInHeaders + " for this channel " + this + " key " + key);
                 }
                 
                 try {
@@ -348,11 +321,9 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                 	boolean hasRPort = v.hasParameter(Via.RPORT);
                     if(!hasRPort && v.getPort() != peerPort) {
                     	// https://github.com/RestComm/jain-sip/issues/79
-                    	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    		logger.logDebug(
-                                    "setting rport since viaPort " + v.getPort() + " different than peerPacketSourcePort "
-                                    + peerPort + " so that the response can be routed back");
-                        }
+                		logger.debug(
+                            "setting rport since viaPort " + v.getPort() + " different than peerPacketSourcePort "
+                            + peerPort + " so that the response can be routed back");
                     	hasRPort = true;
                     }
                     if (hasRPort
@@ -401,21 +372,14 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                 // Create a new sever side request processor for this
                 // message and let it handle the rest.
 
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug(
-                            "----Processing Message---");
-                }
-                if (logger.isLoggingEnabled(
-                        ServerLogger.TRACE_MESSAGES)) {
-
-                    sipStack.serverLogger.logMessage(sipMessage, this
-                            .getPeerHostPort().toString(),
-                            this.messageProcessor.getIpAddress()
-                                    .getHostAddress()
-                                    + ":" + this.messageProcessor.getPort(),
-                            false, receptionTime);
-
-                }
+                logger.debug(
+                    "----Processing Message---");
+                sipStack.serverLogger.logMessage(sipMessage, this
+                        .getPeerHostPort().toString(),
+                        this.messageProcessor.getIpAddress()
+                                .getHostAddress()
+                                + ":" + this.messageProcessor.getPort(),
+                        false, receptionTime);
                 // Check for reasonable size - reject message
                 // if it is too long.
                 if (sipStack.getMaxMessageSize() > 0
@@ -487,10 +451,8 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                 		} catch (Exception e) {
                 			// IGNore
                 		}
-                		if (logger.isLoggingEnabled())
-                			logger
-                			.logWarning(
-                					"Dropping message -- could not acquire semaphore");
+            			logger.warn(
+        					"Dropping message -- could not acquire semaphore");
                 	}
                 }
             } else {
@@ -501,10 +463,9 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                 try {
                     sipResponse.checkHeaders();
                 } catch (ParseException ex) {
-                    if (logger.isLoggingEnabled())
-                        logger.logError(
-                                "Dropping Badly formatted response message >>> "
-                                        + sipResponse);
+                    logger.error(
+                        "Dropping Badly formatted response message >>> "
+                                + sipResponse);
                     return;
                 }
                 // This is a response message - process it.
@@ -516,9 +477,8 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                                         : sipResponse.getContentLength()
                                                 .getContentLength()) > sipStack
                                 .getMaxMessageSize()) {
-                    if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                        logger.logDebug(
-                                "Message size exceeded");
+                    logger.debug(
+                        "Message size exceeded");
                     return;
 
                 }
@@ -530,10 +490,9 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                         if (sipServerResponse instanceof SIPClientTransaction
                                 && !((SIPClientTransaction) sipServerResponse)
                                         .checkFromTag(sipResponse)) {
-                            if (logger.isLoggingEnabled())
-                                logger.logError(
-                                        "Dropping response message with invalid tag >>> "
-                                                + sipResponse);
+                            logger.error(
+                                    "Dropping response message with invalid tag >>> "
+                                            + sipResponse);
                             return;
                         }
 
@@ -550,7 +509,7 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                     }
                 } else {
                 	logger
-                    	.logWarning(
+                    	.warn(
                             "Application is blocked -- could not acquire semaphore -- dropping response");
                 }
             }
@@ -614,9 +573,8 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
                     }
 
                     try {
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                            logger.logDebug(
-                                    "IOException closing sock " + ex);
+                        logger.debug(
+                            "IOException closing sock " + ex);
                         try {
                             if (sipStack.maxConnections != -1) {
                                 synchronized (messageProcessor) {
@@ -729,14 +687,12 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
     		try {
 				keepAliveSemaphore.acquire();
 			} catch (InterruptedException e) {
-				logger.logError("Couldn't acquire keepAliveSemaphore");
+				logger.error("Couldn't acquire keepAliveSemaphore");
 				return;
 			}
 	    	try {
-	    		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                logger.logDebug("~~~ cancelPingKeepAliveTimeoutTaskIfStarted for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
-	                        +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + ")");
-	            }
+                logger.debug("~~~ cancelPingKeepAliveTimeoutTaskIfStarted for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
+                        +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + ")");
 	    		sipStack.getTimer().cancel(pingKeepAliveTimeoutTask);
 	    	} finally {
 	    		keepAliveSemaphore.release();
@@ -752,10 +708,8 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
             keepAliveTimeout = messageProcessor.getSIPStack().getReliableConnectionKeepAliveTimeout();
         }
 
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("~~~ setKeepAliveTimeout for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
-                    +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + ")");
-        }
+        logger.debug("~~~ setKeepAliveTimeout for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
+                +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + ")");
 
         this.keepAliveTimeout = keepAliveTimeout;
         if(keepAliveSemaphore == null) {
@@ -780,50 +734,42 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
 
         StringBuilder methodLog = new StringBuilder();
 
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            methodLog.append("~~~ rescheduleKeepAliveTimeout for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
-                    +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + "): newKeepAliveTimeout=");
-            if (newKeepAliveTimeout == Long.MAX_VALUE) {
-                methodLog.append("Long.MAX_VALUE");
-            } else {
-                methodLog.append(newKeepAliveTimeout);
-            }
+        methodLog.append("~~~ rescheduleKeepAliveTimeout for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
+                +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + "): newKeepAliveTimeout=");
+        if (newKeepAliveTimeout == Long.MAX_VALUE) {
+            methodLog.append("Long.MAX_VALUE");
+        } else {
+            methodLog.append(newKeepAliveTimeout);
+        }
 //            methodLog.append(", lastKeepAliveReceivedTimeOrNow=");
 //            methodLog.append(lastKeepAliveReceivedTimeOrNow);
 //            methodLog.append(", newScheduledTime=");
 //            methodLog.append(newScheduledTime);
-        }
 
 //        long delay = newScheduledTime > now ? newScheduledTime - now : 1;
         try {
 			keepAliveSemaphore.acquire();
 		} catch (InterruptedException e) {
-			logger.logWarning("Couldn't acquire keepAliveSemaphore");
+			logger.warn("Couldn't acquire keepAliveSemaphore");
 			return;
 		}
 		try{
 	        if(pingKeepAliveTimeoutTask == null) {
 	        	pingKeepAliveTimeoutTask = new KeepAliveTimeoutTimerTask();	  	        	
-	        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                methodLog.append(", scheduling pingKeepAliveTimeoutTask to execute after ");
-	                methodLog.append(keepAliveTimeout / 1000);
-	                methodLog.append(" seconds");
-	                logger.logDebug(methodLog.toString());
-	            }
+                methodLog.append(", scheduling pingKeepAliveTimeoutTask to execute after ");
+                methodLog.append(keepAliveTimeout / 1000);
+                methodLog.append(" seconds");
+                logger.debug(methodLog.toString());
 	    	    sipStack.getTimer().schedule(pingKeepAliveTimeoutTask, keepAliveTimeout);
 	        } else {
-	        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                logger.logDebug("~~~ cancelPingKeepAliveTimeout for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
-	                        +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + ")");
-	        	}
+                logger.debug("~~~ cancelPingKeepAliveTimeout for MessageChannel(key=" + key + "), clientAddress=" + peerAddress
+                    +  ", clientPort=" + peerPort+ ", timeout="+ keepAliveTimeout + ")");
         		sipStack.getTimer().cancel(pingKeepAliveTimeoutTask);        	
         		pingKeepAliveTimeoutTask = new KeepAliveTimeoutTimerTask();
-        		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                methodLog.append(", scheduling pingKeepAliveTimeoutTask to execute after ");
-	                methodLog.append(keepAliveTimeout / 1000);
-	                methodLog.append(" seconds");
-	                logger.logDebug(methodLog.toString());
-	            }
+                methodLog.append(", scheduling pingKeepAliveTimeoutTask to execute after ");
+                methodLog.append(keepAliveTimeout / 1000);
+                methodLog.append(" seconds");
+                logger.debug(methodLog.toString());
         		sipStack.getTimer().schedule(pingKeepAliveTimeoutTask, keepAliveTimeout);
 	        }
 		} finally {
@@ -833,10 +779,8 @@ public abstract class ConnectionOrientedMessageChannel extends MessageChannel im
     class KeepAliveTimeoutTimerTask extends SIPStackTimerTask {
 
         public void runTask() {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "~~~ Starting processing of KeepAliveTimeoutEvent( " + peerAddress.getHostAddress() + "," + peerPort + ")...");
-            }
+            logger.debug(
+                "~~~ Starting processing of KeepAliveTimeoutEvent( " + peerAddress.getHostAddress() + "," + peerPort + ")...");
             close(true, true);
             if(sipStack instanceof SipStackImpl) {
 	            for (Iterator<SipProviderImpl> it = ((SipStackImpl)sipStack).getSipProviders(); it.hasNext();) {

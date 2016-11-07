@@ -25,10 +25,6 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.StackLogger;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -37,22 +33,24 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.LogLevels;
+
 /**
  * Websocket handshake rev 13 and rev 8
  *
  */
 public class WebSocketHttpHandshake {
 
-	private static StackLogger logger = CommonLogger
-			.getLogger(WebSocketHttpHandshake.class);
-	
+	private static Logger logger = LoggerFactory.getLogger(WebSocketHttpHandshake.class);
+
 	private HashMap<String, String> headers = new HashMap<String, String>();
 
 	public byte[] createHttpResponse(String request) throws Exception {
 		
-		if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-			logger.logDebug("Request=" + request);
-		}
+		logger.debug("Request=" + request);
 		InputStream is = new ByteArrayInputStream(request.getBytes());
 
 		boolean isSecure = false;
@@ -137,9 +135,7 @@ public class WebSocketHttpHandshake {
 
 		String response = sb.toString();
 
-		if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-			logger.logDebug("Response=" + response);
-		}
+		logger.debug("Response=" + response);
 		byte[] output = sb.toString().getBytes();
 
 		return output;

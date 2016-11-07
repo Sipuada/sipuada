@@ -29,20 +29,18 @@
 
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.ServerLogger;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.LogRecord;
-import android.gov.nist.javax.sip.header.CallID;
-import android.gov.nist.javax.sip.message.SIPMessage;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Properties;
 
+import org.slf4j.Logger;
+
+import android.gov.nist.core.ServerLogger;
+import android.gov.nist.javax.sip.LogRecord;
+import android.gov.nist.javax.sip.header.CallID;
+import android.gov.nist.javax.sip.message.SIPMessage;
 import android.javax.sip.SipStack;
 import android.javax.sip.header.TimeStampHeader;
 
@@ -61,7 +59,7 @@ public class ServerLog implements ServerLogger {
 
     private boolean logContent;
 
-    protected StackLogger stackLogger;
+    protected Logger stackLogger;
 
     /**
      * Name of the log file in which the trace is written out (default is null)
@@ -93,43 +91,13 @@ public class ServerLog implements ServerLogger {
     private void setProperties(Properties configurationProperties) {
         this.configurationProperties = configurationProperties;
         // Set a descriptive name for the message trace logger.
-        this.description = configurationProperties.getProperty("javax.sip.STACK_NAME");
-        this.stackIpAddress = configurationProperties.getProperty("javax.sip.IP_ADDRESS");
-        this.logFileName = configurationProperties.getProperty("gov.nist.javax.sip.SERVER_LOG");
-        String logLevel = configurationProperties.getProperty("gov.nist.javax.sip.TRACE_LEVEL");
-        String logContent = configurationProperties
-                .getProperty("gov.nist.javax.sip.LOG_MESSAGE_CONTENT");
-
+        this.description = configurationProperties.getProperty("android.javax.sip.STACK_NAME");
+        this.stackIpAddress = configurationProperties.getProperty("android.javax.sip.IP_ADDRESS");
+        this.logFileName = configurationProperties.getProperty("android.gov.nist.javax.sip.SERVER_LOG");
+        String logLevel = configurationProperties.getProperty("android.gov.nist.javax.sip.TRACE_LEVEL");
+        String logContent = configurationProperties.getProperty("android.gov.nist.javax.sip.LOG_MESSAGE_CONTENT");
         this.logContent = (logContent != null && logContent.equals("true"));
-
-        if (logLevel != null) {
-            if (logLevel.equals("LOG4J")) {
-            	CommonLogger.useLegacyLogger = false;
-            } else {
-                try {
-                    int ll;
-                    if (logLevel.equals("DEBUG")) {
-                        ll = TRACE_DEBUG;
-                    } else if (logLevel.equals("INFO")) {
-                        ll = TRACE_MESSAGES;
-                    } else if (logLevel.equals("ERROR")) {
-                        ll = TRACE_EXCEPTION;
-                    } else if (logLevel.equals("NONE") || logLevel.equals("OFF")) {
-                        ll = TRACE_NONE;
-                    } else {
-                        ll = Integer.parseInt(logLevel);
-                    }
-
-                    this.setTraceLevel(ll);
-                } catch (NumberFormatException ex) {
-                    System.out.println("ServerLog: WARNING Bad integer " + logLevel);
-                    System.out.println("logging dislabled ");
-                    this.setTraceLevel(0);
-                }
-            }
-        }
         checkLogFile();
-
     }
 
     public void setStackIpAddress(String ipAddress) {
@@ -168,7 +136,7 @@ public class ServerLog implements ServerLogger {
             if (printWriter == null) {
                 boolean overwrite = Boolean.valueOf(
                     configurationProperties.getProperty(
-                        "gov.nist.javax.sip.SERVER_LOG_OVERWRITE"));
+                        "android.gov.nist.javax.sip.SERVER_LOG_OVERWRITE"));
 
                 FileWriter fw = new FileWriter(logFileName, !overwrite);
 
@@ -177,71 +145,64 @@ public class ServerLog implements ServerLogger {
                         + "Use the  Trace Viewer in src/tools/tracesviewer to"
                         + " view this  trace  \n"
                         + "Here are the stack configuration properties \n"
-                        + "javax.sip.IP_ADDRESS= "
-                        + configurationProperties.getProperty("javax.sip.IP_ADDRESS") + "\n"
-                        + "javax.sip.STACK_NAME= "
-                        + configurationProperties.getProperty("javax.sip.STACK_NAME") + "\n"
-                        + "javax.sip.ROUTER_PATH= "
-                        + configurationProperties.getProperty("javax.sip.ROUTER_PATH") + "\n"
-                        + "javax.sip.OUTBOUND_PROXY= "
-                        + configurationProperties.getProperty("javax.sip.OUTBOUND_PROXY") + "\n"
+                        + "android.javax.sip.IP_ADDRESS= "
+                        + configurationProperties.getProperty("android.javax.sip.IP_ADDRESS") + "\n"
+                        + "android.javax.sip.STACK_NAME= "
+                        + configurationProperties.getProperty("android.javax.sip.STACK_NAME") + "\n"
+                        + "android.javax.sip.ROUTER_PATH= "
+                        + configurationProperties.getProperty("android.javax.sip.ROUTER_PATH") + "\n"
+                        + "android.javax.sip.OUTBOUND_PROXY= "
+                        + configurationProperties.getProperty("android.javax.sip.OUTBOUND_PROXY") + "\n"
                         + "-->");
                 printWriter.println("<description\n logDescription=\"" + description
                         + "\"\n name=\""
-                        + configurationProperties.getProperty("javax.sip.STACK_NAME")
+                        + configurationProperties.getProperty("android.javax.sip.STACK_NAME")
                         + "\"\n auxInfo=\"" + auxInfo + "\"/>\n ");
                 if (auxInfo != null) {
-
-                    if (sipStack.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                        stackLogger
-                                .logDebug("Here are the stack configuration properties \n"
-                                        + "javax.sip.IP_ADDRESS= "
-                                        + configurationProperties
-                                                .getProperty("javax.sip.IP_ADDRESS")
-                                        + "\n"
-                                        + "javax.sip.ROUTER_PATH= "
-                                        + configurationProperties
-                                                .getProperty("javax.sip.ROUTER_PATH")
-                                        + "\n"
-                                        + "javax.sip.OUTBOUND_PROXY= "
-                                        + configurationProperties
-                                                .getProperty("javax.sip.OUTBOUND_PROXY")
-                                        + "\n"
-                                        + "gov.nist.javax.sip.CACHE_CLIENT_CONNECTIONS= "
-                                        + configurationProperties
-                                                .getProperty("gov.nist.javax.sip.CACHE_CLIENT_CONNECTIONS")
-                                        + "\n"
-                                        + "gov.nist.javax.sip.CACHE_SERVER_CONNECTIONS= "
-                                        + configurationProperties
-                                                .getProperty("gov.nist.javax.sip.CACHE_SERVER_CONNECTIONS")
-                                        + "\n"
-                                        + "gov.nist.javax.sip.REENTRANT_LISTENER= "
-                                        + configurationProperties
-                                                .getProperty("gov.nist.javax.sip.REENTRANT_LISTENER")
-                                        + "gov.nist.javax.sip.THREAD_POOL_SIZE= "
-                                        + configurationProperties
-                                                .getProperty("gov.nist.javax.sip.THREAD_POOL_SIZE")
-                                        + "\n");
-                        stackLogger.logDebug(" ]]> ");
-                        stackLogger.logDebug("</debug>");
-                        stackLogger.logDebug("<description\n logDescription=\"" + description
-                                + "\"\n name=\"" + stackIpAddress + "\"\n auxInfo=\"" + auxInfo
-                                + "\"/>\n ");
-                        stackLogger.logDebug("<debug>");
-                        stackLogger.logDebug("<![CDATA[ ");
-                    }
+                    stackLogger.debug("Here are the stack configuration properties \n"
+                        + "android.javax.sip.IP_ADDRESS= "
+                        + configurationProperties
+                                .getProperty("android.javax.sip.IP_ADDRESS")
+                        + "\n"
+                        + "android.javax.sip.ROUTER_PATH= "
+                        + configurationProperties
+                                .getProperty("android.javax.sip.ROUTER_PATH")
+                        + "\n"
+                        + "android.javax.sip.OUTBOUND_PROXY= "
+                        + configurationProperties
+                                .getProperty("android.javax.sip.OUTBOUND_PROXY")
+                        + "\n"
+                        + "android.gov.nist.javax.sip.CACHE_CLIENT_CONNECTIONS= "
+                        + configurationProperties
+                                .getProperty("android.gov.nist.javax.sip.CACHE_CLIENT_CONNECTIONS")
+                        + "\n"
+                        + "android.gov.nist.javax.sip.CACHE_SERVER_CONNECTIONS= "
+                        + configurationProperties
+                                .getProperty("android.gov.nist.javax.sip.CACHE_SERVER_CONNECTIONS")
+                        + "\n"
+                        + "android.gov.nist.javax.sip.REENTRANT_LISTENER= "
+                        + configurationProperties
+                                .getProperty("android.gov.nist.javax.sip.REENTRANT_LISTENER")
+                        + "android.gov.nist.javax.sip.THREAD_POOL_SIZE= "
+                        + configurationProperties
+                                .getProperty("android.gov.nist.javax.sip.THREAD_POOL_SIZE")
+                        + "\n");
+                    stackLogger.debug(" ]]> ");
+                    stackLogger.debug("</debug>");
+                    stackLogger.debug("<description\n logDescription=\"" + description
+                        + "\"\n name=\"" + stackIpAddress + "\"\n auxInfo=\"" + auxInfo
+                        + "\"/>\n ");
+                    stackLogger.debug("<debug>");
+                    stackLogger.debug("<![CDATA[ ");
                 } else {
-
-                    if (sipStack.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                        stackLogger.logDebug("Here are the stack configuration properties \n"
-                                + configurationProperties + "\n");
-                        stackLogger.logDebug(" ]]>");
-                        stackLogger.logDebug("</debug>");
-                        stackLogger.logDebug("<description\n logDescription=\"" + description
-                                + "\"\n name=\"" + stackIpAddress + "\" />\n");
-                        stackLogger.logDebug("<debug>");
-                        stackLogger.logDebug("<![CDATA[ ");
-                    }
+                    stackLogger.debug("Here are the stack configuration properties \n"
+                            + configurationProperties + "\n");
+                    stackLogger.debug(" ]]>");
+                    stackLogger.debug("</debug>");
+                    stackLogger.debug("<description\n logDescription=\"" + description
+                            + "\"\n name=\"" + stackIpAddress + "\" />\n");
+                    stackLogger.debug("<debug>");
+                    stackLogger.debug("<![CDATA[ ");
                 }
             }
         } catch (IOException ex) {
@@ -287,10 +248,7 @@ public class ServerLog implements ServerLogger {
         if (printWriter != null) {
             printWriter.println(logInfo);
         }
-        if (sipStack.isLoggingEnabled()) {
-            stackLogger.logInfo(logInfo);
-
-        }
+        stackLogger.info(logInfo);
     }
 
     private void logMessage(String message, String from, String to, boolean sender,

@@ -26,22 +26,22 @@
 package android.gov.nist.javax.sip.stack;
 
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.HostPort;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.stack.NioTlsWebSocketMessageChannel;
-
-import javax.net.ssl.SSLContext;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SocketChannel;
 import java.security.cert.CertificateException;
 
+import javax.net.ssl.SSLContext;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.HostPort;
+
 public class NioTlsWebSocketMessageProcessor extends NioWebSocketMessageProcessor {
 
-    private static StackLogger logger = CommonLogger.getLogger(NioTlsWebSocketMessageProcessor.class);
+    private static Logger logger = LoggerFactory.getLogger(NioTlsWebSocketMessageProcessor.class);
 
     SSLContext sslServerCtx;
     SSLContext sslClientCtx;
@@ -59,17 +59,13 @@ public class NioTlsWebSocketMessageProcessor extends NioWebSocketMessageProcesso
 	
 	@Override
 	public NioTcpMessageChannel createMessageChannel(NioTcpMessageProcessor nioTcpMessageProcessor, SocketChannel client) throws IOException {
-		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-    		logger.logDebug("NioTlsWebSocketMessageProcessor::createMessageChannel: " + nioTcpMessageProcessor + " client " + client);
-    	}
+		logger.debug("NioTlsWebSocketMessageProcessor::createMessageChannel: " + nioTcpMessageProcessor + " client " + client);
 		return NioTlsWebSocketMessageChannel.create(sipStack, NioTlsWebSocketMessageProcessor.this, client);		
     }
 	
     @Override
     public MessageChannel createMessageChannel(HostPort targetHostPort) throws IOException {
-    	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-    		logger.logDebug("NioTlsWebSocketMessageProcessor::createMessageChannel: " + targetHostPort);
-    	}
+		logger.debug("NioTlsWebSocketMessageProcessor::createMessageChannel: " + targetHostPort);
     	NioTlsWebSocketMessageChannel retval = null;
     	try {
     		String key = MessageChannel.getKey(targetHostPort, transport);
@@ -86,18 +82,14 @@ public class NioTlsWebSocketMessageProcessor extends NioWebSocketMessageProcesso
     				this.messageChannels.put(key, retval);
     			}
     			retval.isCached = true;
-    			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-    				logger.logDebug("key " + key);
-    				logger.logDebug("Creating " + retval);
-    			}
+				logger.debug("key " + key);
+				logger.debug("Creating " + retval);
     			selector.wakeup();
     			return retval;
 
     		}
     	} finally {
-    		if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-    			logger.logDebug("MessageChannel::createMessageChannel - exit " + retval);
-    		}
+			logger.debug("MessageChannel::createMessageChannel - exit " + retval);
     	}
     }
 
@@ -113,10 +105,8 @@ public class NioTlsWebSocketMessageProcessor extends NioWebSocketMessageProcesso
  //           retval.getSocketChannel().register(selector, SelectionKey.OP_READ);
             this.messageChannels.put(key, retval);
             retval.isCached = true;
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("key " + key);
-                logger.logDebug("Creating " + retval);
-            }
+            logger.debug("key " + key);
+            logger.debug("Creating " + retval);
             return retval;
         }
 
@@ -125,12 +115,10 @@ public class NioTlsWebSocketMessageProcessor extends NioWebSocketMessageProcesso
 		if(sipStack.securityManagerProvider.getKeyManagers(false) == null ||
 				sipStack.securityManagerProvider.getTrustManagers(false) == null ||
                 sipStack.securityManagerProvider.getTrustManagers(true) == null) {
-			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("TLS initialization failed due to NULL security config");
-            }
+            logger.debug("TLS initialization failed due to NULL security config");
 			return; // The settings 
 		}
-			
+
         sslServerCtx = SSLContext.getInstance("TLS");
         sslServerCtx.init(sipStack.securityManagerProvider.getKeyManagers(false), 
                 sipStack.securityManagerProvider.getTrustManagers(false),

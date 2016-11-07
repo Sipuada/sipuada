@@ -42,10 +42,10 @@ import java.util.StringTokenizer;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogLevels;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.core.ServerLogger;
-import android.gov.nist.core.StackLogger;
 import android.gov.nist.core.ThreadAuditor;
 import android.gov.nist.core.net.AddressResolver;
 import android.gov.nist.core.net.DefaultSecurityManagerProvider;
@@ -121,14 +121,14 @@ import android.javax.sip.message.Request;
  * file (e.g. log4j.properties). The logger name for the stack is specified
  * using the gov.nist.javax.sip.LOG4J_LOGGER_NAME property. By default log4j
  * logger name for the stack is the same as the stack name. For example, <code>
- * properties.setProperty("gov.nist.javax.sip.TRACE_LEVEL", "LOG4J");
- * properties.setProperty("gov.nist.javax.sip.LOG4J_LOGGER_NAME", "SIPStackLogger");
+ * properties.setProperty("android.gov.nist.javax.sip.TRACE_LEVEL", "LOG4J");
+ * properties.setProperty("android.gov.nist.javax.sip.LOG4J_LOGGER_NAME", "SIPStackLogger");
  * </code> allows you to now control logging in the stack entirely using log4j
  * facilities.</li>
  * 
- * <li><b>gov.nist.javax.sip.LOG_FACTORY = classpath </b> <b> Use of this
+ * <li><b>android.gov.nist.javax.sip.LOG_FACTORY = classpath </b> <b> Use of this
  * property is still supported but deprecated. Please use
- * gov.nist.javax.sip.STACK_LOGGER and gov.nist.javax.sip.SERVER_LOGGER for
+ * android.gov.nist.javax.sip.STACK_LOGGER and gov.nist.javax.sip.SERVER_LOGGER for
  * integration with logging frameworks and for custom formatting of log records.
  * </b> <br/>
  * The fully qualified classpath for an implementation of the MessageLogFactory.
@@ -628,7 +628,7 @@ import android.javax.sip.message.Request;
  */
 public class SipStackImpl extends SIPTransactionStack implements
 		SipStack, SipStackExt {
-	private static StackLogger logger = CommonLogger.getLogger(SipStackImpl.class);
+	private static Logger logger = LoggerFactory.getLogger(SipStackImpl.class);
 	private EventScanner eventScanner;
 
 	protected Hashtable<String, ListeningPointImpl> listeningPoints;
@@ -698,7 +698,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 		this.sipProviders = Collections.synchronizedList(new LinkedList<SipProviderImpl>());
 		this.sipListener = null;
 		if(!getTimer().isStarted()) {			
-			String defaultTimerName = configurationProperties.getProperty("gov.nist.javax.sip.TIMER_CLASS_NAME",DefaultSipTimer.class.getName());
+			String defaultTimerName = configurationProperties.getProperty("android.gov.nist.javax.sip.TIMER_CLASS_NAME",DefaultSipTimer.class.getName());
 			try {				
 				setTimer((SipTimer)Class.forName(defaultTimerName).newInstance());
 				getTimer().start(this, configurationProperties);
@@ -708,8 +708,8 @@ public class SipStackImpl extends SIPTransactionStack implements
 		        }
 			} catch (Exception e) {
 				logger
-					.logError(
-							"Bad configuration value for gov.nist.javax.sip.TIMER_CLASS_NAME", e);			
+					.error(
+							"Bad configuration value for android.gov.nist.javax.sip.TIMER_CLASS_NAME", e);			
 			}
 		}
 	}
@@ -738,7 +738,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 		configurationProperties = new MergedSystemProperties(configurationProperties);
 		this.configurationProperties = configurationProperties;
 		String address = configurationProperties
-				.getProperty("javax.sip.IP_ADDRESS");
+				.getProperty("android.javax.sip.IP_ADDRESS");
 		try {
 			/** Retrieve the stack IP address */
 			if (address != null) {
@@ -754,43 +754,21 @@ public class SipStackImpl extends SIPTransactionStack implements
 
 		/** Retrieve the stack name */
 		String name = configurationProperties
-				.getProperty("javax.sip.STACK_NAME");
+				.getProperty("android.javax.sip.STACK_NAME");
 		if (name == null)
 			throw new PeerUnavailableException("stack name is missing");
 		super.setStackName(name);
 		String stackLoggerClassName = configurationProperties
-				.getProperty("gov.nist.javax.sip.STACK_LOGGER");
+				.getProperty("android.gov.nist.javax.sip.STACK_LOGGER");
 		// To log debug messages.
 		if (stackLoggerClassName == null)
-			stackLoggerClassName = "gov.nist.core.LogWriter";
-			try {
-				Class<?> stackLoggerClass = Class.forName(stackLoggerClassName);
-				Class<?>[] constructorArgs = new Class[0];
-				Constructor<?> cons = stackLoggerClass
-						.getConstructor(constructorArgs);
-				Object[] args = new Object[0];
-				StackLogger stackLogger = (StackLogger) cons.newInstance(args);
-				CommonLogger.legacyLogger = stackLogger;
-				stackLogger.setStackProperties(configurationProperties);
-			} catch (InvocationTargetException ex1) {
-				throw new IllegalArgumentException(
-						"Cound not instantiate stack logger "
-								+ stackLoggerClassName
-								+ "- check that it is present on the classpath and that there is a no-args constructor defined",
-						ex1);
-			} catch (Exception ex) {
-				throw new IllegalArgumentException(
-						"Cound not instantiate stack logger "
-								+ stackLoggerClassName
-								+ "- check that it is present on the classpath and that there is a no-args constructor defined",
-						ex);
-			}
+			stackLoggerClassName = "android.gov.nist.core.LogWriter";
 
 		String serverLoggerClassName = configurationProperties
-				.getProperty("gov.nist.javax.sip.SERVER_LOGGER");
+				.getProperty("android.gov.nist.javax.sip.SERVER_LOGGER");
 		// To log debug messages.
 		if (serverLoggerClassName == null)
-			serverLoggerClassName = "gov.nist.javax.sip.stack.ServerLog";
+			serverLoggerClassName = "android.gov.nist.javax.sip.stack.ServerLog";
 			try {
 				Class<?> serverLoggerClass = Class
 						.forName(serverLoggerClassName);
@@ -816,31 +794,31 @@ public class SipStackImpl extends SIPTransactionStack implements
 			}
 
 		super.setReliableConnectionKeepAliveTimeout(1000 * Integer.parseInt(
-			        configurationProperties.getProperty("gov.nist.javax.sip.RELIABLE_CONNECTION_KEEP_ALIVE_TIMEOUT", "-1")));
+			        configurationProperties.getProperty("android.gov.nist.javax.sip.RELIABLE_CONNECTION_KEEP_ALIVE_TIMEOUT", "-1")));
 		
 		// http://java.net/jira/browse/JSIP-415 Prevent Bad Client or Attacker (DoS) to block the TLSMessageProcessor or TLSMessageChannel
 		super.setSslHandshakeTimeout(Long.parseLong(
-		        configurationProperties.getProperty("gov.nist.javax.sip.SSL_HANDSHAKE_TIMEOUT", "-1")));
+		        configurationProperties.getProperty("android.gov.nist.javax.sip.SSL_HANDSHAKE_TIMEOUT", "-1")));
 		super.setThreadPriority(Integer.parseInt(
-			        configurationProperties.getProperty("gov.nist.javax.sip.THREAD_PRIORITY","" + Thread.MAX_PRIORITY)));
+			        configurationProperties.getProperty("android.gov.nist.javax.sip.THREAD_PRIORITY","" + Thread.MAX_PRIORITY)));
 			
 		// Default router -- use this for routing SIP URIs.
 		// Our router does not do DNS lookups.
 		this.outboundProxy = configurationProperties
-				.getProperty("javax.sip.OUTBOUND_PROXY");
+				.getProperty("android.javax.sip.OUTBOUND_PROXY");
 
 		// http://java.net/jira/browse/JSIP-430
         ByteBufferFactory.getInstance().setUseDirect(Boolean.valueOf(
-                configurationProperties.getProperty("gov.nist.javax.sip.stack.USE_DIRECT_BUFFERS",
+                configurationProperties.getProperty("android.gov.nist.javax.sip.stack.USE_DIRECT_BUFFERS",
                         Boolean.TRUE.toString())));
 
 		this.defaultRouter = new DefaultRouter(this, outboundProxy);
 
 		/** Retrieve the router path */
 		String routerPath = configurationProperties
-				.getProperty("javax.sip.ROUTER_PATH");
+				.getProperty("android.javax.sip.ROUTER_PATH");
 		if (routerPath == null)
-			routerPath = "gov.nist.javax.sip.stack.DefaultRouter";
+			routerPath = "android.gov.nist.javax.sip.stack.DefaultRouter";
 
 		try {
 			Class<?> routerClass = Class.forName(routerPath);
@@ -855,13 +833,13 @@ public class SipStackImpl extends SIPTransactionStack implements
 			super.setRouter(router);
 		} catch (InvocationTargetException ex1) {
 			logger
-					.logError(
+					.error(
 							"could not instantiate router -- invocation target problem",
 							(Exception) ex1.getCause());
 			throw new PeerUnavailableException(
 					"Cound not instantiate router - check constructor", ex1);
 		} catch (Exception ex) {
-			logger.logError("could not instantiate router",
+			logger.error("could not instantiate router",
 					(Exception) ex.getCause());
 			throw new PeerUnavailableException("Could not instantiate router",
 					ex);
@@ -869,7 +847,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 
 		// The flag that indicates that the default router is to be ignored.
 		String useRouterForAll = configurationProperties
-				.getProperty("javax.sip.USE_ROUTER_FOR_ALL_URIS");
+				.getProperty("android.javax.sip.USE_ROUTER_FOR_ALL_URIS");
 		this.useRouterForAll = true;
 		if (useRouterForAll != null) {
 			this.useRouterForAll = "true".equalsIgnoreCase(useRouterForAll);
@@ -880,7 +858,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 		 * Dialogs.
 		 */
 		String extensionMethods = configurationProperties
-				.getProperty("javax.sip.EXTENSION_METHODS");
+				.getProperty("android.javax.sip.EXTENSION_METHODS");
 
 		if (extensionMethods != null) {
 			java.util.StringTokenizer st = new java.util.StringTokenizer(
@@ -901,10 +879,10 @@ public class SipStackImpl extends SIPTransactionStack implements
 		}
 		
 		// Allow application to choose the tls client auth policy on the socket
-        String clientAuthType = configurationProperties.getProperty("gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE");
+        String clientAuthType = configurationProperties.getProperty("android.gov.nist.javax.sip.TLS_CLIENT_AUTH_TYPE");
         if (clientAuthType != null) {
             super.clientAuth = ClientAuthType.valueOf(clientAuthType);
-            logger.logInfo("using " + clientAuthType + " tls auth policy");
+            logger.info("using " + clientAuthType + " tls auth policy");
         }
 		
 		String keyStoreFile = configurationProperties
@@ -936,56 +914,56 @@ public class SipStackImpl extends SIPTransactionStack implements
 								    trustStorePassword.toCharArray() : null,
 						keyStoreType, trustStoreType);
 			} catch (Exception e1) {
-				logger.logError(
+				logger.error(
 						"could not instantiate SSL networking", e1);
 			}
 		}
 
 		// Set the auto dialog support flag.
 		super.isAutomaticDialogSupportEnabled = configurationProperties
-				.getProperty("javax.sip.AUTOMATIC_DIALOG_SUPPORT", "on")
+				.getProperty("android.javax.sip.AUTOMATIC_DIALOG_SUPPORT", "on")
 				.equalsIgnoreCase("on");
 
 		super.isAutomaticDialogErrorHandlingEnabled = configurationProperties
-					.getProperty("gov.nist.javax.sip.AUTOMATIC_DIALOG_ERROR_HANDLING","true")
+					.getProperty("android.gov.nist.javax.sip.AUTOMATIC_DIALOG_ERROR_HANDLING","true")
 					.equals(Boolean.TRUE.toString());
 		if ( super.isAutomaticDialogSupportEnabled ) {
 			super.isAutomaticDialogErrorHandlingEnabled = true;
 		}
 	
 		if (configurationProperties
-				.getProperty("gov.nist.javax.sip.MAX_LISTENER_RESPONSE_TIME") != null) {
+				.getProperty("android.gov.nist.javax.sip.MAX_LISTENER_RESPONSE_TIME") != null) {
 			super.maxListenerResponseTime = Integer
 					.parseInt(configurationProperties
-							.getProperty("gov.nist.javax.sip.MAX_LISTENER_RESPONSE_TIME"));
+							.getProperty("android.gov.nist.javax.sip.MAX_LISTENER_RESPONSE_TIME"));
 			if (super.maxListenerResponseTime <= 0)
 				throw new PeerUnavailableException(
-						"Bad configuration parameter gov.nist.javax.sip.MAX_LISTENER_RESPONSE_TIME : should be positive");
+						"Bad configuration parameter android.gov.nist.javax.sip.MAX_LISTENER_RESPONSE_TIME : should be positive");
 		} else {
 			super.maxListenerResponseTime = -1;
 		}
 
 		if (configurationProperties
-				.getProperty("gov.nist.javax.sip.MAX_TX_LIFETIME_INVITE") != null) {
+				.getProperty("android.gov.nist.javax.sip.MAX_TX_LIFETIME_INVITE") != null) {
 			super.maxTxLifetimeInvite = Integer
 					.parseInt(configurationProperties
-							.getProperty("gov.nist.javax.sip.MAX_TX_LIFETIME_INVITE"));
+							.getProperty("android.gov.nist.javax.sip.MAX_TX_LIFETIME_INVITE"));
 			if (super.getMaxTxLifetimeInvite() <= 0)
 				throw new PeerUnavailableException(
-						"Bad configuration parameter gov.nist.javax.sip.MAX_TX_LIFETIME_INVITE : should be positive");
+						"Bad configuration parameter android.gov.nist.javax.sip.MAX_TX_LIFETIME_INVITE : should be positive");
 		} else {
 			super.maxTxLifetimeInvite = -1;
 		}
 		
     	// http://java.net/jira/browse/JSIP-420
 		if (configurationProperties
-				.getProperty("gov.nist.javax.sip.MAX_TX_LIFETIME_NON_INVITE") != null) {
+				.getProperty("android.gov.nist.javax.sip.MAX_TX_LIFETIME_NON_INVITE") != null) {
 			super.maxTxLifetimeNonInvite = Integer
 					.parseInt(configurationProperties
-							.getProperty("gov.nist.javax.sip.MAX_TX_LIFETIME_NON_INVITE"));
+							.getProperty("android.gov.nist.javax.sip.MAX_TX_LIFETIME_NON_INVITE"));
 			if (super.getMaxTxLifetimeNonInvite() <= 0)
 				throw new PeerUnavailableException(
-						"Bad configuration parameter gov.nist.javax.sip.MAX_TX_LIFETIME_NON_INVITE : should be positive");
+						"Bad configuration parameter android.gov.nist.javax.sip.MAX_TX_LIFETIME_NON_INVITE : should be positive");
 		} else {
 			super.maxTxLifetimeNonInvite = -1;
 		}
@@ -993,15 +971,15 @@ public class SipStackImpl extends SIPTransactionStack implements
 
 		this.setDeliverTerminatedEventForAck(configurationProperties
 				.getProperty(
-						"gov.nist.javax.sip.DELIVER_TERMINATED_EVENT_FOR_ACK",
+						"android.gov.nist.javax.sip.DELIVER_TERMINATED_EVENT_FOR_ACK",
 						"false").equalsIgnoreCase("true"));
 
 		super.setDeliverUnsolicitedNotify(Boolean.parseBoolean( configurationProperties.getProperty(
-				"gov.nist.javax.sip.DELIVER_UNSOLICITED_NOTIFY", "false")));
+				"android.gov.nist.javax.sip.DELIVER_UNSOLICITED_NOTIFY", "false")));
 				
 
 		String forkedSubscriptions = configurationProperties
-				.getProperty("javax.sip.FORKABLE_EVENTS");
+				.getProperty("android.javax.sip.FORKABLE_EVENTS");
 		if (forkedSubscriptions != null) {
 			StringTokenizer st = new StringTokenizer(forkedSubscriptions);
 			while (st.hasMoreTokens()) {
@@ -1011,10 +989,10 @@ public class SipStackImpl extends SIPTransactionStack implements
 		}
 
 		// Allow application to hook in a TLS Security Policy implementation
-		String tlsPolicyPath = configurationProperties.getProperty("gov.nist.javax.sip.TLS_SECURITY_POLICY");
+		String tlsPolicyPath = configurationProperties.getProperty("android.gov.nist.javax.sip.TLS_SECURITY_POLICY");
 		if (tlsPolicyPath == null) {
-			tlsPolicyPath = "gov.nist.javax.sip.stack.DefaultTlsSecurityPolicy";
-			logger.logWarning("using default tls security policy");
+			tlsPolicyPath = "android.gov.nist.javax.sip.stack.DefaultTlsSecurityPolicy";
+			logger.warn("using default tls security policy");
 		}
 		try {
 			Class< ? > tlsPolicyClass = Class.forName(tlsPolicyPath);
@@ -1039,7 +1017,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 		 * NIST only feature.
 		 */
 
-		final String NETWORK_LAYER_KEY = "gov.nist.javax.sip.NETWORK_LAYER";
+		final String NETWORK_LAYER_KEY = "android.gov.nist.javax.sip.NETWORK_LAYER";
 
 		if (configurationProperties.containsKey(NETWORK_LAYER_KEY)) {
 			String path = configurationProperties
@@ -1056,7 +1034,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 			}
 		}
 
-		final String ADDRESS_RESOLVER_KEY = "gov.nist.javax.sip.ADDRESS_RESOLVER";
+		final String ADDRESS_RESOLVER_KEY = "android.gov.nist.javax.sip.ADDRESS_RESOLVER";
 
 		if (configurationProperties.containsKey(ADDRESS_RESOLVER_KEY)) {
 			String path = configurationProperties
@@ -1074,51 +1052,48 @@ public class SipStackImpl extends SIPTransactionStack implements
 		}
 
 		String maxConnections = configurationProperties
-				.getProperty("gov.nist.javax.sip.MAX_CONNECTIONS");
+				.getProperty("android.gov.nist.javax.sip.MAX_CONNECTIONS");
 		if (maxConnections != null) {
 			try {
 				this.maxConnections = new Integer(maxConnections).intValue();
 			} catch (NumberFormatException ex) {
-				if (logger.isLoggingEnabled())
-					logger.logError(
-						"max connections - bad value " + ex.getMessage());
+				logger.error(
+					"max connections - bad value " + ex.getMessage());
 			}
 		}
 
 		String threadPoolSize = configurationProperties
-				.getProperty("gov.nist.javax.sip.THREAD_POOL_SIZE");
+				.getProperty("android.gov.nist.javax.sip.THREAD_POOL_SIZE");
 		if (threadPoolSize != null) {
 			try {
 				this.threadPoolSize = new Integer(threadPoolSize).intValue();
 			} catch (NumberFormatException ex) {
-				if (logger.isLoggingEnabled())
-					this.logger.logError(
-						"thread pool size - bad value " + ex.getMessage());
+				logger.error(
+					"thread pool size - bad value " + ex.getMessage());
 			}
 		}
 
 		int congetstionControlTimeout = Integer
 		.parseInt(configurationProperties.getProperty(
-				"gov.nist.javax.sip.CONGESTION_CONTROL_TIMEOUT",
+				"android.gov.nist.javax.sip.CONGESTION_CONTROL_TIMEOUT",
 		"8000"));
 		super.setStackCongestionControlTimeout(congetstionControlTimeout);
 
 		String tcpTreadPoolSize = configurationProperties
-		.getProperty("gov.nist.javax.sip.TCP_POST_PARSING_THREAD_POOL_SIZE");
+		.getProperty("android.gov.nist.javax.sip.TCP_POST_PARSING_THREAD_POOL_SIZE");
 		if (tcpTreadPoolSize != null) {
 			try {
 				int threads = new Integer(tcpTreadPoolSize).intValue();
 				super.setTcpPostParsingThreadPoolSize(threads);
 				PostParseExecutorServices.setPostParseExcutorSize(this, threads, congetstionControlTimeout);
 			} catch (NumberFormatException ex) {
-				if (logger.isLoggingEnabled())
-					this.logger.logError(
-							"TCP post-parse thread pool size - bad value " + tcpTreadPoolSize + " : " + ex.getMessage());
+				logger.error(
+						"TCP post-parse thread pool size - bad value " + tcpTreadPoolSize + " : " + ex.getMessage());
 			}
 		}
 
 		String serverTransactionTableSize = configurationProperties
-				.getProperty("gov.nist.javax.sip.MAX_SERVER_TRANSACTIONS");
+				.getProperty("android.gov.nist.javax.sip.MAX_SERVER_TRANSACTIONS");
 		if (serverTransactionTableSize != null) {
 			try {
 				this.serverTransactionTableHighwaterMark = new Integer(
@@ -1126,11 +1101,10 @@ public class SipStackImpl extends SIPTransactionStack implements
 				this.serverTransactionTableLowaterMark = this.serverTransactionTableHighwaterMark * 80 / 100;
 				// Lowater is 80% of highwater
 			} catch (NumberFormatException ex) {
-				if (logger.isLoggingEnabled())
-					this.logger
-						.logError(
-								"transaction table size - bad value "
-										+ ex.getMessage());
+				logger
+					.error(
+							"transaction table size - bad value "
+									+ ex.getMessage());
 			}
 		} else {
 			// Issue 256 : consistent with MAX_CLIENT_TRANSACTIONS, if the MAX_SERVER_TRANSACTIONS is not set
@@ -1139,7 +1113,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 		}
 
 		String clientTransactionTableSize = configurationProperties
-				.getProperty("gov.nist.javax.sip.MAX_CLIENT_TRANSACTIONS");
+				.getProperty("android.gov.nist.javax.sip.MAX_CLIENT_TRANSACTIONS");
 		if (clientTransactionTableSize != null) {
 			try {
 				this.clientTransactionTableHiwaterMark = new Integer(
@@ -1147,11 +1121,10 @@ public class SipStackImpl extends SIPTransactionStack implements
 				this.clientTransactionTableLowaterMark = this.clientTransactionTableLowaterMark * 80 / 100;
 				// Lowater is 80% of highwater
 			} catch (NumberFormatException ex) {
-				if (logger.isLoggingEnabled())
-					this.logger
-						.logError(
-								"transaction table size - bad value "
-										+ ex.getMessage());
+				logger
+					.error(
+							"transaction table size - bad value "
+									+ ex.getMessage());
 			}
 		} else {
 			this.unlimitedClientTransactionTableSize = true;
@@ -1162,7 +1135,7 @@ public class SipStackImpl extends SIPTransactionStack implements
          * NIST only feature.
          */
 
-        final String SECURITY_MANAGER_PROVIDER_KEY = "gov.nist.javax.sip.SECURITY_MANAGER_PROVIDER";
+        final String SECURITY_MANAGER_PROVIDER_KEY = "android.gov.nist.javax.sip.SECURITY_MANAGER_PROVIDER";
 
         if (configurationProperties.containsKey(SECURITY_MANAGER_PROVIDER_KEY)) {
             String path = configurationProperties
@@ -1188,7 +1161,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 
 		super.cacheServerConnections = true;
 		String flag = configurationProperties
-				.getProperty("gov.nist.javax.sip.CACHE_SERVER_CONNECTIONS");
+				.getProperty("android.gov.nist.javax.sip.CACHE_SERVER_CONNECTIONS");
 
 		if (flag != null && "false".equalsIgnoreCase(flag.trim())) {
 			super.cacheServerConnections = false;
@@ -1196,14 +1169,14 @@ public class SipStackImpl extends SIPTransactionStack implements
 
 		super.cacheClientConnections = true;
 		String cacheflag = configurationProperties
-				.getProperty("gov.nist.javax.sip.CACHE_CLIENT_CONNECTIONS");
+				.getProperty("android.gov.nist.javax.sip.CACHE_CLIENT_CONNECTIONS");
 
 		if (cacheflag != null && "false".equalsIgnoreCase(cacheflag.trim())) {
 			super.cacheClientConnections = false;
 		}
 
 		String readTimeout = configurationProperties
-				.getProperty("gov.nist.javax.sip.READ_TIMEOUT");
+				.getProperty("android.gov.nist.javax.sip.READ_TIMEOUT");
 		if (readTimeout != null) {
 			try {
 
@@ -1215,23 +1188,22 @@ public class SipStackImpl extends SIPTransactionStack implements
 				}
 			} catch (NumberFormatException nfe) {
 				// Ignore.
-				if (logger.isLoggingEnabled())
-					logger.logError("Bad read timeout " + readTimeout);
+				logger.error("Bad read timeout " + readTimeout);
 			}
 		}
 
 		// Get the address of the stun server.
 
 		String stunAddr = configurationProperties
-				.getProperty("gov.nist.javax.sip.STUN_SERVER");
+				.getProperty("android.gov.nist.javax.sip.STUN_SERVER");
 
 		if (stunAddr != null)
-			this.logger.logWarning(
+			this.logger.warn(
 					"Ignoring obsolete property "
-							+ "gov.nist.javax.sip.STUN_SERVER");
+							+ "android.gov.nist.javax.sip.STUN_SERVER");
 
 		String maxMsgSize = configurationProperties
-				.getProperty("gov.nist.javax.sip.MAX_MESSAGE_SIZE");
+				.getProperty("android.gov.nist.javax.sip.MAX_MESSAGE_SIZE");
 
 		try {
 			if (maxMsgSize != null) {
@@ -1243,18 +1215,17 @@ public class SipStackImpl extends SIPTransactionStack implements
 				super.maxMessageSize = 0;
 			}
 		} catch (NumberFormatException ex) {
-			if (logger.isLoggingEnabled())
-				logger.logError(
-					"maxMessageSize - bad value " + ex.getMessage());
+			logger.error(
+				"maxMessageSize - bad value " + ex.getMessage());
 		}
 
 		String rel = configurationProperties
-				.getProperty("gov.nist.javax.sip.REENTRANT_LISTENER");
+				.getProperty("android.gov.nist.javax.sip.REENTRANT_LISTENER");
 		this.reEntrantListener = (rel != null && "true".equalsIgnoreCase(rel));
 
 		// Check if a thread audit interval is specified
 		String interval = configurationProperties
-				.getProperty("gov.nist.javax.sip.THREAD_AUDIT_INTERVAL_IN_MILLISECS");
+				.getProperty("android.gov.nist.javax.sip.THREAD_AUDIT_INTERVAL_IN_MILLISECS");
 		if (interval != null) {
 			try {
 				threadAuditor = new ThreadAuditor();
@@ -1263,10 +1234,9 @@ public class SipStackImpl extends SIPTransactionStack implements
 				getThreadAuditor().setPingIntervalInMillisecs(
 						Long.valueOf(interval).longValue() / 2);
 			} catch (NumberFormatException ex) {
-				if (logger.isLoggingEnabled())
-					logger.logError(
-						"THREAD_AUDIT_INTERVAL_IN_MILLISECS - bad value ["
-								+ interval + "] " + ex.getMessage());
+				logger.error(
+					"THREAD_AUDIT_INTERVAL_IN_MILLISECS - bad value ["
+							+ interval + "] " + ex.getMessage());
 			}
 		}
 
@@ -1276,16 +1246,16 @@ public class SipStackImpl extends SIPTransactionStack implements
 						.valueOf(
 								configurationProperties
 										.getProperty(
-												"gov.nist.javax.sip.PASS_INVITE_NON_2XX_ACK_TO_LISTENER",
+												"android.gov.nist.javax.sip.PASS_INVITE_NON_2XX_ACK_TO_LISTENER",
 												"false")).booleanValue());
 
 		this.generateTimeStampHeader = Boolean.valueOf(
 				configurationProperties.getProperty(
-						"gov.nist.javax.sip.AUTO_GENERATE_TIMESTAMP", "false"))
+						"android.gov.nist.javax.sip.AUTO_GENERATE_TIMESTAMP", "false"))
 				.booleanValue();
 
 		String messageLogFactoryClasspath = configurationProperties
-				.getProperty("gov.nist.javax.sip.LOG_FACTORY");
+				.getProperty("android.gov.nist.javax.sip.LOG_FACTORY");
 		if (messageLogFactoryClasspath != null) {
 			try {
 				Class<?> clazz = Class.forName(messageLogFactoryClasspath);
@@ -1293,10 +1263,9 @@ public class SipStackImpl extends SIPTransactionStack implements
 				this.logRecordFactory = (LogRecordFactory) c
 						.newInstance(new Object[0]);
 			} catch (Exception ex) {
-				if (logger.isLoggingEnabled())
-					logger
-						.logError(
-								"Bad configuration value for LOG_FACTORY -- using default logger");
+				logger
+					.error(
+							"Bad configuration value for LOG_FACTORY -- using default logger");
 				this.logRecordFactory = new DefaultMessageLogFactory();
 			}
 
@@ -1305,13 +1274,13 @@ public class SipStackImpl extends SIPTransactionStack implements
 		}
 
 		boolean computeContentLength = configurationProperties.getProperty(
-				"gov.nist.javax.sip.COMPUTE_CONTENT_LENGTH_FROM_MESSAGE_BODY",
+				"android.gov.nist.javax.sip.COMPUTE_CONTENT_LENGTH_FROM_MESSAGE_BODY",
 				"false").equalsIgnoreCase("true");
 		StringMsgParser
 				.setComputeContentLengthFromMessage(computeContentLength);
 
 		String tlsClientProtocols = configurationProperties.getProperty(
-				"gov.nist.javax.sip.TLS_CLIENT_PROTOCOLS");
+				"android.gov.nist.javax.sip.TLS_CLIENT_PROTOCOLS");
 		if (tlsClientProtocols != null)
 		{
 			// http://java.net/jira/browse/JSIP-451 - josemrecio
@@ -1319,41 +1288,37 @@ public class SipStackImpl extends SIPTransactionStack implements
 			StringTokenizer st = new StringTokenizer(tlsClientProtocols, "\" ,");
 			String[] protocols = new String[st.countTokens()];
 			
-			if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-	            logger.logDebug(
-	                "TLS Client Protocols = ");
+            logger.debug(
+                "TLS Client Protocols = ");
 			int i=0;
 			while (st.hasMoreTokens()) {
 				protocols[i] = st.nextToken();
-				if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-	                logger.logDebug(
-	                    "TLS Client Protocol = " + protocols[i]);
-				}
+                logger.debug(
+                    "TLS Client Protocol = " + protocols[i]);
 				i++;
 			}
 			this.enabledProtocols = protocols;
 		}
 
 		super.rfc2543Supported = configurationProperties.getProperty(
-				"gov.nist.javax.sip.RFC_2543_SUPPORT_ENABLED", "true")
+				"android.gov.nist.javax.sip.RFC_2543_SUPPORT_ENABLED", "true")
 				.equalsIgnoreCase("true");
 
 		super.setPatchWebSocketHeaders(Boolean.parseBoolean(configurationProperties.getProperty(
-				"gov.nist.javax.sip.PATCH_SIP_WEBSOCKETS_HEADERS", "true")));
+				"android.gov.nist.javax.sip.PATCH_SIP_WEBSOCKETS_HEADERS", "true")));
 		
 		super.setPatchRport(Boolean.parseBoolean(configurationProperties.getProperty(
-				"gov.nist.javax.sip.ALWAYS_ADD_RPORT", "false")));
+				"android.gov.nist.javax.sip.ALWAYS_ADD_RPORT", "false")));
 		
 		super.cancelClientTransactionChecked = configurationProperties
 				.getProperty(
-						"gov.nist.javax.sip.CANCEL_CLIENT_TRANSACTION_CHECKED",
+						"android.gov.nist.javax.sip.CANCEL_CLIENT_TRANSACTION_CHECKED",
 						"true").equalsIgnoreCase("true");
 		super.logStackTraceOnMessageSend = configurationProperties.getProperty(
-				"gov.nist.javax.sip.LOG_STACK_TRACE_ON_MESSAGE_SEND", "false")
+				"android.gov.nist.javax.sip.LOG_STACK_TRACE_ON_MESSAGE_SEND", "false")
 				.equalsIgnoreCase("true");
-		if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-			logger.logDebug(
-				"created Sip stack. Properties = " + configurationProperties);
+		logger.debug(
+			"created Sip stack. Properties = " + configurationProperties);
 		InputStream in = getClass().getResourceAsStream("/TIMESTAMP");
 		if (in != null) {
 			BufferedReader streamReader = new BufferedReader(
@@ -1364,80 +1329,79 @@ public class SipStackImpl extends SIPTransactionStack implements
 				if (in != null) {
 					in.close();
 				}
-				logger.setBuildTimeStamp(buildTimeStamp);
 			} catch (IOException ex) {
-				logger.logError("Could not open build timestamp.");
+				logger.error("Could not open build timestamp.");
 			}
 		}
 
 		String bufferSize = configurationProperties.getProperty(
-				"gov.nist.javax.sip.RECEIVE_UDP_BUFFER_SIZE", MAX_DATAGRAM_SIZE
+				"android.gov.nist.javax.sip.RECEIVE_UDP_BUFFER_SIZE", MAX_DATAGRAM_SIZE
 						.toString());
 		int bufferSizeInteger = new Integer(bufferSize).intValue();
 		super.setReceiveUdpBufferSize(bufferSizeInteger);
 
 		bufferSize = configurationProperties.getProperty(
-				"gov.nist.javax.sip.SEND_UDP_BUFFER_SIZE", MAX_DATAGRAM_SIZE
+				"android.gov.nist.javax.sip.SEND_UDP_BUFFER_SIZE", MAX_DATAGRAM_SIZE
 						.toString());
 		bufferSizeInteger = new Integer(bufferSize).intValue();
 		super.setSendUdpBufferSize(bufferSizeInteger);
 		// Contribution for https://github.com/Mobicents/jain-sip/issues/40
 		super.setConnectionLingerTimer(Integer.parseInt(configurationProperties.getProperty(
-				"gov.nist.javax.sip.LINGER_TIMER", "8")));
+				"android.gov.nist.javax.sip.LINGER_TIMER", "8")));
 
 		super.isBackToBackUserAgent = Boolean
 				.parseBoolean(configurationProperties.getProperty(
-						"gov.nist.javax.sip.IS_BACK_TO_BACK_USER_AGENT",
+						"android.gov.nist.javax.sip.IS_BACK_TO_BACK_USER_AGENT",
 						Boolean.FALSE.toString()));
 		super.checkBranchId = Boolean.parseBoolean(configurationProperties
-				.getProperty("gov.nist.javax.sip.REJECT_STRAY_RESPONSES",
+				.getProperty("android.gov.nist.javax.sip.REJECT_STRAY_RESPONSES",
 						Boolean.FALSE.toString()));
 		
-		super.isDialogTerminatedEventDeliveredForNullDialog = (Boolean.parseBoolean(configurationProperties.getProperty("gov.nist.javax.sip.DELIVER_TERMINATED_EVENT_FOR_NULL_DIALOG",
+		super.isDialogTerminatedEventDeliveredForNullDialog = (Boolean.parseBoolean(configurationProperties.getProperty("android.gov.nist.javax.sip.DELIVER_TERMINATED_EVENT_FOR_NULL_DIALOG",
 		        Boolean.FALSE.toString())));
 		
 		
 		super.maxForkTime = Integer.parseInt(
-		        configurationProperties.getProperty("gov.nist.javax.sip.MAX_FORK_TIME_SECONDS","0"));
+		        configurationProperties.getProperty("android.gov.nist.javax.sip.MAX_FORK_TIME_SECONDS","0"));
 		
 		super.earlyDialogTimeout = Integer.parseInt(
-                configurationProperties.getProperty("gov.nist.javax.sip.EARLY_DIALOG_TIMEOUT_SECONDS","180"));				
+                configurationProperties.getProperty("android.gov.nist.javax.sip.EARLY_DIALOG_TIMEOUT_SECONDS","180"));				
 		
-		super.minKeepAliveInterval = Integer.parseInt(configurationProperties.getProperty("gov.nist.javax.sip.MIN_KEEPALIVE_TIME_SECONDS","-1"));
+		super.minKeepAliveInterval = Integer.parseInt(configurationProperties.getProperty("android.gov.nist.javax.sip.MIN_KEEPALIVE_TIME_SECONDS","-1"));
 		
 		super.deliverRetransmittedAckToListener = Boolean.parseBoolean(configurationProperties.getProperty
-				("gov.nist.javax.sip.DELIVER_RETRANSMITTED_ACK_TO_LISTENER","false"));
+				("android.gov.nist.javax.sip.DELIVER_RETRANSMITTED_ACK_TO_LISTENER","false"));
 		
-		super.dialogTimeoutFactor = Integer.parseInt(configurationProperties.getProperty("gov.nist.javax.sip.DIALOG_TIMEOUT_FACTOR","64"));
+		super.dialogTimeoutFactor = Integer.parseInt(configurationProperties.getProperty("android.gov.nist.javax.sip.DIALOG_TIMEOUT_FACTOR","64"));
 		
-		String messageParserFactoryName = configurationProperties.getProperty("gov.nist.javax.sip.MESSAGE_PARSER_FACTORY",StringMsgParserFactory.class.getName());
+		String messageParserFactoryName = configurationProperties.getProperty("android.gov.nist.javax.sip.MESSAGE_PARSER_FACTORY",StringMsgParserFactory.class.getName());
 		try {
 			super.messageParserFactory = (MessageParserFactory) Class.forName(messageParserFactoryName).newInstance();
 		} catch (Exception e) {
 			logger
-				.logError(
-						"Bad configuration value for gov.nist.javax.sip.MESSAGE_PARSER_FACTORY", e);			
+				.error(
+						"Bad configuration value for android.gov.nist.javax.sip.MESSAGE_PARSER_FACTORY", e);			
 		}
 		
-		String messageProcessorFactoryName = configurationProperties.getProperty("gov.nist.javax.sip.MESSAGE_PROCESSOR_FACTORY",OIOMessageProcessorFactory.class.getName());
+		String messageProcessorFactoryName = configurationProperties.getProperty("android.gov.nist.javax.sip.MESSAGE_PROCESSOR_FACTORY",OIOMessageProcessorFactory.class.getName());
 		try {
 			super.messageProcessorFactory = (MessageProcessorFactory) Class.forName(messageProcessorFactoryName).newInstance();
 		} catch (Exception e) {
 			logger
-				.logError(
-						"Bad configuration value for gov.nist.javax.sip.MESSAGE_PROCESSOR_FACTORY", e);			
+				.error(
+						"Bad configuration value for android.gov.nist.javax.sip.MESSAGE_PROCESSOR_FACTORY", e);			
 		}
 		
-		String maxIdleTimeString = configurationProperties.getProperty("gov.nist.javax.sip.NIO_MAX_SOCKET_IDLE_TIME", "7200000");
+		String maxIdleTimeString = configurationProperties.getProperty("android.gov.nist.javax.sip.NIO_MAX_SOCKET_IDLE_TIME", "7200000");
 		try {
 			super.nioSocketMaxIdleTime = Long.parseLong(maxIdleTimeString);
 		} catch (Exception e) {
 			logger
-				.logError(
-						"Bad configuration value for gov.nist.javax.sip.NIO_MAX_SOCKET_IDLE_TIME=" + maxIdleTimeString, e);			
+				.error(
+						"Bad configuration value for android.gov.nist.javax.sip.NIO_MAX_SOCKET_IDLE_TIME=" + maxIdleTimeString, e);			
 		}
 		
-		String defaultTimerName = configurationProperties.getProperty("gov.nist.javax.sip.TIMER_CLASS_NAME",DefaultSipTimer.class.getName());
+		String defaultTimerName = configurationProperties.getProperty("android.gov.nist.javax.sip.TIMER_CLASS_NAME",DefaultSipTimer.class.getName());
 		try {
 			setTimer((SipTimer)Class.forName(defaultTimerName).newInstance());
 			getTimer().start(this, configurationProperties);
@@ -1447,25 +1411,24 @@ public class SipStackImpl extends SIPTransactionStack implements
 	        }
 		} catch (Exception e) {
 			logger
-				.logError(
-						"Bad configuration value for gov.nist.javax.sip.TIMER_CLASS_NAME", e);			
+				.error(
+						"Bad configuration value for android.gov.nist.javax.sip.TIMER_CLASS_NAME", e);			
 		}
 		boolean aggressiveCleanup = Boolean.parseBoolean(configurationProperties
-				.getProperty("gov.nist.javax.sip.AGGRESSIVE_CLEANUP",
+				.getProperty("android.gov.nist.javax.sip.AGGRESSIVE_CLEANUP",
 						Boolean.FALSE.toString()));
 		if(aggressiveCleanup) {
 			setReleaseReferencesStrategy(ReleaseReferencesStrategy.Normal);
 		}
 		
 		 String releaseReferencesStrategyString = configurationProperties
-				.getProperty("gov.nist.javax.sip.RELEASE_REFERENCES_STRATEGY");
+				.getProperty("android.gov.nist.javax.sip.RELEASE_REFERENCES_STRATEGY");
 		 if(releaseReferencesStrategyString != null) {
 			 setReleaseReferencesStrategy(ReleaseReferencesStrategy.valueOf(releaseReferencesStrategyString));
-			 if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-					logger.logDebug("Using following release references strategy " + getReleaseReferencesStrategy());
+			logger.debug("Using following release references strategy " + getReleaseReferencesStrategy());
 		 }
 		
-		String valveClassName = configurationProperties.getProperty("gov.nist.javax.sip.SIP_MESSAGE_VALVE", null);
+		String valveClassName = configurationProperties.getProperty("android.gov.nist.javax.sip.SIP_MESSAGE_VALVE", null);
 		if(valveClassName != null && !valveClassName.equals("")) {
 			try {
 				super.sipMessageValve = (SIPMessageValve) Class.forName(valveClassName).newInstance();
@@ -1476,17 +1439,17 @@ public class SipStackImpl extends SIPTransactionStack implements
 					sipMessageValve.init(thisStack);
 				} catch (Exception e) {
 					logger
-					.logError("Error intializing SIPMessageValve", e);
+					.error("Error intializing SIPMessageValve", e);
 				}
 
 			} catch (Exception e) {
 				logger
-				.logError(
-						"Bad configuration value for gov.nist.javax.sip.SIP_MESSAGE_VALVE", e);			
+				.error(
+						"Bad configuration value for android.gov.nist.javax.sip.SIP_MESSAGE_VALVE", e);			
 			}
 		}
 
-		String interceptorClassName = configurationProperties.getProperty("gov.nist.javax.sip.SIP_EVENT_INTERCEPTOR", null);
+		String interceptorClassName = configurationProperties.getProperty("android.gov.nist.javax.sip.SIP_EVENT_INTERCEPTOR", null);
 		if(interceptorClassName != null && !interceptorClassName.equals("")) {
 			try {
 				super.sipEventInterceptor = (SIPEventInterceptor) Class.forName(interceptorClassName).newInstance();
@@ -1498,20 +1461,20 @@ public class SipStackImpl extends SIPTransactionStack implements
 							sipEventInterceptor.init(thisStack);
 						} catch (Exception e) {
 							logger
-							.logError("Error intializing SIPEventInterceptor", e);
+							.error("Error intializing SIPEventInterceptor", e);
 						}
 						
 					}
 				}.start();
 			} catch (Exception e) {
 				logger
-					.logError(
-							"Bad configuration value for gov.nist.javax.sip.SIP_EVENT_INTERCEPTOR", e);			
+					.error(
+							"Bad configuration value for android.gov.nist.javax.sip.SIP_EVENT_INTERCEPTOR", e);			
 			}
 		}
 		
 		boolean sslRenegotiationEnabled = Boolean.parseBoolean(configurationProperties.getProperty(
-				"gov.nist.javax.sip.SSL_RENEGOTIATION_ENABLED",
+				"android.gov.nist.javax.sip.SSL_RENEGOTIATION_ENABLED",
 				"true"));
 		
 		setSslRenegotiationEnabled(sslRenegotiationEnabled);
@@ -1527,10 +1490,9 @@ public class SipStackImpl extends SIPTransactionStack implements
 	public synchronized ListeningPoint createListeningPoint(String address,
 			int port, String transport) throws TransportNotSupportedException,
 			InvalidArgumentException {
-		if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-			logger.logDebug(
-				"createListeningPoint : address = " + address + " port = "
-						+ port + " transport = " + transport);
+		logger.debug(
+			"createListeningPoint : address = " + address + " port = "
+					+ port + " transport = " + transport);
 
 		if (address == null)
 			throw new NullPointerException(
@@ -1565,12 +1527,10 @@ public class SipStackImpl extends SIPTransactionStack implements
 				InetAddress inetAddr = InetAddress.getByName(address);
 				MessageProcessor messageProcessor = this
 						.createMessageProcessor(inetAddr, port, transport);
-				if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-					logger.logDebug(
-							"Created Message Processor: " + address
-									+ " port = " + port + " transport = "
-									+ transport);
-				}
+				logger.debug(
+						"Created Message Processor: " + address
+								+ " port = " + port + " transport = "
+								+ transport);
 				lip = new ListeningPointImpl(this, port, transport);
 				lip.messageProcessor = messageProcessor;
 				messageProcessor.setListeningPoint(lip);
@@ -1584,10 +1544,9 @@ public class SipStackImpl extends SIPTransactionStack implements
 				}
 				return (ListeningPoint) lip;
 			} catch (java.io.IOException ex) {
-				if (logger.isLoggingEnabled())
-					logger.logError(
-						"Invalid argument address = " + address + " port = "
-								+ port + " transport = " + transport);
+				logger.error(
+					"Invalid argument address = " + address + " port = "
+							+ port + " transport = " + transport);
 				throw new InvalidArgumentException(ex.getMessage(), ex);
 			}
 		}
@@ -1602,9 +1561,8 @@ public class SipStackImpl extends SIPTransactionStack implements
 			throws ObjectInUseException {
 		if (listeningPoint == null)
 			throw new NullPointerException("null listeningPoint");
-		if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-			this.logger.logDebug(
-					"createSipProvider: " + listeningPoint);
+		this.logger.debug(
+				"createSipProvider: " + listeningPoint);
 		ListeningPointImpl listeningPointImpl = (ListeningPointImpl) listeningPoint;
 		if (listeningPointImpl.sipProvider != null)
 			throw new ObjectInUseException("Provider already attached!");
@@ -1743,10 +1701,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 	 * @see javax.sip.SipStack#stop()
 	 */
 	public void stop() {
-		if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-			logger.logDebug("stopStack -- stoppping the stack");
-			logger.logStackTrace();
-		}
+		logger.debug("stopStack -- stoppping the stack");
 		this.stopStack();
 		if(super.sipMessageValve != null) 
 			super.sipMessageValve.destroy();
@@ -1817,7 +1772,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 	 * (non-Javadoc)
 	 * 
 	 * @see
-	 * gov.nist.javax.sip.SipStackExt#getAuthenticationHelper(gov.nist.javax
+	 * android.gov.nist.javax.sip.SipStackExt#getAuthenticationHelper(android.gov.nist.javax
 	 * .sip.clientauthutils.AccountManager, javax.sip.header.HeaderFactory)
 	 */
 	public AuthenticationHelper getAuthenticationHelper(
@@ -1829,7 +1784,7 @@ public class SipStackImpl extends SIPTransactionStack implements
 	 * (non-Javadoc)
 	 * 
 	 * @see
-	 * gov.nist.javax.sip.SipStackExt#getAuthenticationHelper(gov.nist.javax
+	 * android.gov.nist.javax.sip.SipStackExt#getAuthenticationHelper(android.gov.nist.javax
 	 * .sip.clientauthutils.AccountManager, javax.sip.header.HeaderFactory)
 	 */
 	public AuthenticationHelper getSecureAuthenticationHelper(

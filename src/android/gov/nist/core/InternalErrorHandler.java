@@ -26,7 +26,10 @@
 /*******************************************************************************
 * Product of NIST/ITL Advanced Networking Technologies Division (ANTD).        *
 *******************************************************************************/
-package gov.nist.core;
+package android.gov.nist.core;
+
+import org.slf4j.Logger;
+
 /**
 *  Handle Internal error failures and print a stack trace (for debugging).
 *
@@ -48,11 +51,11 @@ public class InternalErrorHandler {
     /**
     * Handle an unexpected exception.
     */
-    public static void handleException(Exception ex, StackLogger stackLogger) {
+    public static void handleException(Exception ex, Logger stackLogger) {
         System.err.println ("Unexpected internal error  "  + ex.getMessage());
-        stackLogger.logError("UNEXPECTED INTERNAL ERROR " +  ex.getMessage());
+        stackLogger.error("UNEXPECTED INTERNAL ERROR " +  ex.getMessage());
         ex.printStackTrace();
-        stackLogger.logException(ex);
+        stackLogger.error("StackTrace", ex);
         throw new RuntimeException("Unexpected internal error !! "  + ex.getMessage(), ex);
 
     }
@@ -68,10 +71,9 @@ public class InternalErrorHandler {
 
     }
 
-    public static void handleException(String emsg, StackLogger stackLogger) {
-        stackLogger.logStackTrace();
-        stackLogger.logError("Unexepcted INTERNAL ERROR !!");
-        stackLogger.logFatalError(emsg);
+    public static void handleException(String emsg, Logger stackLogger) {
+        stackLogger.error("Unexepcted INTERNAL ERROR !!");
+        stackLogger.error(emsg);
         throw new RuntimeException(emsg);
 
     }

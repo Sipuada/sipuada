@@ -1,9 +1,20 @@
 package android.gov.nist.javax.sip.stack.sctp;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogWriter;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.text.ParseException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.sun.nio.sctp.MessageInfo;
+import com.sun.nio.sctp.SctpChannel;
+
 import android.gov.nist.core.ServerLogger;
-import android.gov.nist.core.StackLogger;
 import android.gov.nist.javax.sip.header.CSeq;
 import android.gov.nist.javax.sip.header.CallID;
 import android.gov.nist.javax.sip.header.From;
@@ -24,17 +35,6 @@ import android.gov.nist.javax.sip.stack.SIPTransactionStack;
 import android.gov.nist.javax.sip.stack.ServerRequestInterface;
 import android.gov.nist.javax.sip.stack.ServerResponseInterface;
 
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.text.ParseException;
-
-import com.sun.nio.sctp.MessageInfo;
-import com.sun.nio.sctp.SctpChannel;
-
 /**
  * SCTP message channel
  *
@@ -42,7 +42,7 @@ import com.sun.nio.sctp.SctpChannel;
  */
 final class SCTPMessageChannel extends MessageChannel
     implements ParseExceptionListener, Comparable<SCTPMessageChannel> {
-    private static StackLogger logger = CommonLogger.getLogger(SCTPMessageChannel.class);
+    private static Logger logger = LoggerFactory.getLogger(SCTPMessageChannel.class);
 
     private final SCTPMessageProcessor processor;
     private InetSocketAddress peerAddress;            // destination address
@@ -191,9 +191,7 @@ final class SCTPMessageChannel extends MessageChannel
 
         // XX ignoring 'reconnect' for now
         int nBytes = channel.send( ByteBuffer.wrap(message), messageInfo );
-        if ( logger.isLoggingEnabled( LogWriter.TRACE_DEBUG ) ) {
-            logger.logDebug( "SCTP bytes sent:" + nBytes );
-        }
+        logger.debug( "SCTP bytes sent:" + nBytes );
     }
 
     /**
@@ -207,23 +205,17 @@ final class SCTPMessageChannel extends MessageChannel
         MessageInfo info = channel.receive( rxBuffer, null, null );
         if (info==null) {
             // happens a lot, some sort of keep-alive?
-            if ( logger.isLoggingEnabled( LogWriter.TRACE_DEBUG ) ) {
-                logger.logDebug( "SCTP read-event but no message" );
-            }
+            logger.debug( "SCTP read-event but no message" );
             return;
         } else if (info.bytes()==-1) {
-            logger.logWarning( "SCTP peer closed, closing too..." );
+            logger.warn( "SCTP peer closed, closing too..." );
             this.close();
             return;
         } else if ( !info.isComplete() ) {
-            if ( logger.isLoggingEnabled( LogWriter.TRACE_DEBUG ) ) {
-                logger.logDebug( "SCTP incomplete message; bytes=" + info.bytes() );
-            }
+            logger.debug( "SCTP incomplete message; bytes=" + info.bytes() );
             return;
         } else {
-            if ( logger.isLoggingEnabled( LogWriter.TRACE_DEBUG ) ) {
-                logger.logDebug( "SCTP message now complete; bytes=" + info.bytes() );
-            }
+            logger.debug( "SCTP message now complete; bytes=" + info.bytes() );
         }
 
         // Assume it is 1 full message, not multiple messages
@@ -236,10 +228,7 @@ final class SCTPMessageChannel extends MessageChannel
             this.processMessage( m, rxTime );
             rxTime = 0;    // reset for next message
         } catch (ParseException e) {
-            logger.logException( e );
-            if ( logger.isLoggingEnabled( LogWriter.TRACE_DEBUG ) ) {
-                logger.logDebug( "Invalid message bytes=" + msg.length + ":" + new String(msg) );
-            }
+            logger.debug( "Invalid message bytes=" + msg.length + ":" + new String(msg) );
             this.close();
             throw new IOException( "Error parsing incoming SCTP message", e );
         }
@@ -264,27 +253,19 @@ final class SCTPMessageChannel extends MessageChannel
             // This is a request - process it.
             // So far so good -- we will commit this message if
             // all processing is OK.
-            if (logger.isLoggingEnabled(ServerLogger.TRACE_MESSAGES)) {
-                sipStack.getServerLogger().logMessage(sipMessage, this
-                        .getPeerHostPort().toString(), this.getHost() + ":"
-                        + this.getPort(), false, rxTime);
-            }
+            sipStack.getServerLogger().logMessage(sipMessage, this
+                    .getPeerHostPort().toString(), this.getHost() + ":"
+                    + this.getPort(), false, rxTime);
             ServerRequestInterface sipServerRequest = sipStack
                     .newSIPServerRequest(sipRequest, this);
             // Drop it if there is no request returned
             if (sipServerRequest == null) {
-                if (logger.isLoggingEnabled()) {
-                    logger
-                            .logWarning("Null request interface returned -- dropping request");
-                }
-
-
+                logger
+                    .warn("Null request interface returned -- dropping request");
                 return;
             }
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("About to process "
-                        + sipRequest.getFirstLine() + "/" + sipServerRequest);
-            }
+            logger.debug("About to process "
+                    + sipRequest.getFirstLine() + "/" + sipServerRequest);
             try {
                 sipServerRequest.processRequest(sipRequest, this);
             } finally {
@@ -295,9 +276,8 @@ final class SCTPMessageChannel extends MessageChannel
                     }
                 }
             }
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger.logDebug("Done processing "
-                        + sipRequest.getFirstLine() + "/" + sipServerRequest);
+            logger.debug("Done processing "
+                    + sipRequest.getFirstLine() + "/" + sipServerRequest);
 
             // So far so good -- we will commit this message if
             // all processing is OK.
@@ -308,10 +288,9 @@ final class SCTPMessageChannel extends MessageChannel
             try {
                 sipResponse.checkHeaders();
             } catch (ParseException ex) {
-                if (logger.isLoggingEnabled())
-                    logger
-                            .logError("Dropping Badly formatted response message >>> "
-                                    + sipResponse);
+                logger
+                        .error("Dropping Badly formatted response message >>> "
+                                + sipResponse);
                 return;
             }
             ServerResponseInterface sipServerResponse = sipStack
@@ -321,10 +300,9 @@ final class SCTPMessageChannel extends MessageChannel
                     if (sipServerResponse instanceof SIPClientTransaction
                             && !((SIPClientTransaction) sipServerResponse)
                                     .checkFromTag(sipResponse)) {
-                        if (logger.isLoggingEnabled())
-                            logger
-                                    .logError("Dropping response message with invalid tag >>> "
-                                            + sipResponse);
+                        logger
+                                .error("Dropping response message with invalid tag >>> "
+                                        + sipResponse);
                         return;
                     }
 
@@ -338,9 +316,7 @@ final class SCTPMessageChannel extends MessageChannel
 
                 // Normal processing of message.
             } else {
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug("null sipServerResponse!");
-                }
+                logger.debug("null sipServerResponse!");
             }
 
         }
@@ -359,8 +335,6 @@ final class SCTPMessageChannel extends MessageChannel
     public void handleException(ParseException ex, SIPMessage sipMessage,
             Class hdrClass, String header, String message)
             throws ParseException {
-        if (getSIPStack().isLoggingEnabled())
-            this.logger.logException(ex);
         // Log the bad message for later reference.
         if ((hdrClass != null)
                 && (hdrClass.equals(From.class) || hdrClass.equals(To.class)
@@ -369,8 +343,8 @@ final class SCTPMessageChannel extends MessageChannel
                         || hdrClass.equals(CallID.class)
                         || hdrClass.equals(RequestLine.class) || hdrClass
                         .equals(StatusLine.class))) {
-            logger.logError("BAD MESSAGE!");
-            logger.logError(message);
+            logger.error("BAD MESSAGE!");
+            logger.error(message);
             throw ex;
         } else {
             sipMessage.addUnparsed(header);

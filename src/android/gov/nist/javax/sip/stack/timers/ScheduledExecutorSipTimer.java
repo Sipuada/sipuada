@@ -25,16 +25,17 @@
 */
 package android.gov.nist.javax.sip.stack.timers;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.NamingThreadFactory;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.SipStackImpl;
-import android.gov.nist.javax.sip.stack.SIPStackTimerTask;
-
 import java.util.Properties;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.NamingThreadFactory;
+import android.gov.nist.javax.sip.SipStackImpl;
+import android.gov.nist.javax.sip.stack.SIPStackTimerTask;
 
 /**
  * Implementation of the SIP Timer based on java.util.concurrent.ScheduledThreadPoolExecutor
@@ -44,7 +45,7 @@ import java.util.concurrent.TimeUnit;
  *
  */
 public class ScheduledExecutorSipTimer implements SipTimer {
-	private static StackLogger logger = CommonLogger.getLogger(ScheduledExecutorSipTimer.class);
+	private static Logger logger = LoggerFactory.getLogger(ScheduledExecutorSipTimer.class);
 	protected SipStackImpl sipStackImpl;
 	ScheduledThreadPoolExecutor threadPoolExecutor;
     
@@ -58,16 +59,12 @@ public class ScheduledExecutorSipTimer implements SipTimer {
 			Runnable r = new Runnable() {			
 				public void run() {
 					try {
-						if(logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-							logger.logDebug("Purging canceled timer tasks...");
-						}
+						logger.debug("Purging canceled timer tasks...");
 						threadPoolExecutor.purge();
-						if(logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-							logger.logDebug("Purging canceled timer tasks completed.");
-						}						
+						logger.debug("Purging canceled timer tasks completed.");
 					}
 					catch (Exception e) {
-						logger.logError("failed to execute purge",e);
+						logger.error("failed to execute purge",e);
 					}
 				}
 			};
@@ -80,10 +77,7 @@ public class ScheduledExecutorSipTimer implements SipTimer {
 	 */
 	public void stop() {
 		threadPoolExecutor.shutdown();
-		logger.logStackTrace(StackLogger.TRACE_DEBUG);
-		if(logger.isLoggingEnabled(StackLogger.TRACE_INFO)) {
-			logger.logInfo("the sip stack timer " + this.getClass().getName() + " has been stopped");
-		}
+		logger.info("the sip stack timer " + this.getClass().getName() + " has been stopped");
 	}
 
 	/* (non-Javadoc)
@@ -121,9 +115,7 @@ public class ScheduledExecutorSipTimer implements SipTimer {
 		// TODO have a param in the stack properties to set the number of thread for the timer executor
 		threadPoolExecutor.prestartAllCoreThreads();
 		schedulePurgeTaskIfNeeded();
-		if(logger.isLoggingEnabled(StackLogger.TRACE_INFO)) {
-			logger.logInfo("the sip stack timer " + this.getClass().getName() + " has been started");
-		}
+		logger.info("the sip stack timer " + this.getClass().getName() + " has been started");
 	}
 	/*
 	 * (non-Javadoc)

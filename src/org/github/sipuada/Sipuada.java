@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 
-import android.gov.nist.gnjvx.sip.Utils;
+import android.gov.nist.javax.sip.Utils;
 import android.javax.sip.InvalidArgumentException;
 import android.javax.sip.ListeningPoint;
 import android.javax.sip.ObjectInUseException;
@@ -195,7 +195,9 @@ public class Sipuada implements SipuadaApi {
 			Transport transport = Transport.UNKNOWN;
 			try {
 				transport = Transport.valueOf(rawTransport);
-			} catch (IllegalArgumentException ignore) {}
+			} catch (IllegalArgumentException ignore) {
+				ignore.printStackTrace();
+			}
 			synchronized (transportToUserAgents) {
 				if (!transportToUserAgents.containsKey(transport)) {
 					transportToUserAgents.put(transport, new HashSet<SipUserAgent>());
@@ -677,7 +679,9 @@ public class Sipuada implements SipuadaApi {
 				SipStack stack = listeningPointToStack.get(listeningPoint);
 				try {
 					stack.deleteListeningPoint(listeningPoint);
-				} catch (ObjectInUseException ignore) {}
+				} catch (ObjectInUseException ignore) {
+					ignore.printStackTrace();
+				}
 			}
 			return false;
 		}
@@ -934,7 +938,9 @@ public class Sipuada implements SipuadaApi {
 				Transport transport = Transport.UNKNOWN;
 				try {
 					transport = Transport.valueOf(rawTransport);
-				} catch (IllegalArgumentException ignore) {}
+				} catch (IllegalArgumentException ignore) {
+					ignore.printStackTrace();
+				}
 				synchronized (transportToUserAgents) {
 					if (!transportToUserAgents.containsKey(transport)) {
 						transportToUserAgents.put(transport, new HashSet<SipUserAgent>());
@@ -1028,7 +1034,9 @@ public class Sipuada implements SipuadaApi {
 			Transport transport = Transport.UNKNOWN;
 			try {
 				transport = Transport.valueOf(rawTransport);
-			} catch (IllegalArgumentException ignore) {}
+			} catch (IllegalArgumentException ignore) {
+				ignore.printStackTrace();
+			}
 			Set<SipUserAgent> userAgents = transportToUserAgents.get(transport);
 			userAgents.remove(originalBestUserAgent);
 			nextBestUserAgent = chooseBestAgentThatWontBeRemoved(false, expiredListeningPoints);
@@ -1059,7 +1067,9 @@ public class Sipuada implements SipuadaApi {
 								try {
 									stack.deleteSipProvider(provider);
 									stack.deleteListeningPoint(expiredListeningPoint);
-								} catch (ObjectInUseException ignore) {}
+								} catch (ObjectInUseException ignore) {
+									ignore.printStackTrace();
+								}
 								synchronized (activeUserAgentCallIds) {
 									Set<String> activeCallIds = activeUserAgentCallIds.get(userAgent);
 									if (activeCallIds != null) {
@@ -1118,7 +1128,9 @@ public class Sipuada implements SipuadaApi {
 			Transport transport = Transport.UNKNOWN;
 			try {
 				transport = Transport.valueOf(rawTransport);
-			} catch (IllegalArgumentException ignore) {}
+			} catch (IllegalArgumentException ignore) {
+				ignore.printStackTrace();
+			}
 			Set<SipUserAgent> userAgents = transportToUserAgents.get(transport);
 			userAgents.remove(originalBestUserAgent);
 			nextBestUserAgent = chooseBestAgentThatIsAvailable(false);
@@ -1159,7 +1171,9 @@ public class Sipuada implements SipuadaApi {
 		Transport transport = Transport.UNKNOWN;
 		try {
 			transport = Transport.valueOf(rawTransport);
-		} catch (IllegalArgumentException ignore) {}
+		} catch (IllegalArgumentException ignore) {
+			ignore.printStackTrace();
+		}
 		Set<SipUserAgent> userAgentCandidates = transportToUserAgents.get(transport);
 		if (userAgentCandidates == null) {
 			userAgentCandidates = new HashSet<>();
@@ -1315,11 +1329,15 @@ public class Sipuada implements SipuadaApi {
 						if (listeningPoint != null) {
 							stack.deleteListeningPoint(listeningPoint);
 						}
-					} catch (ObjectInUseException ignore) {}
+					} catch (ObjectInUseException ignore) {
+						ignore.printStackTrace();
+					}
 				}
 				try {
 					stack.deleteSipProvider(provider);
-				} catch (ObjectInUseException ignore) {}
+				} catch (ObjectInUseException ignore) {
+					ignore.printStackTrace();
+				}
 				stack.stop();
 			}
 		}

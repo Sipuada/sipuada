@@ -85,7 +85,7 @@ import android.javax.sip.message.MessageFactory;
  * peer SipStack object by setting the pathname to
  * <code>gov.nist</code> and calling the createSipStack method. The SipFactory
  * would return a new instance of the SipStack object at the following location:
- * <code>android.gov.nist.gnjvx.sip.SipStackImpl.java</code> Because the space of
+ * <code>android.gov.nist.javax.sip.SipStackImpl.java</code> Because the space of
  * domain names is managed, this scheme ensures that collisions between two
  * different vendor's implementations will not happen. For example: a different
  * vendor with a domain name 'bea.com' would have their peer SipStack object
@@ -189,7 +189,7 @@ public class SipFactory {
 	public MessageFactory createMessageFactory()
 			throws PeerUnavailableException {
 		if (messageFactory == null) {
-			messageFactory = (MessageFactory) createSipFactory("gnjvx.sip.message.MessageFactoryImpl");
+			messageFactory = (MessageFactory) createSipFactory("javax.sip.message.MessageFactoryImpl");
 		}
 		return messageFactory;
 	}
@@ -204,7 +204,7 @@ public class SipFactory {
 	 */
 	public HeaderFactory createHeaderFactory() throws PeerUnavailableException {
 		if (headerFactory == null) {
-			headerFactory = (HeaderFactory) createSipFactory("gnjvx.sip.header.HeaderFactoryImpl");
+			headerFactory = (HeaderFactory) createSipFactory("javax.sip.header.HeaderFactoryImpl");
 		}
 		return headerFactory;
 	}
@@ -220,7 +220,7 @@ public class SipFactory {
 	public AddressFactory createAddressFactory()
 			throws PeerUnavailableException {
 		if (addressFactory == null) {
-			addressFactory = (AddressFactory) createSipFactory("gnjvx.sip.address.AddressFactoryImpl");
+			addressFactory = (AddressFactory) createSipFactory("javax.sip.address.AddressFactoryImpl");
 		}
 		return addressFactory;
 	}
@@ -313,7 +313,7 @@ public class SipFactory {
 			paramTypes[0] = Class.forName("java.util.Properties");
 			// get constructor of SipStack in order to instantiate
 			Constructor sipStackConstructor = Class.forName(
-					getPathName() + ".gnjvx.sip.SipStackImpl").getConstructor(
+					getPathName() + ".javax.sip.SipStackImpl").getConstructor(
 					paramTypes);
 			// Wrap properties object in order to pass to constructor of
 			// SipSatck
@@ -325,11 +325,11 @@ public class SipFactory {
 			sipStackList.add(sipStack);
 			String name = properties.getProperty("android.javax.sip.STACK_NAME");
 			this.sipStackByName.put(name, sipStack);
-                        return sipStack;    
+            return sipStack;    
 		} catch (Exception e) {
 			String errmsg = "The Peer SIP Stack: "
 					+ getPathName()
-					+ ".gnjvx.sip.SipStackImpl"
+					+ ".javax.sip.SipStackImpl"
 					+ " could not be instantiated. Ensure the Path Name has been set.";
 			throw new PeerUnavailableException(errmsg, e);
 		}

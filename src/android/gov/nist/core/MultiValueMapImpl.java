@@ -21,7 +21,7 @@
  * of the terms of this agreement.
  *
  */
-package gov.nist.core;
+package android.gov.nist.core;
 
 import java.util.ArrayList;
 import java.util.Collection;

@@ -23,7 +23,7 @@
 * .
 *
 */
-package gov.nist.core;
+package android.gov.nist.core;
 
 import java.text.ParseException;
 

@@ -29,13 +29,16 @@
 
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.text.ParseException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.core.Host;
 import android.gov.nist.core.HostPort;
 import android.gov.nist.core.InternalErrorHandler;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.ServerLogger;
-import android.gov.nist.core.StackLogger;
 import android.gov.nist.javax.sip.address.AddressImpl;
 import android.gov.nist.javax.sip.header.ContentLength;
 import android.gov.nist.javax.sip.header.ContentType;
@@ -44,11 +47,6 @@ import android.gov.nist.javax.sip.message.MessageFactoryImpl;
 import android.gov.nist.javax.sip.message.SIPMessage;
 import android.gov.nist.javax.sip.message.SIPRequest;
 import android.gov.nist.javax.sip.message.SIPResponse;
-
-import java.io.IOException;
-import java.net.InetAddress;
-import java.text.ParseException;
-
 import android.javax.sip.address.Hop;
 import android.javax.sip.header.CSeqHeader;
 import android.javax.sip.header.CallIdHeader;
@@ -72,7 +70,7 @@ import android.javax.sip.header.ViaHeader;
  */
 public abstract class MessageChannel {
 
-    private static StackLogger logger = CommonLogger.getLogger(MessageChannel.class);
+    private static Logger logger = LoggerFactory.getLogger(MessageChannel.class);
 
     // Incremented whenever a transaction gets assigned
     // to the message channel and decremented when
@@ -227,16 +225,12 @@ public abstract class MessageChannel {
                                 try {
                                     ((RawMessageChannel) channel).processMessage((SIPMessage) sipMessage.clone());
                                 } catch (Exception ex) {
-                                    if (logger.isLoggingEnabled(ServerLogger.TRACE_ERROR)) {
-                                        logger.logError("Error self routing message cause by: ", ex);
-                                    }
+                                    logger.error("Error self routing message cause by: ", ex);
                                 }
                             }
                         };
                         getSIPStack().getSelfRoutingThreadpoolExecutor().execute(processMessageTask);
-
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                            logger.logDebug("Self routing message");
+                        logger.debug("Self routing message");
                         return;
                     }
 
@@ -255,15 +249,11 @@ public abstract class MessageChannel {
         } catch (IOException ioe) {
             throw ioe;
         } catch (Exception ex) {
-            if (this.logger.isLoggingEnabled(ServerLogger.TRACE_ERROR)) {
-                this.logger.logError("Error self routing message cause by: ", ex);
-            }
+        	logger.error("Error self routing message cause by: ", ex);
             // TODO: When moving to Java 6, use the IOExcpetion(message, exception) constructor
             throw new IOException("Error self routing message");
         } finally {
-
-            if (this.logger.isLoggingEnabled(ServerLogger.TRACE_MESSAGES))
-                logMessage(sipMessage, hopAddr, hop.getPort(), time);
+            logMessage(sipMessage, hopAddr, hop.getPort(), time);
         }
     }
 
@@ -387,9 +377,6 @@ public abstract class MessageChannel {
      * @param port is the port to which the message is directed.
      */
     public void logMessage(SIPMessage sipMessage, InetAddress address, int port, long time) {
-        if (!logger.isLoggingEnabled(ServerLogger.TRACE_MESSAGES))
-            return;
-
         // Default port.
         if (port == -1)
             port = 5060;

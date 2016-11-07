@@ -25,17 +25,17 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.StackLogger;
-
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class KeyedSemaphore {
 	ConcurrentHashMap<String, Semaphore> map = new ConcurrentHashMap<String, Semaphore>();
-	static StackLogger logger = CommonLogger.getLogger(KeyedSemaphore.class);
+	static Logger logger = LoggerFactory.getLogger(KeyedSemaphore.class);
 	
     public void leaveIOCriticalSection(String key) {
         Semaphore creationSemaphore = map.get(key);
@@ -59,9 +59,7 @@ public class KeyedSemaphore {
             creationSemaphore = map.putIfAbsent(key, newCreationSemaphore);
             if(creationSemaphore == null) {
                 creationSemaphore = newCreationSemaphore;       
-                if (logger.isLoggingEnabled(StackLogger.TRACE_DEBUG)) {
-                    logger.logDebug("new Semaphore added for key " + key);
-                }
+                logger.debug("new Semaphore added for key " + key);
             }
         }
         

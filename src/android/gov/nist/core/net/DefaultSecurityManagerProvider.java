@@ -1,13 +1,5 @@
-package gov.nist.core.net;
+package android.gov.nist.core.net;
 
-import gov.nist.core.CommonLogger;
-import gov.nist.core.LogWriter;
-import gov.nist.core.StackLogger;
-
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -15,6 +7,14 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.Security;
 import java.util.Properties;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implement the default TLS security policy by loading kays specified in stack
@@ -26,7 +26,7 @@ import java.util.Properties;
  */
 public class DefaultSecurityManagerProvider implements SecurityManagerProvider {
 
-    private static final StackLogger logger = CommonLogger.getLogger(DefaultSecurityManagerProvider.class);
+    private static final Logger logger = LoggerFactory.getLogger(DefaultSecurityManagerProvider.class);
 
     private KeyManagerFactory keyManagerFactory;
     private TrustManagerFactory trustManagerFactory;
@@ -44,10 +44,10 @@ public class DefaultSecurityManagerProvider implements SecurityManagerProvider {
         String keyStoreType = properties.getProperty("javax.net.ssl.keyStoreType");
         if (keyStoreType == null) {
             keyStoreType = KeyStore.getDefaultType();
-            logger.logWarning("Using default keystore type " + keyStoreType);
+            logger.warn("Using default keystore type " + keyStoreType);
         }
         if (keyStoreFilename == null || keyStorePassword == null) {
-            logger.logWarning("TLS server settings will be inactive - TLS key store will use JVM defaults"
+            logger.warn("TLS server settings will be inactive - TLS key store will use JVM defaults"
                     + " keyStoreType=" +  keyStoreType
                     + " javax.net.ssl.keyStore=" + keyStoreFilename
                     + " javax.net.ssl.keyStorePassword=" + (keyStorePassword == null? null: "***"));
@@ -58,17 +58,17 @@ public class DefaultSecurityManagerProvider implements SecurityManagerProvider {
         // optional, if not specified using keyStorePassword
         String trustStorePassword = properties.getProperty("javax.net.ssl.trustStorePassword");
         if(trustStorePassword == null) {
-        	logger.logInfo("javax.net.ssl.trustStorePassword is null, using the password passed through javax.net.ssl.keyStorePassword");
+        	logger.info("javax.net.ssl.trustStorePassword is null, using the password passed through javax.net.ssl.keyStorePassword");
         	trustStorePassword = keyStorePassword;
         }
         // optional, uses default if not specified 
         String trustStoreType = properties.getProperty("javax.net.ssl.trustStoreType");
         if (trustStoreType == null) {
             trustStoreType = KeyStore.getDefaultType();
-            logger.logWarning("Using default truststore type " + trustStoreType);
+            logger.warn("Using default truststore type " + trustStoreType);
         }
         if (trustStoreFilename == null || trustStorePassword == null) {
-            logger.logWarning("TLS trust settings will be inactive - TLS trust store will use JVM defaults."
+            logger.warn("TLS trust settings will be inactive - TLS trust store will use JVM defaults."
                     + " trustStoreType=" +  trustStoreType
                     + " javax.net.ssl.trustStore=" +  trustStoreFilename
                     + " javax.net.ssl.trustStorePassword=" + (trustStorePassword == null? null: "***"));
@@ -78,10 +78,8 @@ public class DefaultSecurityManagerProvider implements SecurityManagerProvider {
         if (algorithm == null) {
             algorithm = "SunX509";
         }
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("SecurityManagerProvider " + this.getClass().getCanonicalName() + " will use algorithm " + algorithm);
-        }
-        
+        logger.debug("SecurityManagerProvider " + this.getClass().getCanonicalName() + " will use algorithm " + algorithm);
+
         keyManagerFactory = KeyManagerFactory.getInstance(algorithm);
         if(keyStoreFilename != null) {
         	final KeyStore ks = KeyStore.getInstance(keyStoreType);
@@ -101,9 +99,7 @@ public class DefaultSecurityManagerProvider implements SecurityManagerProvider {
         } else {
         	trustManagerFactory.init((KeyStore)null);
         }
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-        	logger.logDebug("TLS settings OK. SecurityManagerProvider " + this.getClass().getCanonicalName() + " initialized.");
-        }
+    	logger.debug("TLS settings OK. SecurityManagerProvider " + this.getClass().getCanonicalName() + " initialized.");
     }
 
     public KeyManager[] getKeyManagers(boolean client) {

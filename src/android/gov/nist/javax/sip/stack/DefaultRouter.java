@@ -28,22 +28,30 @@
  ******************************************************************************/
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.javax.sip.message.*;
-import android.gov.nist.javax.sip.address.*;
-import android.gov.nist.javax.sip.header.*;
-import android.gov.nist.javax.sip.*;
-import android.gov.nist.core.*;
-import android.gov.nist.core.net.AddressResolver;
-
-import android.javax.sip.*;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
 
-import android.javax.sip.header.RouteHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.InternalErrorHandler;
+import android.gov.nist.core.net.AddressResolver;
+import android.gov.nist.javax.sip.SIPConstants;
+import android.gov.nist.javax.sip.address.AddressImpl;
+import android.gov.nist.javax.sip.address.SipUri;
+import android.gov.nist.javax.sip.header.RequestLine;
+import android.gov.nist.javax.sip.header.Route;
+import android.gov.nist.javax.sip.header.RouteList;
+import android.gov.nist.javax.sip.message.SIPRequest;
+import android.javax.sip.ListeningPoint;
+import android.javax.sip.SipException;
+import android.javax.sip.SipStack;
+import android.javax.sip.address.Hop;
+import android.javax.sip.address.Router;
+import android.javax.sip.address.SipURI;
+import android.javax.sip.address.URI;
 import android.javax.sip.header.ViaHeader;
-import android.javax.sip.message.*;
-import android.javax.sip.address.*;
+import android.javax.sip.message.Request;
 
 /*
  * Bug reported by Will Scullin -- maddr was being ignored when routing
@@ -98,7 +106,7 @@ import android.javax.sip.address.*;
  */
 public class DefaultRouter implements Router {
 	
-	private static StackLogger logger = CommonLogger.getLogger(DefaultRouter.class);
+	private static Logger logger = LoggerFactory.getLogger(DefaultRouter.class);
 
     private SIPTransactionStack sipStack;
 
@@ -119,9 +127,8 @@ public class DefaultRouter implements Router {
                         .resolveAddress((Hop) (new HopImpl(defaultRoute)));
             } catch (IllegalArgumentException ex) {
                 // The outbound proxy is optional. If specified it should be host:port/transport.
-                logger
-                        .logError(
-                                "Invalid default route specification - need host:port/transport");
+                logger.error(
+                    "Invalid default route specification - need host:port/transport");
                 throw ex;
             }
         }
@@ -205,15 +212,11 @@ public class DefaultRouter implements Router {
                 if (!sipUri.hasLrParam()) {
 
                     fixStrictRouting(sipRequest);
-                    if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                        logger
-                                .logDebug("Route post processing fixed strict routing");
+                    logger.debug("Route post processing fixed strict routing");
                 }
 
                 Hop hop = createHop(sipUri,request);
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                    logger
-                            .logDebug("NextHop based on Route:" + hop);
+                logger.debug("NextHop based on Route:" + hop);
                 return hop;
             } else {
                 throw new SipException("First Route not a SIP URI");
@@ -222,30 +225,23 @@ public class DefaultRouter implements Router {
         } else if (requestURI.isSipURI()
                 && ((SipURI) requestURI).getMAddrParam() != null) {
             Hop hop = createHop((SipURI) requestURI,request);
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger
-                        .logDebug("Using request URI maddr to route the request = "
-                                + hop.toString());
-
+            logger.debug("Using request URI maddr to route the request = " + hop.toString());
             // JvB: don't remove it!
             // ((SipURI) requestURI).removeParameter("maddr");
 
             return hop;
 
         } else if (defaultRoute != null) {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger
-                        .logDebug("Using outbound proxy to route the request = "
-                                + defaultRoute.toString());
+            logger.debug("Using outbound proxy to route the request = "
+                + defaultRoute.toString());
             return defaultRoute;
         } else if (requestURI.isSipURI()) {
             Hop hop = createHop((SipURI) requestURI,request);
-            if (hop != null && logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger.logDebug("Used request-URI for nextHop = "
-                        + hop.toString());
-            else if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger
-                        .logDebug("returning null hop -- loop detected");
+            if (hop != null)
+                logger.debug("Used request-URI for nextHop = "
+                    + hop.toString());
+            else {
+                logger.debug("returning null hop -- loop detected");
             }
             return hop;
 
@@ -278,9 +274,7 @@ public class DefaultRouter implements Router {
 
         routes.add(route); // as last one
         req.setRequestURI(firstUri);
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("post: fixStrictRouting" + req);
-        }
+        logger.debug("post: fixStrictRouting" + req);
     }
 
     /**

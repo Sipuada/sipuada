@@ -25,12 +25,6 @@
 */
 package android.gov.nist.core.net;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.SipStackImpl;
-import android.gov.nist.javax.sip.stack.ClientAuthType;
-
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -57,6 +51,12 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.javax.sip.SipStackImpl;
+import android.gov.nist.javax.sip.stack.ClientAuthType;
+
 /**
  * extended implementation of a network layer that allows to define a private java
  * keystores/truststores
@@ -68,8 +68,8 @@ import javax.net.ssl.X509TrustManager;
  */
 public class SslNetworkLayer implements NetworkLayer {
 
-	private static StackLogger logger = CommonLogger.getLogger(SslNetworkLayer.class);
-	
+	private static Logger logger = LoggerFactory.getLogger(SslNetworkLayer.class);
+
     private SSLSocketFactory sslSocketFactory;
 
     private SSLServerSocketFactory sslServerSocketFactory;
@@ -81,16 +81,10 @@ public class SslNetworkLayer implements NetworkLayer {
           return new X509Certificate[0]; 
         }
         public void checkClientTrusted(X509Certificate[] certs, String authType) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "checkClientTrusted : Not validating certs " + certs + " authType " + authType);
-            }
+            logger.debug("checkClientTrusted : Not validating certs " + certs + " authType " + authType);
         }
         public void checkServerTrusted(X509Certificate[] certs, String authType) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "checkServerTrusted : Not validating certs " + certs + " authType " + authType);
-            }
+            logger.debug("checkServerTrusted : Not validating certs " + certs + " authType " + authType);
         }
     }};
 
@@ -118,16 +112,10 @@ public class SslNetworkLayer implements NetworkLayer {
         tmFactory.init(trustStore);
         kmFactory.init(keyStore, keyStorePassword);
         if(sipStack.getClientAuth() == ClientAuthType.DisabledAll) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "ClientAuth " + sipStack.getClientAuth()  +  " bypassing all cert validations");
-            }
+            logger.debug("ClientAuth " + sipStack.getClientAuth()  +  " bypassing all cert validations");
         	sslContext.init(null, trustAllCerts, secureRandom);
         } else {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "ClientAuth " + sipStack.getClientAuth());
-            }
+            logger.debug("ClientAuth " + sipStack.getClientAuth());
         	sslContext.init(kmFactory.getKeyManagers(), tmFactory.getTrustManagers(), secureRandom);
         }
         sslServerSocketFactory = sslContext.getServerSocketFactory();        

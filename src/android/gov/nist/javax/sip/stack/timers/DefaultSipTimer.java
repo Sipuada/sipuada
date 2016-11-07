@@ -25,16 +25,17 @@
 */
 package android.gov.nist.javax.sip.stack.timers;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.SipStackImpl;
-import android.gov.nist.javax.sip.stack.SIPStackTimerTask;
-import android.gov.nist.javax.sip.stack.SIPTransactionStack;
-
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.StackLogger;
+import android.gov.nist.javax.sip.SipStackImpl;
+import android.gov.nist.javax.sip.stack.SIPStackTimerTask;
 
 /**
  * Default SIP Timer implementation based on java.util.Timer 
@@ -43,7 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  */
 public class DefaultSipTimer extends Timer implements SipTimer {
-	private static StackLogger logger = CommonLogger.getLogger(DefaultSipTimer.class);
+	private static Logger logger = LoggerFactory.getLogger(DefaultSipTimer.class);
 
 	protected AtomicBoolean started = new AtomicBoolean(false);
 	protected SipStackImpl sipStackImpl;
@@ -122,9 +123,7 @@ public class DefaultSipTimer extends Timer implements SipTimer {
 		sipStackImpl= sipStack;
 		// don't need the properties so nothing to see here
 		started.set(true);
-		if(logger.isLoggingEnabled(StackLogger.TRACE_INFO)) {
-			logger.logInfo("the sip stack timer " + this.getClass().getName() + " has been started");
-		}
+		logger.info("the sip stack timer " + this.getClass().getName() + " has been started");
 	}
 
 	/*
@@ -134,10 +133,7 @@ public class DefaultSipTimer extends Timer implements SipTimer {
 	public void stop() {
 		started.set(false);
 		cancel();		
-		logger.logStackTrace(StackLogger.TRACE_DEBUG);
-		if(logger.isLoggingEnabled(StackLogger.TRACE_INFO)) {
-			logger.logInfo("the sip stack timer " + this.getClass().getName() + " has been stopped");
-		}
+		logger.info("the sip stack timer " + this.getClass().getName() + " has been stopped");
 	}
 	
 	/*

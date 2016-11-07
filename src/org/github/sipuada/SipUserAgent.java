@@ -45,7 +45,7 @@ import com.google.common.eventbus.DeadEvent;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 
-import android.gov.nist.gnjvx.sip.Utils;
+import android.gov.nist.javax.sip.Utils;
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
 import android.javax.sip.DialogTerminatedEvent;
@@ -137,10 +137,14 @@ public class SipUserAgent implements SipListener {
 					globalRegisterCSeqs, username, primaryHost, password, localIp, localPort, transport);
 			uas = new SipUserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					username, localIp, localPort, transport);
-		} catch (PeerUnavailableException ignore){}
+		} catch (PeerUnavailableException ignore){
+			ignore.printStackTrace();
+		}
 		try {
 			provider.addSipListener(this);
-		} catch (TooManyListenersException ignore) {}
+		} catch (TooManyListenersException ignore) {
+			ignore.printStackTrace();
+		}
 		registeredPlugins = plugins;
 		this.username = username;
 		this.primaryHost = primaryHost;
@@ -797,7 +801,9 @@ public class SipUserAgent implements SipListener {
 							RequestMethod method = RequestMethod.UNKNOWN;
 							try {
 								method = RequestMethod.valueOf(request.getMethod());
-							} catch (IllegalArgumentException ignore) {};
+							} catch (IllegalArgumentException ignore) {
+								ignore.printStackTrace();
+							};
 							if (acceptCallInvitation) {
 								return uas.sendAcceptResponse(method, request, serverTransaction);
 							}
@@ -925,7 +931,9 @@ public class SipUserAgent implements SipListener {
 								"Bad plug-in crashed while trying to perform session "
 								+ "setup in context of call " + callId + ".", callId);
 						}
-					} catch (InterruptedException ignore) {}
+					} catch (InterruptedException ignore) {
+						ignore.printStackTrace();
+					}
 				}
 
 			}).start();

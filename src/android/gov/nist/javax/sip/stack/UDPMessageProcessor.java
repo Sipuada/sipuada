@@ -28,13 +28,6 @@
  *******************************************************************************/
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.HostPort;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.core.ThreadAuditor;
-import android.gov.nist.javax.sip.SipStackImpl;
-
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -46,6 +39,12 @@ import java.util.LinkedList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.HostPort;
+import android.gov.nist.core.ThreadAuditor;
+import android.gov.nist.javax.sip.SipStackImpl;
 import android.javax.sip.IOExceptionEvent;
 import android.javax.sip.SipListener;
 
@@ -72,7 +71,7 @@ import android.javax.sip.SipListener;
  */
 public class UDPMessageProcessor extends MessageProcessor implements Runnable {
 	
-	private static StackLogger logger = CommonLogger.getLogger(UDPMessageProcessor.class);
+	private static Logger logger = LoggerFactory.getLogger(UDPMessageProcessor.class);
     /**
      * The Mapped port (in case STUN suport is enabled)
      */
@@ -128,9 +127,7 @@ public class UDPMessageProcessor extends MessageProcessor implements Runnable {
         if(sipStack.getMaxMessageSize() < SipStackImpl.MAX_DATAGRAM_SIZE && sipStack.getMaxMessageSize() > 0) {
             this.maxMessageSize = sipStack.getMaxMessageSize();
         }
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("Max Message size is " + maxMessageSize);
-        }
+        logger.debug("Max Message size is " + maxMessageSize);
         this.messageQueue = new LinkedBlockingQueue<DatagramQueuedMessageDispatch>();
         // Contribution for https://github.com/Mobicents/jain-sip/issues/39
         if(sipStack.getStackCongestionControlTimeout()>0) {
@@ -255,9 +252,7 @@ public class UDPMessageProcessor extends MessageProcessor implements Runnable {
             }
             catch (SocketException ex) {
             	if( !isRunning ) {
-					if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                    logger.logDebug("UDPMessageProcessor: Stopping");
-					}
+                    logger.debug("UDPMessageProcessor: Stopping");
                     return;
             	}
             	else {
@@ -279,8 +274,7 @@ public class UDPMessageProcessor extends MessageProcessor implements Runnable {
 	    	boolean lastBeforeFloodingChecker = exceptionsReportedCounter == MAX_EXCEPTIONS_TO_REPORT;
 	    	String msg = String.format("Caught '%s' on UDP receive socket on %s:%s, message '%s'. Trying to ignore it ... %s",
 			                     e.getClass().getSimpleName(), sock.getLocalAddress().getHostAddress(), getPort(), e.getMessage(), lastBeforeFloodingChecker ? "(Flooding checker active, no more socket IO-exceptions will be reported)" : "");
-	    	logger.logWarning(msg);
-	    	logger.logException(e);
+	    	logger.warn(msg, e);
 			SipListener listener = sipStack.getSipListener();
 			if( listener != null ) {
 				listener.processIOException( new SocketIOExceptionEvent(msg));

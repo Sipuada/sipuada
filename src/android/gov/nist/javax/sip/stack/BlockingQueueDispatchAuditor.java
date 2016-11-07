@@ -25,18 +25,17 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.StackLogger;
-
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class BlockingQueueDispatchAuditor extends TimerTask {
   private Timer timer = null;
   private static int timerThreadCount = 0;
-  private static StackLogger logger = CommonLogger.getLogger(BlockingQueueDispatchAuditor.class);
+  private static Logger logger = LoggerFactory.getLogger(BlockingQueueDispatchAuditor.class);
     private long totalReject = 0;
     private boolean started = false;
     private Queue<? extends Runnable> queue;
@@ -89,15 +88,12 @@ public class BlockingQueueDispatchAuditor extends TimerTask {
     		}
     		if(removed>0) {
     			totalReject+=removed;
-    			if(logger != null && logger.isLoggingEnabled(LogLevels.TRACE_WARN))
-    				logger.logWarning("Removed stuck messages=" + removed +
-    						" total rejected=" + totalReject + " stil in queue=" + this.queue.size());
+				logger.warn("Removed stuck messages=" + removed +
+						" total rejected=" + totalReject + " stil in queue=" + this.queue.size());
     		}
 
     	} catch (Exception e) {
-    		if(logger != null && logger.isLoggingEnabled(LogLevels.TRACE_WARN)) {
-				logger.logWarning("Problem reaping old requests. This is not a fatal error." + e);
-			}
+			logger.warn("Problem reaping old requests. This is not a fatal error." + e);
 		}
 	}
 }

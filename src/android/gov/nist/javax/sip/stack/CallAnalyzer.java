@@ -24,21 +24,22 @@
  *
  */
 package android.gov.nist.javax.sip.stack;
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.SipStackImpl;
-
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.WeakHashMap;
-import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.javax.sip.SipStackImpl;
 
 /**
  * This class is a simple thread analysis utility which tracks the time each request is stuck inside a JAIN SIP thread.
@@ -53,7 +54,7 @@ import java.util.concurrent.TimeUnit;
  *
  */
 public  class CallAnalyzer {
-	private static StackLogger logger = CommonLogger.getLogger(CallAnalyzer.class);
+	private static Logger logger = LoggerFactory.getLogger(CallAnalyzer.class);
 	
 	/*
 	 * This is a Thread -> Hashmap association, each hashmap can contain multiple metricts for the thread
@@ -245,7 +246,7 @@ public  class CallAnalyzer {
 								
 								// if a thread is stuck for too long log it
 								if(logger != null && delta>statInfo.config.stuckTimeBeforeDump) {
-									logger.logWarning("Offending thread:\n" + getCurrentStack(info.getKey()));
+									logger.warn("Offending thread:\n" + getCurrentStack(info.getKey()));
 
 									StringBuilder sb = new StringBuilder();
 									Thread[] threads = new Thread[5000];
@@ -263,7 +264,7 @@ public  class CallAnalyzer {
 											}
 										}
 									}
-									logger.logWarning(sb.toString());
+									logger.warn(sb.toString());
 									threads = null;
 									break;
 								}

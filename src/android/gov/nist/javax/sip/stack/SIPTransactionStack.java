@@ -25,12 +25,45 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.*;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.Host;
+import android.gov.nist.core.HostPort;
+import android.gov.nist.core.LogLevels;
+import android.gov.nist.core.ServerLogger;
+import android.gov.nist.core.StackLogger;
+import android.gov.nist.core.ThreadAuditor;
 import android.gov.nist.core.net.AddressResolver;
 import android.gov.nist.core.net.DefaultNetworkLayer;
 import android.gov.nist.core.net.NetworkLayer;
 import android.gov.nist.core.net.SecurityManagerProvider;
-import android.gov.nist.javax.sip.*;
+import android.gov.nist.javax.sip.DefaultAddressResolver;
+import android.gov.nist.javax.sip.ListeningPointImpl;
+import android.gov.nist.javax.sip.LogRecordFactory;
+import android.gov.nist.javax.sip.ReleaseReferencesStrategy;
+import android.gov.nist.javax.sip.SIPConstants;
+import android.gov.nist.javax.sip.SipListenerExt;
+import android.gov.nist.javax.sip.SipProviderImpl;
+import android.gov.nist.javax.sip.SipStackImpl;
+import android.gov.nist.javax.sip.Utils;
 import android.gov.nist.javax.sip.header.Event;
 import android.gov.nist.javax.sip.header.Via;
 import android.gov.nist.javax.sip.header.extensions.JoinHeader;
@@ -40,21 +73,21 @@ import android.gov.nist.javax.sip.message.SIPRequest;
 import android.gov.nist.javax.sip.message.SIPResponse;
 import android.gov.nist.javax.sip.parser.MessageParserFactory;
 import android.gov.nist.javax.sip.stack.timers.SipTimer;
-
-import android.javax.sip.*;
+import android.javax.sip.ClientTransaction;
+import android.javax.sip.Dialog;
+import android.javax.sip.DialogState;
+import android.javax.sip.DialogTerminatedEvent;
+import android.javax.sip.ServerTransaction;
+import android.javax.sip.SipException;
+import android.javax.sip.SipListener;
+import android.javax.sip.TransactionState;
+import android.javax.sip.TransactionTerminatedEvent;
 import android.javax.sip.address.Hop;
 import android.javax.sip.address.Router;
 import android.javax.sip.header.CallIdHeader;
 import android.javax.sip.header.EventHeader;
 import android.javax.sip.message.Request;
 import android.javax.sip.message.Response;
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.SocketAddress;
-import java.net.UnknownHostException;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /*
  * Jeff Keyser : architectural suggestions and contributions. Pierre De Rop and Thomas Froment :
@@ -77,7 +110,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public abstract class SIPTransactionStack implements
         SIPTransactionEventListener, SIPDialogEventListener {
-	private static StackLogger logger = CommonLogger.getLogger(SIPTransactionStack.class);
+	private static Logger logger = LoggerFactory.getLogger(SIPTransactionStack.class);
     /*
      * Number of milliseconds between timer ticks (500).
      */
@@ -503,10 +536,7 @@ public abstract class SIPTransactionStack implements
 
         @Override
         public void runTask() {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            	logger.logDebug(
-                        "Removing forked client transaction : forkId = " + forkId);
-        	}
+        	logger.debug("Removing forked client transaction : forkId = " + forkId);
             forkedClientTransactionTable.remove(forkId);
         }
 
@@ -579,8 +609,7 @@ public abstract class SIPTransactionStack implements
      * Re Initialize the stack instance.
      */
     protected void reInit() {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("Re-initializing !");
+        logger.debug("Re-initializing !");
 
         // Array of message processors.
         messageProcessors = new CopyOnWriteArrayList<MessageProcessor>();
@@ -683,32 +712,11 @@ public abstract class SIPTransactionStack implements
      }
 
     /**
-     * For debugging -- allows you to disable logging or enable logging
-     * selectively.
-     *
-     *
-     */
-    public void disableLogging() {
-        this.logger.disableLogging();
-    }
-
-    /**
-     * Globally enable message logging ( for debugging)
-     *
-     */
-    public void enableLogging() {
-        this.logger.enableLogging();
-    }
-
-    /**
      * Print the dialog table.
      *
      */
     public void printDialogTable() {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            this.logger.logDebug(
-                    "dialog table  = " + this.dialogTable);
-        }
+        this.logger.debug("dialog table  = " + this.dialogTable);
     }
 
     /**
@@ -742,8 +750,7 @@ public abstract class SIPTransactionStack implements
      */
     public void addExtensionMethod(String extensionMethod) {
         if (extensionMethod.equals(Request.NOTIFY)) {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger.logDebug("NOTIFY Supported Natively");
+            logger.debug("NOTIFY Supported Natively");
         } else {
             dialogCreatingMethods.add(Utils.toUpperCase(extensionMethod.trim()));
         }
@@ -759,20 +766,12 @@ public abstract class SIPTransactionStack implements
     public SIPDialog putDialog(SIPDialog dialog) {
         String dialogId = dialog.getDialogId();
         if (dialogTable.containsKey(dialogId)) {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger
-                        .logDebug("putDialog: dialog already exists" + dialogId
-                                + " in table = " + dialogTable.get(dialogId));
-            }
+            logger.debug("putDialog: dialog already exists" + dialogId
+                    + " in table = " + dialogTable.get(dialogId));
             return dialogTable.get(dialogId);
         }
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("putDialog dialogId=" + dialogId
-                    + " dialog = " + dialog);
-        }
+        logger.debug("putDialog dialogId=" + dialogId + " dialog = " + dialog);
         dialog.setStack(this);
-        if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-            logger.logStackTrace();
         dialogTable.put(dialogId, dialog);
         putMergeDialog(dialog);
         
@@ -800,18 +799,14 @@ public abstract class SIPTransactionStack implements
         if (transaction instanceof SIPClientTransaction) {
             String dialogId = ((SIPRequest) transaction.getRequest())
                     .getDialogId(false);
-            if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                logger.logDebug("createDialog dialogId=" + dialogId);
-            }
+            logger.debug("createDialog dialogId=" + dialogId);
             if (this.earlyDialogTable.get(dialogId) != null) {
                 SIPDialog dialog = this.earlyDialogTable.get(dialogId);
                 if (dialog.getState() == null
                         || dialog.getState() == DialogState.EARLY) {
                     retval = dialog;
-                    if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                        logger.logDebug("createDialog early Dialog found : earlyDialogId="
-                                + dialogId + " earlyDialog= " + dialog);
-                    }
+                    logger.debug("createDialog early Dialog found : earlyDialogId="
+                		+ dialogId + " earlyDialog= " + dialog);
                 } else {
                     retval = new SIPDialog(transaction);
                     this.earlyDialogTable.put(dialogId, retval);
@@ -819,10 +814,8 @@ public abstract class SIPTransactionStack implements
             } else {
                 retval = new SIPDialog(transaction);
                 this.earlyDialogTable.put(dialogId, retval);
-                if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                    logger.logDebug("createDialog early Dialog not found : earlyDialogId="
-                            + dialogId + " created one " + retval);
-                }
+                logger.debug("createDialog early Dialog not found : earlyDialogId="
+                    + dialogId + " created one " + retval);
             }
         } else {
             retval = new SIPDialog(transaction);
@@ -844,32 +837,26 @@ public abstract class SIPTransactionStack implements
             SIPResponse sipResponse) {
         String originalDialogId = ((SIPRequest)transaction.getRequest()).getDialogId(false);
         String earlyDialogId = sipResponse.getDialogId(false);
-        if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-            logger.logDebug("createDialog originalDialogId=" + originalDialogId);
-            logger.logDebug("createDialog earlyDialogId=" + earlyDialogId);
-            logger.logDebug("createDialog default Dialog=" + transaction.getDefaultDialog());
-            if(transaction.getDefaultDialog() != null) {
-                logger.logDebug("createDialog default Dialog Id=" + transaction.getDefaultDialog().getDialogId());
-            }
+        logger.debug("createDialog originalDialogId=" + originalDialogId);
+        logger.debug("createDialog earlyDialogId=" + earlyDialogId);
+        logger.debug("createDialog default Dialog=" + transaction.getDefaultDialog());
+        if(transaction.getDefaultDialog() != null) {
+            logger.debug("createDialog default Dialog Id=" + transaction.getDefaultDialog().getDialogId());
         }
         SIPDialog retval = null;
         SIPDialog earlyDialog = this.earlyDialogTable.get(originalDialogId);
         if (earlyDialog != null && transaction != null && (transaction.getDefaultDialog() == null || transaction.getDefaultDialog().getDialogId().equals(originalDialogId))) {
             retval = earlyDialog;
-            if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                logger.logDebug("createDialog early Dialog found : earlyDialogId="
-                        + originalDialogId + " earlyDialog= " + retval);
-            }
+            logger.debug("createDialog early Dialog found : earlyDialogId="
+                    + originalDialogId + " earlyDialog= " + retval);
             if (sipResponse.isFinalResponse()) {
                 this.earlyDialogTable.remove(originalDialogId);
             }
 
         } else {
             retval = new SIPDialog(transaction, sipResponse);
-            if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                logger.logDebug("createDialog early Dialog not found : earlyDialogId="
-                        + earlyDialogId + " created one " + retval);
-            }
+            logger.debug("createDialog early Dialog not found : earlyDialogId="
+                + earlyDialogId + " created one " + retval);
         }
         return retval;
 
@@ -969,22 +956,16 @@ public abstract class SIPTransactionStack implements
     public SIPDialog getEarlyDialog(String dialogId) {
 
         SIPDialog sipDialog = (SIPDialog) earlyDialogTable.get(dialogId);
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("getEarlyDialog(" + dialogId + ") : returning " + sipDialog);
-        }
+        logger.debug("getEarlyDialog(" + dialogId + ") : returning " + sipDialog);
         return sipDialog;
 
     }
 
     protected void removeMergeDialog(String mergeId) {
 		if(mergeId != null) {
-			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-				logger.logDebug("Tyring to remove Dialog from serverDialogMerge table with Merge Dialog Id " + mergeId);
-			}
+			logger.debug("Tyring to remove Dialog from serverDialogMerge table with Merge Dialog Id " + mergeId);
 			SIPDialog sipDialog = serverDialogMergeTestTable.remove(mergeId);		
-			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG) && sipDialog != null) {
-				logger.logDebug("removed Dialog " + sipDialog + " from serverDialogMerge table with Merge Dialog Id " + mergeId);
-			}
+			logger.debug("removed Dialog " + sipDialog + " from serverDialogMerge table with Merge Dialog Id " + mergeId);
 		}
 	}
 	
@@ -993,9 +974,7 @@ public abstract class SIPTransactionStack implements
 			String mergeId = sipDialog.getMergeId();
 			if(mergeId != null) {
 				serverDialogMergeTestTable.put(mergeId, sipDialog);
-				if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-					logger.logDebug("put Dialog " + sipDialog + " in serverDialogMerge table with Merge Dialog Id " + mergeId);
-				}
+				logger.debug("put Dialog " + sipDialog + " in serverDialogMerge table with Merge Dialog Id " + mergeId);
 			}
 		}
 	}
@@ -1012,10 +991,7 @@ public abstract class SIPTransactionStack implements
     public SIPDialog getDialog(String dialogId) {
 
         SIPDialog sipDialog = (SIPDialog) dialogTable.get(dialogId);
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("getDialog(" + dialogId + ") : returning "
-                    + sipDialog);
-        }
+        logger.debug("getDialog(" + dialogId + ") : returning " + sipDialog);
         return sipDialog;
 
     }
@@ -1028,9 +1004,7 @@ public abstract class SIPTransactionStack implements
      *            is the dialog Id to remove.
      */
     public void removeDialog(String dialogId) {
-        if (logger.isLoggingEnabled()) {
-            logger.logWarning("Silently removing dialog from table");
-        }
+        logger.warn("Silently removing dialog from table");
         dialogTable.remove(dialogId);
     }
 
@@ -1054,20 +1028,14 @@ public abstract class SIPTransactionStack implements
         SIPClientTransaction retval = null;
         try {
             Iterator it = clientTransactionTable.values().iterator();
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger.logDebug("ct table size = "
-                        + clientTransactionTable.size());
+            logger.debug("ct table size = " + clientTransactionTable.size());
             String thisToTag = notifyMessage.getTo().getTag();
             if (thisToTag == null) {
                 return retval;
             }
             Event eventHdr = (Event) notifyMessage.getHeader(EventHeader.NAME);
             if (eventHdr == null) {
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger
-                            .logDebug("event Header is null -- returning null");
-                }
-
+                logger.debug("event Header is null -- returning null");
                 return retval;
             }
             while (it.hasNext()) {
@@ -1082,12 +1050,10 @@ public abstract class SIPTransactionStack implements
                 // dont include it.
                 if (hisEvent == null)
                     continue;
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    logger.logDebug("ct.fromTag = " + fromTag);
-                    logger.logDebug("thisToTag = " + thisToTag);
-                    logger.logDebug("hisEvent = " + hisEvent);
-                    logger.logDebug("eventHdr " + eventHdr);
-                }
+                logger.debug("ct.fromTag = " + fromTag);
+                logger.debug("thisToTag = " + thisToTag);
+                logger.debug("hisEvent = " + hisEvent);
+                logger.debug("eventHdr " + eventHdr);
 
                 if (  fromTag.equalsIgnoreCase(thisToTag)
                       && hisEvent != null
@@ -1104,12 +1070,8 @@ public abstract class SIPTransactionStack implements
 
             return retval;
         } finally {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                logger.logDebug("findSubscribeTransaction : returning "
-                        + retval);
-
+            logger.debug("findSubscribeTransaction : returning " + retval);
         }
-
     }
 
     /**
@@ -1194,12 +1156,7 @@ public abstract class SIPTransactionStack implements
                     String key = sipMessage.getTransactionId();
 
                     retval = (SIPTransaction) serverTransactionTable.get(key);
-                    if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                        logger
-                                .logDebug(
-                                        "serverTx: looking for key " + key
-                                                + " existing="
-                                + serverTransactionTable);
+                    logger.debug("serverTx: looking for key " + key + " existing=" + serverTransactionTable);
                     if (key
                             .startsWith(SIPConstants.BRANCH_MAGIC_COOKIE_LOWER_CASE)) {
                         return retval;
@@ -1224,15 +1181,12 @@ public abstract class SIPTransactionStack implements
                 Via via = sipMessage.getTopmostVia();
                 if (via.getBranch() != null) {
                     String key = sipMessage.getTransactionId();
-                    if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                        logger.logDebug(
-                                "clientTx: looking for key " + key);
+                    logger.debug("clientTx: looking for key " + key);
                     retval = (SIPTransaction) clientTransactionTable.get(key);
                     if (key
                             .startsWith(SIPConstants.BRANCH_MAGIC_COOKIE_LOWER_CASE)) {
                         return retval;
                     }
-
                 }
                 // Need to scan the table for old style transactions (RFC 2543
                 // style). This is terribly slow but we need to do this
@@ -1251,10 +1205,7 @@ public abstract class SIPTransactionStack implements
 
             }
         } finally {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "findTransaction: returning  : " + retval);
-            }
+            logger.debug("findTransaction: returning  : " + retval);
         }
         return retval;
 
@@ -1275,11 +1226,9 @@ public abstract class SIPTransactionStack implements
     public SIPTransaction findCancelTransaction(SIPRequest cancelRequest,
             boolean isServer) {
 
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("findCancelTransaction request= \n"
-                    + cancelRequest + "\nfindCancelRequest isServer="
-                    + isServer);
-        }
+        logger.debug("findCancelTransaction request= \n"
+            + cancelRequest + "\nfindCancelRequest isServer="
+            + isServer);
 
         if (isServer) {
             Iterator<SIPServerTransaction> li = this.serverTransactionTable
@@ -1307,9 +1256,7 @@ public abstract class SIPTransactionStack implements
             }
 
         }
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger
-                    .logDebug("Could not find transaction for cancel request");
+        logger.debug("Could not find transaction for cancel request");
         return null;
     }
 
@@ -1336,12 +1283,8 @@ public abstract class SIPTransactionStack implements
      */
     public SIPServerTransaction findPendingTransaction(
             String transactionId) {
-        if (this.logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            this.logger.logDebug("looking for pending tx for :"
-                    + transactionId);
-        }
+        logger.debug("looking for pending tx for :" + transactionId);
         return (SIPServerTransaction) pendingTransactions.get(transactionId);
-
     }
 
     /**
@@ -1370,9 +1313,7 @@ public abstract class SIPTransactionStack implements
             if (mergedTransaction != null
                     && !mergedTransaction
                             .isMessagePartOfTransaction(sipRequest)) {
-            	if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-            		logger.logDebug("Mathcing merged transaction for merge id " + mergeId + " with "+ mergedTransaction);
-            	}
+        		logger.debug("Mathcing merged transaction for merge id " + mergeId + " with "+ mergedTransaction);
                 return true;
             }else {
                 /*
@@ -1383,9 +1324,7 @@ public abstract class SIPTransactionStack implements
                         .get(mergeId);
                 if (serverDialog != null && serverDialog.firstTransactionIsServerTransaction
                         && serverDialog.getState() == DialogState.CONFIRMED) {
-                	if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-                		logger.logDebug("Mathcing merged dialog for merge id " + mergeId + " with "+ serverDialog);
-                	}
+            		logger.debug("Mathcing merged dialog for merge id " + mergeId + " with "+ serverDialog);
                     return true;
                 }
             }
@@ -1402,10 +1341,7 @@ public abstract class SIPTransactionStack implements
      *            -- pending transaction to remove.
      */
     public void removePendingTransaction(SIPServerTransaction tr) {
-        if (this.logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            this.logger.logDebug("removePendingTx: "
-                    + tr.getTransactionId());
-        }
+        logger.debug("removePendingTx: " + tr.getTransactionId());
         this.pendingTransactions.remove(tr.getTransactionId());
 
     }
@@ -1418,9 +1354,7 @@ public abstract class SIPTransactionStack implements
      *
      */
     public void removeFromMergeTable(SIPServerTransaction tr) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("Removing tx from merge table ");
-        }
+        logger.debug("Removing tx from merge table ");
         // http://java.net/jira/browse/JSIP-429
         // get the merge id from the tx instead of the request to avoid reparsing on aggressive cleanup
         String key = tr.getMergeId();        
@@ -1486,19 +1420,12 @@ public abstract class SIPTransactionStack implements
         	try {	
 	            if(!sipMessageValve.processRequest(
 	                    requestReceived, requestMessageChannel)) {
-	                if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                    logger.logDebug(
-	                            "Request dropped by the SIP message valve. Request = " + requestReceived);
-	                }
+                    logger.debug("Request dropped by the SIP message valve. Request = " + requestReceived);
 	                return null;
 	            }
         	} catch(Exception e) {
-        		if(logger.isLoggingEnabled(LogWriter.TRACE_ERROR)) {
-                    logger.logError(
-                            "An issue happening the valve on request " + 
-                            		requestReceived + 
-                            		" thus the message will not be processed further", e);
-                }
+                logger.error("An issue happening the valve on request " + requestReceived
+            		+ " thus the message will not be processed further", e);
         		return null;
         	}
         }
@@ -1559,12 +1486,10 @@ public abstract class SIPTransactionStack implements
 
         // Set ths transaction's encapsulated request
         // interface from the superclass
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("newSIPServerRequest( "
-                    + requestReceived.getMethod() + ":"
-                    + requestReceived.getTopmostVia().getBranch() + "):"
-                    + currentTransaction);
-        }
+        logger.debug("newSIPServerRequest( "
+            + requestReceived.getMethod() + ":"
+            + requestReceived.getTopmostVia().getBranch() + "):"
+            + currentTransaction);
 
         if (currentTransaction != null)
             currentTransaction.setRequestInterface(sipMessageFactory
@@ -1588,8 +1513,7 @@ public abstract class SIPTransactionStack implements
                     currentTransaction.getMessageChannel().sendMessage(trying);
                 }
             } catch (Exception ex) {
-                if (logger.isLoggingEnabled())
-                    logger.logError("Exception occured sending TRYING");
+                logger.error("Exception occured sending TRYING");
             }
             return null;
         } else {
@@ -1624,19 +1548,12 @@ public abstract class SIPTransactionStack implements
         	try {
 	            if(!sipMessageValve.processResponse(
 	                    responseReceived, responseMessageChannel)) {
-	                if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-	                    logger.logDebug(
-	                            "Response dropped by the SIP message valve. Response = " + responseReceived);
-	                }
+                    logger.debug("Response dropped by the SIP message valve. Response = " + responseReceived);
 	                return null;
 	            }
         	} catch(Exception e) {
-        		if(logger.isLoggingEnabled(LogWriter.TRACE_ERROR)) {
-                    logger.logError(
-                            "An issue happening the valve on response " + 
-                            		responseReceived + 
-                            		" thus the message will not be processed further", e);
-                }
+                logger.error("An issue happening the valve on response "
+        			+ responseReceived + " thus the message will not be processed further", e);
         		return null;
         	}
         }
@@ -1678,15 +1595,12 @@ public abstract class SIPTransactionStack implements
                 // JvB: Need to log before passing the response to the client
                 // app, it
                 // gets modified!
-                if (this.logger.isLoggingEnabled(StackLogger.TRACE_INFO)) {
-                    responseMessageChannel.logResponse(responseReceived, System
-                            .currentTimeMillis(), "before processing");
-                }
+                responseMessageChannel.logResponse(responseReceived, System
+                    .currentTimeMillis(), "before processing");
 
                 // Pass the message directly to the TU
                 return sipMessageFactory.newSIPServerResponse(responseReceived,
                         responseMessageChannel);
-
             }
         }
 
@@ -1694,10 +1608,8 @@ public abstract class SIPTransactionStack implements
         boolean acquired = currentTransaction.acquireSem();
         // Set ths transaction's encapsulated response interface
         // from the superclass
-        if (this.logger.isLoggingEnabled(StackLogger.TRACE_INFO)) {
-            currentTransaction.getMessageChannel().logResponse(responseReceived, System
-                    .currentTimeMillis(), "before processing");
-        }
+        currentTransaction.getMessageChannel().logResponse(responseReceived,
+    		System.currentTimeMillis(), "before processing");
 
         if (acquired) {
             ServerResponseInterface sri = sipMessageFactory
@@ -1705,16 +1617,12 @@ public abstract class SIPTransactionStack implements
             if (sri != null) {
                 currentTransaction.setResponseInterface(sri);
             } else {
-                if (this.logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                    this.logger
-                            .logDebug("returning null - serverResponseInterface is null!");
-                }
+                logger.debug("returning null - serverResponseInterface is null!");
                 currentTransaction.releaseSem();
                 return null;
             }
         } else {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                this.logger.logDebug("Could not aquire semaphore !!");
+            logger.debug("Could not aquire semaphore !!");
         }
 
         if (acquired)
@@ -1819,10 +1727,8 @@ public abstract class SIPTransactionStack implements
      *            -- client transaction to add to the set.
      */
     public void addTransaction(SIPClientTransaction clientTransaction) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("added transaction " + clientTransaction);
+        logger.debug("added transaction " + clientTransaction);
         addTransactionHash(clientTransaction);
-
     }
 
     /**
@@ -1830,17 +1736,12 @@ public abstract class SIPTransactionStack implements
      * structures which the stack keeps around. When the tx
      */
     public void removeTransaction(SIPTransaction sipTransaction) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("removeTransaction: Removing Transaction = "
-                    + sipTransaction.getTransactionId() + " transaction = "
-                    + sipTransaction);
-        }
+        logger.debug("removeTransaction: Removing Transaction = "
+                + sipTransaction.getTransactionId() + " transaction = "
+                + sipTransaction);
         Object removed = null;
         try {
         	if (sipTransaction instanceof SIPServerTransaction) {
-        		if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-        			logger.logStackTrace();
-        		}
         		String key = sipTransaction.getTransactionId();
         		removed = serverTransactionTable.remove(key);
         		String method = sipTransaction.getMethod();
@@ -1867,22 +1768,13 @@ public abstract class SIPTransactionStack implements
 
         		String key = sipTransaction.getTransactionId();
         		removed = clientTransactionTable.remove(key);
-
-        		if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-        			logger.logDebug("REMOVED client tx " + removed + " KEY = "
-        					+ key);
-
-
-        		}
+    			logger.debug("REMOVED client tx " + removed + " KEY = " + key);
         		if ( removed != null ) {
         			SIPClientTransaction clientTx = (SIPClientTransaction)removed;
         			final String forkId = clientTx.getForkId();
         			if (forkId != null && clientTx.isInviteTransaction()
         					&& this.maxForkTime != 0) {
-        				if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-        	            	logger.logDebug(
-        	                        "Scheduling to remove forked client transaction : forkId = " + forkId + " in "  + this.maxForkTime + " seconds");
-        	        	}
+    	            	logger.debug("Scheduling to remove forked client transaction : forkId = " + forkId + " in "  + this.maxForkTime + " seconds");
         				this.timer.schedule(new RemoveForkedTransactionTimerTask(
         						forkId), this.maxForkTime * 1000);
         				clientTx.stopExpiresTimer();
@@ -1906,21 +1798,20 @@ public abstract class SIPTransactionStack implements
         	if(removed != null) {
             	((SIPTransaction)removed).cancelMaxTxLifeTimeTimer();
             }
-        	if ( logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-        		logger.logDebug(String.format("removeTransaction: Table size : " +
-        				" clientTransactionTable %d " +
-        				" serverTransactionTable %d " +
-        				" mergetTable %d " +
-        				" terminatedServerTransactionsPendingAck %d  " +
-        				" forkedClientTransactionTable %d " +
-        				" pendingTransactions %d " , 
-        				clientTransactionTable.size(),
-        				serverTransactionTable.size(),
-        				mergeTable.size(),
-        				terminatedServerTransactionsPendingAck.size(),
-        				forkedClientTransactionTable.size(),
-        				pendingTransactions.size()
-        		));
+    		logger.debug(String.format("removeTransaction: Table size : " +
+    				" clientTransactionTable %d " +
+    				" serverTransactionTable %d " +
+    				" mergetTable %d " +
+    				" terminatedServerTransactionsPendingAck %d  " +
+    				" forkedClientTransactionTable %d " +
+    				" pendingTransactions %d " , 
+    				clientTransactionTable.size(),
+    				serverTransactionTable.size(),
+    				mergeTable.size(),
+    				terminatedServerTransactionsPendingAck.size(),
+    				forkedClientTransactionTable.size(),
+    				pendingTransactions.size()
+    		));
         }
     }
 
@@ -1934,12 +1825,9 @@ public abstract class SIPTransactionStack implements
      */
     public void addTransaction(SIPServerTransaction serverTransaction)
             throws IOException {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("added transaction " + serverTransaction);
+        logger.debug("added transaction " + serverTransaction);
         serverTransaction.map();
-
         addTransactionHash(serverTransaction);
-
     }
 
     /**
@@ -1959,12 +1847,7 @@ public abstract class SIPTransactionStack implements
                         }
 
                     } catch (Exception ex) {
-                        if (logger.isLoggingEnabled()) {
-                            logger.logError(
-                                    "Exception occured while waiting for room",
-                                    ex);
-                        }
-
+                        logger.error("Exception occured while waiting for room", ex);
                     }
                 }
             } else {
@@ -1973,18 +1856,10 @@ public abstract class SIPTransactionStack implements
             String key = sipRequest.getTransactionId();
             existingTx = clientTransactionTable.putIfAbsent(key,
                     (SIPClientTransaction) sipTransaction);
-            
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger
-                        .logDebug(" putTransactionHash : " + " key = " + key);
-            }
+                logger.debug(" putTransactionHash : " + " key = " + key);
         } else {
             String key = sipRequest.getTransactionId();
-
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger
-                        .logDebug(" putTransactionHash : " + " key = " + key);
-            }
+            logger.debug(" putTransactionHash : " + " key = " + key);
             existingTx = serverTransactionTable.putIfAbsent(key,
                     (SIPServerTransaction) sipTransaction);
 
@@ -2023,18 +1898,13 @@ public abstract class SIPTransactionStack implements
         Object removed = null;
         if (sipTransaction instanceof SIPClientTransaction) {
             String key = sipTransaction.getTransactionId();
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logStackTrace();
-                logger.logDebug("removing client Tx : " + key);
-            }
+            logger.debug("removing client Tx : " + key);
             removed = clientTransactionTable.remove(key);
 
         } else if (sipTransaction instanceof SIPServerTransaction) {
             String key = sipTransaction.getTransactionId();
             removed = serverTransactionTable.remove(key);
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("removing server Tx : " + key);
-            }
+            logger.debug("removing server Tx : " + key);
         }
     	// http://java.net/jira/browse/JSIP-420
         if(removed != null) {
@@ -2148,11 +2018,8 @@ public abstract class SIPTransactionStack implements
      * deciding whether to create a transaction or not.
      */
     public void putPendingTransaction(SIPServerTransaction tr) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("putPendingTransaction: " + tr);
-
+        logger.debug("putPendingTransaction: " + tr);
         this.pendingTransactions.put(tr.getTransactionId(), tr);
-
     }
 
     /**
@@ -2170,29 +2037,6 @@ public abstract class SIPTransactionStack implements
     }
 
     /**
-     * Return true if logging is enabled for this stack.
-     * Deprecated. Use StackLogger.isLoggingEnabled instead
-     *
-     * @return true if logging is enabled for this stack instance.
-     */
-    @Deprecated
-    public boolean isLoggingEnabled() {
-        return logger == null ? false : logger
-                .isLoggingEnabled();
-    }
-
-    /**
-     * Deprecated. Use StackLogger.isLoggingEnabled instead
-     * @param level
-     * @return
-     */
-    @Deprecated
-    public boolean isLoggingEnabled( int level ) {
-        return logger == null ? false
-                : logger.isLoggingEnabled( level );
-    }
-
-    /**
      * Get the logger. This method should be deprected.
      * Use static logger = CommonLogger.getLogger() instead
      *
@@ -2200,7 +2044,7 @@ public abstract class SIPTransactionStack implements
      *         instance.
      */
     @Deprecated
-    public StackLogger getStackLogger() {
+    public Logger getStackLogger() {
         return logger;
     }
 
@@ -2522,12 +2366,10 @@ public abstract class SIPTransactionStack implements
                     newChannel = nextProcessor
                             .createMessageChannel(targetHostPort);
                 } catch (UnknownHostException ex) {
-                    if (logger.isLoggingEnabled())
-                        logger.logException(ex);
+                    logger.error("UnknownHostException", ex);
                     throw ex;
                 } catch (IOException e) {
-                    if (logger.isLoggingEnabled())
-                        logger.logException(e);
+                    logger.error("IOException", e);
                     // Ignore channel creation error -
                     // try next processor
                 }
@@ -2535,20 +2377,18 @@ public abstract class SIPTransactionStack implements
         }
 
         if(newChannel == null) {
-            if(logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("newChanne is null, messageProcessors.size = " + messageProcessors.size());
-                processorIterator = messageProcessors.iterator();
-                while (processorIterator.hasNext() && newChannel == null) {
-                    nextProcessor = (MessageProcessor) processorIterator.next();
-                    logger.logDebug("nextProcessor:" + nextProcessor + "| transport = " +
-                            nextProcessor.getTransport() + " ipAddress=" +
-                            nextProcessor.getIpAddress() + " port=" +
-                            nextProcessor.getPort());
-                }
-                logger.logDebug("More info on newChannel=null");
-                logger.logDebug("nextHop=" + nextHop + " sourceIp=" + sourceIpAddress +
-                        " sourcePort=" + sourcePort + " targetHostPort=" + targetHostPort);
+            logger.debug("newChanne is null, messageProcessors.size = " + messageProcessors.size());
+            processorIterator = messageProcessors.iterator();
+            while (processorIterator.hasNext() && newChannel == null) {
+                nextProcessor = (MessageProcessor) processorIterator.next();
+                logger.debug("nextProcessor:" + nextProcessor + "| transport = " +
+                    nextProcessor.getTransport() + " ipAddress=" +
+                    nextProcessor.getIpAddress() + " port=" +
+                    nextProcessor.getPort());
             }
+            logger.debug("More info on newChannel=null");
+            logger.debug("nextHop=" + nextHop + " sourceIp=" + sourceIpAddress +
+                " sourcePort=" + sourcePort + " targetHostPort=" + targetHostPort);
         }
         // Return the newly-created channel
         return newChannel;
@@ -2564,10 +2404,8 @@ public abstract class SIPTransactionStack implements
      *
      */
     public boolean isEventForked(String ename) {
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("isEventForked: " + ename + " returning "
-                    + this.forkedEvents.contains(ename));
-        }
+        logger.debug("isEventForked: " + ename + " returning "
+            + this.forkedEvents.contains(ename));
         return this.forkedEvents.contains(ename);
     }
 
@@ -2700,9 +2538,8 @@ public abstract class SIPTransactionStack implements
 
                         // Kill it
                         itDialog.setState(SIPDialog.TERMINATED_STATE);
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                            logger.logDebug("auditDialogs: leaked "
-                                    + dialogReport);
+                        logger.debug("auditDialogs: leaked "
+                            + dialogReport);
                     }
                 }
             }
@@ -2769,9 +2606,8 @@ public abstract class SIPTransactionStack implements
 
                         // Kill it
                         removeTransaction(sipTransaction);
-                        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                            logger.logDebug("auditTransactions: leaked "
-                                    + transactionReport);
+                        logger.debug("auditTransactions: leaked "
+                            + transactionReport);
                     }
                 }
             }
@@ -2887,8 +2723,7 @@ public abstract class SIPTransactionStack implements
             dialogId.append(fromTag);
         }
         String did = dialogId.toString().toLowerCase();
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("Looking for dialog " + did);
+        logger.debug("Looking for dialog " + did);
         /*
          * Check if we can find this dialog in our dialog table.
          */
@@ -3025,13 +2860,10 @@ public abstract class SIPTransactionStack implements
             SIPClientTransaction clientTransaction) {
         String forkId = ((SIPRequest)clientTransaction.getRequest()).getForkId();
         clientTransaction.setForkId(forkId);
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-        	logger.logStackTrace();
-            logger.logDebug(
-                    "Adding forked client transaction : " + clientTransaction + " branch=" + clientTransaction.getBranch() + 
-                    " forkId = " + forkId + "  sipDialog = " + clientTransaction.getDefaultDialog() + 
-                    " sipDialogId= " + clientTransaction.getDefaultDialog().getDialogId());
-    	}
+        logger.debug(
+            "Adding forked client transaction : " + clientTransaction + " branch=" + clientTransaction.getBranch() + 
+            " forkId = " + forkId + "  sipDialog = " + clientTransaction.getDefaultDialog() + 
+            " sipDialogId= " + clientTransaction.getDefaultDialog().getDialogId());
 
         this.forkedClientTransactionTable.put(forkId, clientTransaction);
     }
@@ -3218,9 +3050,7 @@ public abstract class SIPTransactionStack implements
 			throw new IllegalArgumentException("The Stack Thread Priority shouldn't be lower than Thread.MIN_PRIORITY");
 		if(threadPriority > Thread.MAX_PRIORITY)
 			throw new IllegalArgumentException("The Stack Thread Priority shouldn't be higher than Thread.MAX_PRIORITY");
-		if(logger.isLoggingEnabled(StackLogger.TRACE_INFO)) {
-			logger.logInfo("Setting Stack Thread priority to " + threadPriority);
-		}
+		logger.info("Setting Stack Thread priority to " + threadPriority);
 		this.threadPriority = threadPriority;
 	}
 
@@ -3241,15 +3071,10 @@ public abstract class SIPTransactionStack implements
 //
 //        } else 
         if (reliableConnectionKeepAliveTimeout == 0){
-
-            if (logger.isLoggingEnabled(LogWriter.TRACE_INFO)) {
-                logger.logInfo("Default value (840000 ms) will be used for reliableConnectionKeepAliveTimeout stack property");
-            }
+            logger.info("Default value (840000 ms) will be used for reliableConnectionKeepAliveTimeout stack property");
             reliableConnectionKeepAliveTimeout = 840000;
         }
-        if (logger.isLoggingEnabled(LogWriter.TRACE_INFO)) {
-            logger.logInfo("value " + reliableConnectionKeepAliveTimeout + " will be used for reliableConnectionKeepAliveTimeout stack property");
-        }
+        logger.info("value " + reliableConnectionKeepAliveTimeout + " will be used for reliableConnectionKeepAliveTimeout stack property");
         this.reliableConnectionKeepAliveTimeout = reliableConnectionKeepAliveTimeout;
     }
 
@@ -3284,11 +3109,9 @@ public abstract class SIPTransactionStack implements
             return false;
         }
 
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug("~~~ Trying to find MessageChannel and set new KeepAliveTimeout( myAddress=" + myAddress + ", myPort=" + myPort
-                    + ", transport=" + transport + ", peerAddress=" + peerAddress + ", peerPort=" + peerPort
-                    + ", keepAliveTimeout=" + keepAliveTimeout + "), MessageProcessor=" + processor);
-        }
+        logger.debug("~~~ Trying to find MessageChannel and set new KeepAliveTimeout( myAddress=" + myAddress + ", myPort=" + myPort
+            + ", transport=" + transport + ", peerAddress=" + peerAddress + ", peerPort=" + peerPort
+            + ", keepAliveTimeout=" + keepAliveTimeout + "), MessageProcessor=" + processor);
         return  ((ConnectionOrientedMessageProcessor)processor).setKeepAliveTimeout(peerAddress, peerPort, keepAliveTimeout);
 
     }
@@ -3308,11 +3131,9 @@ public abstract class SIPTransactionStack implements
         MessageProcessor processor = findMessageProcessor(myAddress, myPort, transport);
 
         if (processor != null && processor instanceof ConnectionOrientedMessageProcessor) {
-            if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("~~~ closeReliableConnection( myAddress=" + myAddress + ", myPort=" + myPort
-                        + ", transport=" + transport + ", peerAddress=" + peerAddress + ", peerPort=" + peerPort
-                        + "), MessageProcessor=" + processor);
-            }
+            logger.debug("~~~ closeReliableConnection( myAddress=" + myAddress + ", myPort=" + myPort
+                + ", transport=" + transport + ", peerAddress=" + peerAddress + ", peerPort=" + peerPort
+                + "), MessageProcessor=" + processor);
             return ((ConnectionOrientedMessageProcessor)processor).closeReliableConnection(peerAddress, peerPort);
         }
         return false;

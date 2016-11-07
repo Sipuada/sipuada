@@ -26,38 +26,33 @@
 /*******************************************************************************
 * Product of NIST/ITL Advanced Networking Technologies Division (ANTD)         *
 *******************************************************************************/
-package gov.nist.core;
+package android.gov.nist.core;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *   A class to do debug printfs
  */
 public class Debug {
 
+	private static final Logger logger = LoggerFactory.getLogger(Debug.class);
     public static  boolean debug = false;
     public static  boolean parserDebug = false;
-    
-    static StackLogger stackLogger;
-    
-    public static void setStackLogger(StackLogger stackLogger) {
-        Debug.stackLogger = stackLogger;
-    }
 
     public static void println(String s) {
-        if ((parserDebug || debug )&& stackLogger != null )
-            if ( stackLogger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                stackLogger.logDebug(s + "\n");
+        if ((parserDebug || debug ))
+        	logger.debug(s + "\n");
     }
     public static void printStackTrace(Exception ex) {
-        if ((parserDebug || debug ) && stackLogger != null) {
-            stackLogger.logError("Stack Trace",ex);
+        if ((parserDebug || debug )) {
+        	logger.error("Stack Trace", ex);
         }
     }
 
     public static void logError(String message, Exception ex) {
-      if ((parserDebug || debug) &&  stackLogger != null ) {
-          if ( stackLogger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-              stackLogger.logError(message,ex);
+      if ((parserDebug || debug)) {
+    	  logger.error(message, ex);
       }
     }
 

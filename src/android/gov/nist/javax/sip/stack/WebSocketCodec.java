@@ -28,9 +28,10 @@ package android.gov.nist.javax.sip.stack;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 
-import android.gov.nist.core.CommonLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.StackLogger;
 
 /**
  * 
@@ -42,9 +43,8 @@ import android.gov.nist.core.StackLogger;
  */
 public class WebSocketCodec {
 
-	private static StackLogger logger = CommonLogger
-			.getLogger(WebSocketCodec.class);
-	
+	private static Logger logger = LoggerFactory.getLogger(WebSocketCodec.class);
+
 	private static final byte OPCODE_CONT = 0x0;
 	private static final byte OPCODE_TEXT = 0x1;
 	private static final byte OPCODE_BINARY = 0x2;
@@ -102,9 +102,7 @@ public class WebSocketCodec {
 		
 		// All TCP slow-start algorithms will be cut off right here without further analysis
 		if(writeIndex<4) {
-			if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-				logger.logDebug("Abort decode. Write index is at " + writeIndex);
-			}
+			logger.debug("Abort decode. Write index is at " + writeIndex);
 			return null;
 		}
 
@@ -113,11 +111,8 @@ public class WebSocketCodec {
 		frameRsv = (b & 0x70) >> 4;
 		frameOpcode = b & 0x0F;
 
-		if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-			logger.logDebug("Decoding WebSocket Frame opCode=" + frameOpcode);
-		}
-		
-		
+		logger.debug("Decoding WebSocket Frame opCode=" + frameOpcode);
+
 		if(frameOpcode == 8) {
 			//https://code.google.com/p/chromium/issues/detail?id=388243#c15
 			this.closeOpcodeReceived = true;
@@ -167,9 +162,7 @@ public class WebSocketCodec {
 				protocolViolation("Negative payload size: " + framePayloadLength);
 			}
 
-			if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-				logger.logDebug("Decoding WebSocket Frame length=" + framePayloadLength);
-			}
+			logger.debug("Decoding WebSocket Frame length=" + framePayloadLength);
 
 			// Analyze the mask
 			if (frameMasked) {
@@ -188,9 +181,7 @@ public class WebSocketCodec {
 
 		// Check if we have enough data at all
 		if(writeIndex < totalPacketLength) {
-			if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-				logger.logDebug("Abort decode. Write index is at " + writeIndex + " and totalPacketLength is " + totalPacketLength);
-			}
+			logger.debug("Abort decode. Write index is at " + writeIndex + " and totalPacketLength is " + totalPacketLength);
 			return null; // wait for more data
 		}
 
@@ -209,10 +200,8 @@ public class WebSocketCodec {
 		}
 		writeIndex -= totalPacketLength;
 		
-		if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-			logger.logDebug("writeIndex = " + writeIndex + " " + totalPacketLength);
-		}
-		
+		logger.debug("writeIndex = " + writeIndex + " " + totalPacketLength);
+
 		// All done, we are ready to be called again
 		return plainTextBytes;
 	}
@@ -227,9 +216,7 @@ public class WebSocketCodec {
 
 		int length = msg.length;
 
-		if(logger.isLoggingEnabled(LogLevels.TRACE_DEBUG)) {
-			logger.logDebug("Encoding WebSocket Frame opCode=" + opcode + " length=" + length);
-		}
+		logger.debug("Encoding WebSocket Frame opCode=" + opcode + " length=" + length);
 
 		int b0 = 0;
 		if (fin) {

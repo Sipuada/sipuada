@@ -25,17 +25,16 @@
  */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.Host;
-import android.gov.nist.core.HostPort;
-import android.gov.nist.core.LogLevels;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.Host;
+import android.gov.nist.core.HostPort;
 
 /**
  * @author jean.deruelle@gmail.com
@@ -43,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public abstract class ConnectionOrientedMessageProcessor extends MessageProcessor {
 
-	private static StackLogger logger = CommonLogger.getLogger(ConnectionOrientedMessageProcessor.class);
+	private static Logger logger = LoggerFactory.getLogger(ConnectionOrientedMessageProcessor.class);
 	
 	protected int nConnections;
 
@@ -79,16 +78,13 @@ public abstract class ConnectionOrientedMessageProcessor extends MessageProcesso
     protected synchronized void remove(ConnectionOrientedMessageChannel messageChannel) {
 
         String key = messageChannel.getKey();
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            logger.logDebug(Thread.currentThread() + " removing " + key + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
-        }
+        logger.debug(Thread.currentThread() + " removing " + key + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
 
         /** May have been removed already */
         if (messageChannels.get(key) == messageChannel)
             this.messageChannels.remove(key);
         
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug(Thread.currentThread() + " Removing incoming channel " + key + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
+        logger.debug(Thread.currentThread() + " Removing incoming channel " + key + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
         incomingMessageChannels.remove(key);
     }
 	
@@ -96,12 +92,10 @@ public abstract class ConnectionOrientedMessageProcessor extends MessageProcesso
         String key = messageChannel.getKey();
         ConnectionOrientedMessageChannel currentChannel = messageChannels.get(key);
         if (currentChannel != null) {
-            if (logger.isLoggingEnabled(LogLevels.TRACE_DEBUG))
-                logger.logDebug("Closing " + key);
+            logger.debug("Closing " + key);
             currentChannel.close();
         }
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug("Caching " + key);
+        logger.debug("Caching " + key);
         this.messageChannels.put(key, messageChannel);
     }
     
@@ -131,8 +125,7 @@ public abstract class ConnectionOrientedMessageProcessor extends MessageProcesso
 
             if (foundMessageChannel != null) {
                 foundMessageChannel.close();
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                    logger.logDebug(Thread.currentThread() + " Removing channel " + messageChannelKey + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
+                logger.debug(Thread.currentThread() + " Removing channel " + messageChannelKey + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
                 incomingMessageChannels.remove(messageChannelKey);
                 messageChannels.remove(messageChannelKey);
                 return true;
@@ -142,8 +135,7 @@ public abstract class ConnectionOrientedMessageProcessor extends MessageProcesso
 
             if (foundMessageChannel != null) {
                 foundMessageChannel.close();
-                if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-                    logger.logDebug(Thread.currentThread() + " Removing incoming channel " + messageChannelKey + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
+                logger.debug(Thread.currentThread() + " Removing incoming channel " + messageChannelKey + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
                 incomingMessageChannels.remove(messageChannelKey);
                 messageChannels.remove(messageChannelKey);
                 return true;
@@ -163,8 +155,7 @@ public abstract class ConnectionOrientedMessageProcessor extends MessageProcesso
         String messageChannelKey = MessageChannel.getKey(hostPort, "TCP");
                 
         ConnectionOrientedMessageChannel foundMessageChannel = messageChannels.get(messageChannelKey);
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug(Thread.currentThread() + " checking channel with key " + messageChannelKey + " : " + foundMessageChannel + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
+        logger.debug(Thread.currentThread() + " checking channel with key " + messageChannelKey + " : " + foundMessageChannel + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
         
         if (foundMessageChannel != null) {
             foundMessageChannel.setKeepAliveTimeout(keepAliveTimeout);
@@ -173,8 +164,7 @@ public abstract class ConnectionOrientedMessageProcessor extends MessageProcesso
         
         foundMessageChannel = incomingMessageChannels.get(messageChannelKey);
         
-        if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG))
-            logger.logDebug(Thread.currentThread() + " checking incoming channel with key " + messageChannelKey + " : " + foundMessageChannel + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
+        logger.debug(Thread.currentThread() + " checking incoming channel with key " + messageChannelKey + " : " + foundMessageChannel + " for processor " + getIpAddress()+ ":" + getPort() + "/" + getTransport());
         
         if (foundMessageChannel != null) {
             foundMessageChannel.setKeepAliveTimeout(keepAliveTimeout);

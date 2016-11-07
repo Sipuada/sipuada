@@ -42,8 +42,8 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.eventbus.EventBus;
 
-import android.gov.nist.gnjvx.sip.Utils;
-import android.gov.nist.gnjvx.sip.address.SipUri;
+import android.gov.nist.javax.sip.Utils;
+import android.gov.nist.javax.sip.address.SipUri;
 import android.javax.sip.ClientTransaction;
 import android.javax.sip.Dialog;
 import android.javax.sip.DialogState;
@@ -181,9 +181,13 @@ public class SipUserAgentClient {
 				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 				try {
 					contactHeader.setExpires(expires);
-				} catch (InvalidArgumentException ignore) {}
+				} catch (InvalidArgumentException ignore) {
+					ignore.printStackTrace();
+				}
 				contactHeaders.add(contactHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
 				registerRequestUri, callIdHeader, cseq, contactHeaders
@@ -215,11 +219,15 @@ public class SipUserAgentClient {
 			try {
 				expiresHeader = headerMaker.createExpiresHeader(0);
 				additionalHeaders.add(expiresHeader);
-			} catch (InvalidArgumentException ignore) {}
+			} catch (InvalidArgumentException ignore) {
+				ignore.printStackTrace();
+			}
 			ContactHeader contactHeader = headerMaker.createContactHeader();
 			try {
 				contactHeader.setExpires(0);
-			} catch (InvalidArgumentException ignore) {}
+			} catch (InvalidArgumentException ignore) {
+				ignore.printStackTrace();
+			}
 			additionalHeaders.add(contactHeader);
 		}
 		for (String address : expiredAddresses) {
@@ -232,9 +240,13 @@ public class SipUserAgentClient {
 				ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 				try {
 					contactHeader.setExpires(0);
-				} catch (InvalidArgumentException ignore) {}
+				} catch (InvalidArgumentException ignore) {
+					ignore.printStackTrace();
+				}
 				additionalHeaders.add(contactHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		return sendRequest(RequestMethod.REGISTER, username, primaryHost,
 				registerRequestUri, callIdHeader, cseq, additionalHeaders
@@ -270,23 +282,31 @@ public class SipUserAgentClient {
 		try {
 			contactUri.setTransportParam(transport.toUpperCase());
 			contactUri.setParameter("ob", null);
-		} catch (ParseException ignore) {}
+		} catch (ParseException ignore) {
+			ignore.printStackTrace();
+		}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 //		try {
 //			contactHeader.setExpires(60);
-//		} catch (ParseException ignore) {}
+//		} catch (ParseException ignore) {
+//			ignore.printStackTrace();
+//		}
 		additionalHeaders.add(contactHeader);
 //		try {
 //			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
 //			additionalHeaders.add(expiresHeader);
-//		} catch (InvalidArgumentException ignore) {}
+//		} catch (InvalidArgumentException ignore) {
+//			ignore.printStackTrace();
+//		}
 
 		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeaders.add(allowHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		try {
 			SupportedHeader supportedHeader = headerMaker
@@ -294,7 +314,9 @@ public class SipUserAgentClient {
 			additionalHeaders.add(supportedHeader);
 			supportedHeader = headerMaker.createSupportedHeader("100rel");
 			additionalHeaders.add(supportedHeader);
-		} catch (ParseException ignore) {}
+		} catch (ParseException ignore) {
+			ignore.printStackTrace();
+		}
 		return sendRequest(RequestMethod.INVITE, remoteUser, remoteHost, requestUri,
 				callIdHeader, cseq, additionalHeaders.toArray(new Header[additionalHeaders.size()]));
 	}
@@ -355,22 +377,30 @@ public class SipUserAgentClient {
 		try {
 			contactUri.setTransportParam(transport.toUpperCase());
 			contactUri.setParameter("ob", null);
-		} catch (ParseException ignore) {}
+		} catch (ParseException ignore) {
+			ignore.printStackTrace();
+		}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
 //		try {
 //			contactHeader.setExpires(60);
-//		} catch (ParseException ignore) {}
+//		} catch (ParseException ignore) {
+//			ignore.printStackTrace();
+//		}
 		additionalHeadersList.add(contactHeader);
 		try {
 			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
 			additionalHeadersList.add(expiresHeader);
-		} catch (InvalidArgumentException ignore) {}
+		} catch (InvalidArgumentException ignore) {
+			ignore.printStackTrace();
+		}
 		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
 				additionalHeadersList.add(allowHeader);
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		return sendRequest(RequestMethod.MESSAGE, remoteUser, remoteHost, requestUri, callIdHeader, cseq, content,
 			contentTypeHeader, additionalHeadersList.toArray(new Header[additionalHeadersList.size()]));
@@ -429,7 +459,9 @@ public class SipUserAgentClient {
 			try {
 				additionalHeaders.add(headerMaker
 						.createHeader(SipUserAgent.X_FAILURE_REASON_HEADER, reason));
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
 		return sendRequest(RequestMethod.BYE, dialog,
 				additionalHeaders.toArray(new Header[additionalHeaders.size()]));
@@ -482,7 +514,10 @@ public class SipUserAgentClient {
 					cSeqHeader.getMethod());
 			additionalHeaders.add(rAckHeader);
 		} catch (InvalidArgumentException ignore) {
-		} catch (ParseException ignore) {}
+			ignore.printStackTrace();
+		} catch (ParseException ignore) {
+			ignore.printStackTrace();
+		}
 		URI addresseeUri = dialog.getRemoteParty().getURI();
 		URI requestUri = (URI) addresseeUri.clone();
 		CallIdHeader callIdHeader = dialog.getCallId();
@@ -947,7 +982,9 @@ public class SipUserAgentClient {
 			if (request != null) {
 				try {
 					method = RequestMethod.valueOf(request.getMethod());
-				} catch (IllegalArgumentException ignore) {}
+				} catch (IllegalArgumentException ignore) {
+					ignore.printStackTrace();
+				}
 			}
 			Response response = responseEvent.getResponse();
 			int statusCode = response.getStatusCode();
@@ -1361,9 +1398,11 @@ public class SipUserAgentClient {
 						.createContentEncodingHeader(overlappingEncodings.toString());
 				request.setContentEncoding(newContentEncodingHeader);
 				overlappingEncodingsFound = true;
-			} catch (ParseException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
 		}
-		
+
 		boolean shouldBypassContentTypesCheck = false;
 		Map<String, String> typeSubtypeToQValue = new HashMap<>();
 		Map<String, Set<String>> typeToSubTypes = new HashMap<>();
@@ -1430,7 +1469,9 @@ public class SipUserAgentClient {
 								.get(typeSubtype);
 						try {
 							contentTypeHeader.setParameter("q", qValue);
-						} catch (ParseException ignore) {}
+						} catch (ParseException ignore) {
+							ignore.printStackTrace();
+						}
 					}
 					overlappingContentTypes.add(contentTypeHeader);
 				}
@@ -1510,7 +1551,9 @@ public class SipUserAgentClient {
 			if (allowedOptionTags.length() > 0) {
 				try {
 					requireHeader.setOptionTag(allowedOptionTags.toString());
-				} catch (ParseException ignore) {}
+				} catch (ParseException ignore) {
+					ignore.printStackTrace();
+				}
 				request.setHeader(requireHeader);
 			}
 			else {
@@ -1531,7 +1574,9 @@ public class SipUserAgentClient {
 			if (allowedOptionTags.length() > 0) {
 				try {
 					proxyRequireHeader.setOptionTag(allowedOptionTags.toString());
-				} catch (ParseException ignore) {}
+				} catch (ParseException ignore) {
+					ignore.printStackTrace();
+				}
 				request.setHeader(proxyRequireHeader);
 			}
 			else {
@@ -1697,7 +1742,10 @@ public class SipUserAgentClient {
 					}
 					bus.post(new CallInvitationAccepted(callId, dialog));
 				} catch (InvalidArgumentException ignore) {
-				} catch (SipException ignore) {}
+					ignore.printStackTrace();
+				} catch (SipException ignore) {
+					ignore.printStackTrace();
+				}
 			} else {
 				logger.error("Could not process {} response to {} request: dialog is missing!" +
 					response.getStatusCode(), request.getMethod());
@@ -1903,7 +1951,9 @@ public class SipUserAgentClient {
 			if (viaHeader.getBranch() != null) {
 				try {
 					viaHeader.setBranch(newBranchId);
-				} catch (ParseException ignore) {}
+				} catch (ParseException ignore) {
+					ignore.printStackTrace();
+				}
 			}
 			derived.addHeader(viaHeader);
 		}
@@ -1924,7 +1974,9 @@ public class SipUserAgentClient {
 			if (localCSeq < newCSeq) {
 				localCSeq = newCSeq;
 			}
-		} catch (InvalidArgumentException ignore) {}
+		} catch (InvalidArgumentException ignore) {
+			ignore.printStackTrace();
+		}
 		request.setHeader(cseq);
 	}
 
@@ -2016,8 +2068,12 @@ public class SipUserAgentClient {
 			try {
 				viaHeader.setBranch(newClientTransaction.getBranchId());
 //				viaHeader.setRPort();
-			} catch (ParseException ignore) {}
-//			} catch (InvalidArgumentException ignore) {}
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
+//			} catch (InvalidArgumentException ignore) {
+//				ignore.printStackTrace();
+//			}
 		}
 		newClientTransaction.setApplicationData(attempt);
 		if (dialog != null) {

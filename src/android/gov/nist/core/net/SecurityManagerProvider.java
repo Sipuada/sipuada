@@ -23,7 +23,7 @@
 * .
 *
 */
-package gov.nist.core.net;
+package android.gov.nist.core.net;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.TrustManager;

@@ -26,14 +26,6 @@
 package android.gov.nist.javax.sip.stack;
 
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -41,9 +33,16 @@ import java.nio.channels.SocketChannel;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class NioTlsMessageProcessor extends NioTcpMessageProcessor{
 
-    private static StackLogger logger = CommonLogger.getLogger(NioTlsMessageProcessor.class);
+    private static Logger logger = LoggerFactory.getLogger(NioTlsMessageProcessor.class);
 
     // Create a trust manager that does not validate certificate chains
     TrustManager[] trustAllCerts = new TrustManager[] { 
@@ -52,16 +51,10 @@ public class NioTlsMessageProcessor extends NioTcpMessageProcessor{
           return new X509Certificate[0]; 
         }
         public void checkClientTrusted(X509Certificate[] certs, String authType) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "checkClientTrusted : Not validating certs " + certs + " authType " + authType);
-            }
+            logger.debug("checkClientTrusted : Not validating certs " + certs + " authType " + authType);
         }
         public void checkServerTrusted(X509Certificate[] certs, String authType) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "checkServerTrusted : Not validating certs " + certs + " authType " + authType);
-            }
+            logger.debug("checkServerTrusted : Not validating certs " + certs + " authType " + authType);
         }
     }};
     
@@ -94,9 +87,7 @@ public class NioTlsMessageProcessor extends NioTcpMessageProcessor{
 		if(sipStack.securityManagerProvider.getKeyManagers(false) == null ||
 				sipStack.securityManagerProvider.getTrustManagers(false) == null ||
                 sipStack.securityManagerProvider.getTrustManagers(true) == null) {
-			if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug("TLS initialization failed due to NULL security config");
-            }
+            logger.debug("TLS initialization failed due to NULL security config");
 			return; // The settings 
 		}
 			
@@ -104,17 +95,11 @@ public class NioTlsMessageProcessor extends NioTcpMessageProcessor{
         sslClientCtx = SSLContext.getInstance("TLS");
         
         if(sipStack.getClientAuth() == ClientAuthType.DisabledAll) {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "ClientAuth " + sipStack.getClientAuth()  +  " bypassing all cert validations");
-            }
+            logger.debug("ClientAuth " + sipStack.getClientAuth()  +  " bypassing all cert validations");
         	sslServerCtx.init(sipStack.securityManagerProvider.getKeyManagers(false), trustAllCerts, null);
         	sslClientCtx.init(sipStack.securityManagerProvider.getKeyManagers(true), trustAllCerts, null);
         } else {
-        	if (logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-                logger.logDebug(
-                        "ClientAuth " + sipStack.getClientAuth());
-            }
+            logger.debug("ClientAuth " + sipStack.getClientAuth());
         	 sslServerCtx.init(sipStack.securityManagerProvider.getKeyManagers(false), 
                      sipStack.securityManagerProvider.getTrustManagers(false),
                      null);

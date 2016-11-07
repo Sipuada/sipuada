@@ -25,19 +25,18 @@
 */
 package android.gov.nist.javax.sip.stack;
 
-import android.gov.nist.core.CommonLogger;
-import android.gov.nist.core.Host;
-import android.gov.nist.core.HostPort;
-import android.gov.nist.core.InternalErrorHandler;
-import android.gov.nist.core.LogWriter;
-import android.gov.nist.core.StackLogger;
-import android.gov.nist.javax.sip.ListeningPointImpl;
-import android.gov.nist.javax.sip.header.Via;
-
 import java.io.IOException;
 import java.net.InetAddress;
 import java.text.ParseException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import android.gov.nist.core.Host;
+import android.gov.nist.core.HostPort;
+import android.gov.nist.core.InternalErrorHandler;
+import android.gov.nist.javax.sip.ListeningPointImpl;
+import android.gov.nist.javax.sip.header.Via;
 import android.javax.sip.InvalidArgumentException;
 
 /**
@@ -53,7 +52,7 @@ import android.javax.sip.InvalidArgumentException;
  *
  */
 public abstract class MessageProcessor  {
-	private static StackLogger logger = CommonLogger.getLogger(MessageProcessor.class);
+	private static Logger logger = LoggerFactory.getLogger(MessageProcessor.class);
     /**
      * A string containing the 0.0.0.0 IPv4 ANY address.
      */
@@ -189,21 +188,15 @@ public abstract class MessageProcessor  {
     }
     public ListeningPointImpl getListeningPoint() {
         if ( listeningPoint == null )  {
-            if ( logger.isLoggingEnabled()) {
-                this.logger.logError("getListeningPoint" + this +
-                        " returning null listeningpoint");
-
-            }
+            logger.error("getListeningPoint" + this +
+                " returning null listeningpoint");
         }
         return listeningPoint;
     }
 
     public void setListeningPoint(ListeningPointImpl lp) {
-        if ( logger.isLoggingEnabled(LogWriter.TRACE_DEBUG)) {
-            this.logger.logDebug("setListeningPoint" + this +
-                    " listeningPoint = " + lp);
-
-        }
+        logger.debug("setListeningPoint" + this +
+            " listeningPoint = " + lp);
         if ( lp.getPort() != this.getPort())
             InternalErrorHandler.handleException
             ("lp mismatch with provider",logger);
