@@ -17,20 +17,33 @@
  */
 package org.ice4j.ice.harvest;
 
-import org.ice4j.*;
-import org.ice4j.attribute.*;
-import org.ice4j.ice.*;
-import org.ice4j.message.*;
-import org.ice4j.socket.*;
-import org.ice4j.stack.*;
-import org.ice4j.util.*;
-
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.logging.*;
+import java.io.IOException;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger; // Disambiguation
+
+import org.ice4j.Transport;
+import org.ice4j.TransportAddress;
+import org.ice4j.ice.Agent;
+import org.ice4j.ice.Component;
+import org.ice4j.ice.HostCandidate;
+import org.ice4j.ice.IceMediaStream;
+import org.ice4j.ice.IceProcessingState;
+import org.ice4j.ice.LocalCandidate;
+import org.ice4j.socket.IceSocketWrapper;
+import org.ice4j.socket.IceUdpSocketWrapper;
+import org.ice4j.socket.MultiplexingDatagramSocket;
+import org.ice4j.socket.StunDatagramPacketFilter;
+import org.ice4j.stack.StunStack;
 
 /**
  * A harvester implementation which binds to a single <tt>DatagramSocket</tt>
@@ -67,27 +80,27 @@ public class SinglePortUdpHarvester
      * @param port the UDP port number to use.
      * @return the list of created <tt>SinglePortUdpHarvester</tt>s.
      */
-    public static List<SinglePortUdpHarvester> createHarvesters(int port)
-    {
-        List<SinglePortUdpHarvester> harvesters = new LinkedList<>();
-
-        for (TransportAddress address
-                : AbstractUdpListener.getAllowedAddresses(port))
-        {
-            try
-            {
-                harvesters.add(
-                    new SinglePortUdpHarvester(address));
-            }
-            catch (IOException ioe)
-            {
-                logger.info("Failed to create SinglePortUdpHarvester for "
-                                + "address " + address + ": " + ioe);
-            }
-        }
-
-        return harvesters;
-    }
+//    public static List<SinglePortUdpHarvester> createHarvesters(int port)
+//    {
+//        List<SinglePortUdpHarvester> harvesters = new LinkedList<>();
+//
+//        for (TransportAddress address
+//                : AbstractUdpListener.getAllowedAddresses(port))
+//        {
+//            try
+//            {
+//                harvesters.add(
+//                    new SinglePortUdpHarvester(address));
+//            }
+//            catch (IOException ioe)
+//            {
+//                logger.info("Failed to create SinglePortUdpHarvester for "
+//                                + "address " + address + ": " + ioe);
+//            }
+//        }
+//
+//        return harvesters;
+//    }
 
     /**
      * The map which keeps all currently active <tt>Candidate</tt>s created by

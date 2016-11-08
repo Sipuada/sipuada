@@ -17,20 +17,25 @@
  */
 package org.ice4j.ice.harvest;
 
-import org.ice4j.*;
-import org.ice4j.attribute.*;
-import org.ice4j.ice.*;
-import org.ice4j.message.*;
-import org.ice4j.socket.*;
-import org.ice4j.stack.*;
-import org.ice4j.util.*;
-
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.logging.*;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.SocketException;
+import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import org.ice4j.StackProperties;
+import org.ice4j.TransportAddress;
+import org.ice4j.attribute.Attribute;
+import org.ice4j.attribute.UsernameAttribute;
+import org.ice4j.message.Message;
+import org.ice4j.util.QueueStatistics;
 
 /**
  * A class which holds a {@link DatagramSocket} and runs a thread
@@ -82,56 +87,56 @@ public abstract class AbstractUdpListener
      * @param port the UDP port number.
      * @return the list of allowed transport addresses.
      */
-    public static List<TransportAddress> getAllowedAddresses(int port)
-    {
-        List<TransportAddress> addresses = new LinkedList<>();
-        boolean isIPv6Disabled = StackProperties.getBoolean(
-                StackProperties.DISABLE_IPv6,
-                false);
-        boolean isIPv6LinkLocalDisabled = StackProperties.getBoolean(
-                StackProperties.DISABLE_LINK_LOCAL_ADDRESSES,
-                false);
-
-        try
-        {
-            for (NetworkInterface iface
-                    : Collections.list(NetworkInterface.getNetworkInterfaces()))
-            {
-                if (NetworkUtils.isInterfaceLoopback(iface)
-                        || !NetworkUtils.isInterfaceUp(iface)
-                        || !HostCandidateHarvester.isInterfaceAllowed(iface))
-                {
-                    continue;
-                }
-
-                Enumeration<InetAddress> ifaceAddresses
-                        = iface.getInetAddresses();
-                while (ifaceAddresses.hasMoreElements())
-                {
-                    InetAddress address = ifaceAddresses.nextElement();
-
-                    if (!HostCandidateHarvester.isAddressAllowed(address))
-                        continue;
-
-                    if (isIPv6Disabled && address instanceof Inet6Address)
-                        continue;
-                    if (isIPv6LinkLocalDisabled
-                            && address instanceof Inet6Address
-                            && address.isLinkLocalAddress())
-                        continue;
-
-                    addresses.add(
-                        new TransportAddress(address, port, Transport.UDP));
-                }
-            }
-        }
-        catch (SocketException se)
-        {
-            logger.info("Failed to get network interfaces: " + se);
-        }
-
-        return addresses;
-    }
+//    public static List<TransportAddress> getAllowedAddresses(int port)
+//    {
+//        List<TransportAddress> addresses = new LinkedList<>();
+//        boolean isIPv6Disabled = StackProperties.getBoolean(
+//                StackProperties.DISABLE_IPv6,
+//                false);
+//        boolean isIPv6LinkLocalDisabled = StackProperties.getBoolean(
+//                StackProperties.DISABLE_LINK_LOCAL_ADDRESSES,
+//                false);
+//
+//        try
+//        {
+//            for (NetworkInterface iface
+//                    : Collections.list(NetworkInterface.getNetworkInterfaces()))
+//            {
+//                if (NetworkUtils.isInterfaceLoopback(iface)
+//                        || !NetworkUtils.isInterfaceUp(iface)
+//                        || !HostCandidateHarvester.isInterfaceAllowed(iface))
+//                {
+//                    continue;
+//                }
+//
+//                Enumeration<InetAddress> ifaceAddresses
+//                        = iface.getInetAddresses();
+//                while (ifaceAddresses.hasMoreElements())
+//                {
+//                    InetAddress address = ifaceAddresses.nextElement();
+//
+//                    if (!HostCandidateHarvester.isAddressAllowed(address))
+//                        continue;
+//
+//                    if (isIPv6Disabled && address instanceof Inet6Address)
+//                        continue;
+//                    if (isIPv6LinkLocalDisabled
+//                            && address instanceof Inet6Address
+//                            && address.isLinkLocalAddress())
+//                        continue;
+//
+//                    addresses.add(
+//                        new TransportAddress(address, port, Transport.UDP));
+//                }
+//            }
+//        }
+//        catch (SocketException se)
+//        {
+//            logger.info("Failed to get network interfaces: " + se);
+//        }
+//
+//        return addresses;
+//    }
 
     /**
      * Tries to parse the bytes in <tt>buf</tt> at offset <tt>off</tt> (and

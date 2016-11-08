@@ -125,8 +125,7 @@ public class Agent
      * The candidate harvester that we use to gather candidate on the local
      * machine.
      */
-    private final HostCandidateHarvester hostCandidateHarvester
-                                                = new HostCandidateHarvester();
+    private final HostCandidateHarvester hostCandidateHarvester;
 
     /**
      * A list of additional <tt>CandidateHarvester</tt>s which will be used to
@@ -313,33 +312,40 @@ public class Agent
     }
 
     /**
-     * Creates an empty <tt>Agent</tt> with no streams, and no address.
-     * @param ufragPrefix an optional prefix to the generated local ICE username
-     * fragment.
+     * Creates an empty <tt>Agent</tt> with no streams, and the specified local address.
      */
-    public Agent(String ufragPrefix)
-    {
-        this(Level.INFO, ufragPrefix);
+    public Agent(String localAddress) {
+    	this(Level.INFO, null, localAddress);
     }
 
     /**
-     * Creates an empty <tt>Agent</tt> with no streams, and no address.
-     * @param loggingLevel the logging level to be used by the agent and all of
-     * its components.
+     * Creates an empty <tt>Agent</tt> with no streams, and the specified local address.
+     * @param ufragPrefix an optional prefix to the generated local ICE username
+     * fragment.
      */
-    public Agent(Level loggingLevel)
+    public Agent(String ufragPrefix, String localAddress)
     {
-        this(loggingLevel, null);
+        this(Level.INFO, ufragPrefix, localAddress);
     }
 
     /**
-     * Creates an empty <tt>Agent</tt> with no streams, and no address.
+     * Creates an empty <tt>Agent</tt> with no streams, and the specified local address.
+     * @param loggingLevel the logging level to be used by the agent and all of
+     * its components.
+     */
+    public Agent(Level loggingLevel, String localAddress)
+    {
+        this(loggingLevel, null, localAddress);
+    }
+
+    /**
+     * Creates an empty <tt>Agent</tt> with no streams, and the specified local address.
      * @param loggingLevel the logging level to be used by the agent and all of
      * its components.
      * @param ufragPrefix an optional prefix to the generated local ICE username
      * fragment.
      */
-    public Agent(Level loggingLevel, String ufragPrefix)
+    public Agent(Level loggingLevel, String ufragPrefix, String localAddress)
     {
         logger = new Logger(classLogger, loggingLevel);
         SecureRandom random = new SecureRandom();
@@ -367,6 +373,7 @@ public class Agent
 
         tieBreaker = random.nextLong() & 0x7FFFFFFFFFFFFFFFL;
         nominator = new DefaultNominator(this);
+        hostCandidateHarvester = new HostCandidateHarvester(localAddress);
     }
 
     /**

@@ -54,42 +54,64 @@ public class HostCandidateHarvester
      * Holds the list of allowed interfaces. It's either a non-empty array or
      * null.
      */
-    private static String[] allowedInterfaces;
+    private String[] allowedInterfaces;
 
     /**
      * Holds the list of blocked interfaces. It's either a non-empty array or
      * null.
      */
-    private static String[] blockedInterfaces;
+    private String[] blockedInterfaces;
 
     /**
      * The list of allowed addresses.
      */
-    private static List<InetAddress> allowedAddresses;
+    private List<InetAddress> allowedAddresses;
 
     /**
      * The list of blocked addresses.
      */
-    private static List<InetAddress> blockedAddresses;
+    private List<InetAddress> blockedAddresses;
 
     /**
      * A boolean value that indicates whether the host candidate interface
      * filters have been initialized or not.
      */
-    private static boolean interfaceFiltersInitialized = false;
+    private boolean interfaceFiltersInitialized = false;
 
     /**
      * A boolean value that indicates whether the host candidate address
      * filters have been initialized or not.
      */
-    private static boolean addressFiltersInitialized = false;
+    private boolean addressFiltersInitialized = false;
+
+    /**
+     * Required by Sipuada: each Agent will be 'bound' to
+     * a specific local network interface. This means that
+     * this HostCandidateHarvester will have to strictly
+     * consider only the local address below as allowed.
+     * 
+     * So we will have this field below as a behavior switch:
+     * if it is specified, then this HostCandidateHarvester
+     * will always consider only this as the allowed one,
+     * otherwise, it will consider both allowedAddresses
+     * and blockedAddresses sets normally.
+     */
+    private final String localAddressAllowed;
+
+    public HostCandidateHarvester() {
+    	this(null);
+    }
+
+    public HostCandidateHarvester(String localAddressAllowed) {
+    	this.localAddressAllowed = localAddressAllowed;
+    }
 
     /**
      * Gets the array of allowed interfaces.
      *
      * @return the non-empty String array of allowed interfaces or null.
      */
-    public static String[] getAllowedInterfaces(){
+    public String[] getAllowedInterfaces(){
         if (!interfaceFiltersInitialized)
         {
             try
@@ -111,7 +133,7 @@ public class HostCandidateHarvester
      *
      * @return the non-empty String array of blocked interfaces or null.
      */
-    public static String[] getBlockedInterfaces() {
+    public String[] getBlockedInterfaces() {
         if (!interfaceFiltersInitialized)
         {
             try
@@ -132,7 +154,7 @@ public class HostCandidateHarvester
      * Gets the list of explicitly allowed addresses.
      * @return the list of explicitly allowed addresses.
      */
-    public static List<InetAddress> getAllowedAddresses()
+    public List<InetAddress> getAllowedAddresses()
     {
         synchronized (HostCandidateHarvester.class)
         {
@@ -149,7 +171,7 @@ public class HostCandidateHarvester
      * Gets the list of blocked addresses.
      * @return the list of blocked addresses.
      */
-    public static List<InetAddress> getBlockedAddresses()
+    public List<InetAddress> getBlockedAddresses()
     {
         synchronized (HostCandidateHarvester.class)
         {
@@ -166,16 +188,21 @@ public class HostCandidateHarvester
      * Initializes the lists of allowed and blocked addresses according to the
      * configuration properties.
      */
-    private static void initializeAddressFilters()
+    private void initializeAddressFilters()
     {
         synchronized (HostCandidateHarvester.class)
         {
             if (addressFiltersInitialized)
                 return;
-
-            String[] allowedAddressesStr
-                = StackProperties.getStringArray(
-                        StackProperties.ALLOWED_ADDRESSES, ";");
+            
+            String[] allowedAddressesStr;
+            
+            if (localAddressAllowed == null) {
+            	allowedAddressesStr = StackProperties.getStringArray(
+        			StackProperties.ALLOWED_ADDRESSES, ";");
+            } else {
+            	allowedAddressesStr = new String[] { localAddressAllowed };
+            }
 
             if (allowedAddressesStr != null)
             {
@@ -200,9 +227,12 @@ public class HostCandidateHarvester
                 }
             }
 
-            String[] blockedAddressesStr
-                    = StackProperties.getStringArray(
+            String[] blockedAddressesStr = null;
+            if (localAddressAllowed == null) {
+                blockedAddressesStr = StackProperties.getStringArray(
                     StackProperties.BLOCKED_ADDRESSES, ";");
+            }
+
             if (blockedAddressesStr != null)
             {
                 for (String addressStr : blockedAddressesStr)
@@ -402,7 +432,7 @@ public class HostCandidateHarvester
      * <tt>org.ice4j.ice.harvest.BLOCKED_INTERFACES</tt> list. It returns
      * <tt>false</tt> otherwise.
      */
-    static boolean isInterfaceAllowed(NetworkInterface iface)
+    private boolean isInterfaceAllowed(NetworkInterface iface)
     {
         if (iface == null)
             throw new IllegalArgumentException("iface cannot be null");
@@ -458,7 +488,7 @@ public class HostCandidateHarvester
      * @return <tt>true</tt> if <tt>address</tt> is allowed to be used by this
      * <tt>HostCandidateHarvester</tt>.
      */
-    static boolean isAddressAllowed(InetAddress address)
+    private boolean isAddressAllowed(InetAddress address)
     {
         if (address.isLoopbackAddress())
         {
@@ -718,7 +748,7 @@ public class HostCandidateHarvester
      * @throws java.lang.IllegalStateException if there were errors during host
      * candidate interface filters initialization.
      */
-    public static void initializeInterfaceFilters()
+    public void initializeInterfaceFilters()
     {
         synchronized (HostCandidateHarvester.class)
         {
