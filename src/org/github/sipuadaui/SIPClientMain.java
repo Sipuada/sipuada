@@ -14,7 +14,7 @@ import org.github.sipuada.Sipuada;
 import org.github.sipuada.SipuadaApi.BasicRequestCallback;
 import org.github.sipuada.SipuadaApi.CallInvitationCallback;
 import org.github.sipuada.SipuadaApi.SipuadaListener;
-import org.github.sipuada.plugins.audio.LibJitsiAudioSipuadaPlugin;
+import org.github.sipuada.plugins.audio.LibJitsiMediaSipuadaPlugin;
 
 import net.miginfocom.swing.MigLayout;
 
@@ -135,8 +135,8 @@ public class SIPClientMain implements SipuadaListener {
 						username, registrarDomainTextField.getText(),
 						passwordField.getText(),
 //						"192.168.130.49:55002/TCP",
-						"10.100.100.125:44898/TCP"); //150.165.11.157:65486
-				sipuada.registerPlugin(new LibJitsiAudioSipuadaPlugin(username));
+						"10.100.100.125:54899/TCP"); //150.165.11.157:65486
+				sipuada.registerPlugin(new LibJitsiMediaSipuadaPlugin(username));
 				sipuada.registerAddresses(new BasicRequestCallback() {
 
 					@Override
@@ -275,10 +275,12 @@ public class SIPClientMain implements SipuadaListener {
 	}
 
 	@Override
-	public boolean onCallInvitationArrived(String localUser, String localDomain, String callId, String remoteUsername, String remoteHost) {
+	public boolean onCallInvitationArrived(String localUser, String localDomain, String callId,
+			String remoteUsername, String remoteHost, boolean shouldExpectEarlyMedia) {
 		textArea.setText(textArea.getText()
 				+ System.getProperty("line.separator") + " - "
-				+ " Call Invitation from " + remoteUsername + "@" + remoteHost + " Arrived.");
+				+ " Call Invitation from " + remoteUsername + "@" + remoteHost
+				+ " Arrived." + (shouldExpectEarlyMedia ? "\n -  Expecting early media..." : ""));
 		btAcceptCall.setEnabled(true);
 		btRejectCall.setEnabled(true);
 		this.currentInviteCallID = callId;
