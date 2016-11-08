@@ -20,6 +20,7 @@ package org.ice4j.ice.sdp;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,14 +32,13 @@ import org.ice4j.ice.Component;
 import org.ice4j.ice.IceMediaStream;
 import org.ice4j.ice.LocalCandidate;
 
+import android.gov.nist.javax.sdp.fields.SDPKeywords;
 import android.javax.sdp.Attribute;
 import android.javax.sdp.Connection;
 import android.javax.sdp.MediaDescription;
 import android.javax.sdp.Origin;
-import android.javax.sdp.SdpConstants;
 import android.javax.sdp.SdpException;
 import android.javax.sdp.SdpFactory;
-import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
 import android.org.opentelecoms.javax.sdp.NistSdpFactory;
 
@@ -193,7 +193,7 @@ public class IceSdpUtils
                                 : Connection.IP4;
 
             mediaDescription.setConnection(sdpFactory.createConnection(
-                "IN", defaultAddress.getHostAddress(), addressFamily));
+                "IN", addressFamily, defaultAddress.getHostAddress()));
 
             //now check if the RTCP port for the default candidate is different
             //than RTP.port +1, in which case we need to mention it.
@@ -204,12 +204,9 @@ public class IceSdpUtils
             {
                 TransportAddress defaultRtcpCandidate = rtcpComponent
                     .getDefaultCandidate().getTransportAddress();
-
-                if(defaultRtcpCandidate.getPort() != defaultAddress.getPort()+1)
-                {
-                    mediaDescription.setAttribute(
-                        RTCP, Integer.toString(defaultRtcpCandidate.getPort()));
-                }
+                mediaDescription.setAttribute(RTCP, String.format(Locale.US,
+            		"%d %s %s %s", defaultRtcpCandidate.getPort(), SDPKeywords.IN,
+            		SDPKeywords.IPV4, defaultRtcpCandidate.getAddress().getHostAddress()));
             }
         }
         catch (SdpException exc)
@@ -234,16 +231,8 @@ public class IceSdpUtils
      * @throws  IllegalArgumentException Obviously, if there's a problem with
      * the arguments ... duh!
      */
-    public static void initSessionDescription(String sDesRaw,
-                                              Agent  agent)
-        throws IllegalArgumentException
-    {
-    	SessionDescription sDes;
-		try {
-			sDes = sdpFactory.createSessionDescription(sDesRaw);
-		} catch (SdpParseException illegalArgument) {
-			throw new IllegalArgumentException(illegalArgument);
-		}
+    public static void initSessionDescription(SessionDescription sDes, Agent  agent)
+    		throws IllegalArgumentException {
         //now add ICE options
         StringBuilder allOptionsBuilder = new StringBuilder();
 
@@ -287,29 +276,27 @@ public class IceSdpUtils
             else
             {
                 //if an origin existed, we just make sure it has the right
-                // address now and are care ful not to touch anything else.
+                // address now and are careful not to touch anything else.
                 o.setAddress(defaultAddress.getHostAddress());
                 o.setAddressType(addressFamily);
             }
 
             sDes.setOrigin(o);
 
-            //m lines
-            List<IceMediaStream> streams = agent.getStreams();
-            Vector<MediaDescription> mDescs
-                = new Vector<>(agent.getStreamCount());
-            for(IceMediaStream stream : streams)
-            {
-               MediaDescription mLine = sdpFactory.createMediaDescription(
-                               stream.getName(), 0, //default port comes later
-                               1, SdpConstants.RTP_AVP, new int[]{0});
-
-               IceSdpUtils.initMediaDescription(mLine, stream);
-
-               mDescs.add(mLine);
-            }
-
-            sDes.setMediaDescriptions(mDescs);
+//            //m lines
+//            List<IceMediaStream> streams = agent.getStreams();
+//            Vector<MediaDescription> mDescs = new Vector<>(agent.getStreamCount());
+//            for(IceMediaStream stream : streams) {
+//               MediaDescription mLine = sdpFactory.createMediaDescription
+//        		   (stream.getName(), 0, //default port comes later
+//    				   1, SdpConstants.RTP_AVP, new int[]{0});
+//
+//               IceSdpUtils.initMediaDescription(mLine, stream);
+//
+//               mDescs.add(mLine);
+//            }
+//
+//            sDes.setMediaDescriptions(mDescs);
         }
         catch (SdpException exc)
         {
@@ -321,8 +308,7 @@ public class IceSdpUtils
         }
 
         //first set credentials
-        setIceCredentials(
-            sDes, agent.getLocalUfrag(), agent.getLocalPassword());
+        setIceCredentials(sDes, agent.getLocalUfrag(), agent.getLocalPassword());
     }
 
 
