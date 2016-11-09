@@ -21,6 +21,8 @@ import java.io.*;
 
 import org.ice4j.ice.*;
 
+import android.org.opentelecoms.javax.sdp.NistSdpFactory;
+
 /**
  * A slightly more complicated ICE use sample. The sample would create an
  * agent, make it print its SDP, then wait for a similar SDP to be fed through
@@ -70,7 +72,8 @@ public class IceDistributed
         String sdp = readSDP();
 
         startTime = System.currentTimeMillis();
-        SdpUtils.parseSDP(localAgent, sdp);
+        NistSdpFactory sdpFactory = new NistSdpFactory();
+        SdpUtils.parseSDP(localAgent, sdpFactory.createSessionDescription(sdp));
 
         localAgent.startConnectivityEstablishment();
 

@@ -69,7 +69,7 @@ public class SdpUtils
         SdpFactory factory = new NistSdpFactory();
         SessionDescription sdess = factory.createSessionDescription();
 
-        IceSdpUtils.initSessionDescription(sdess.toString(), agent);
+        IceSdpUtils.initSessionDescription(sdess, agent);
 
         return sdess.toString();
     }
@@ -85,12 +85,7 @@ public class SdpUtils
      * @throws Exception for all sorts of reasons.
      */
     @SuppressWarnings("unchecked") // jain-sdp legacy code.
-    public static void parseSDP(Agent localAgent, String sdp)
-        throws Exception
-    {
-        SdpFactory factory = new NistSdpFactory();
-        SessionDescription sdess = factory.createSessionDescription(sdp);
-
+    public static void parseSDP(Agent localAgent, SessionDescription sdess) throws Exception {
         for(IceMediaStream stream : localAgent.getStreams())
         {
             stream.setRemotePassword(sdess.getAttribute("ice-pwd"));
