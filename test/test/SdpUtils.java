@@ -69,7 +69,7 @@ public class SdpUtils
         SdpFactory factory = new NistSdpFactory();
         SessionDescription sdess = factory.createSessionDescription();
 
-        IceSdpUtils.initSessionDescription(sdess.toString(), agent);
+        IceSdpUtils.initSessionDescription(sdess, agent);
 
         return sdess.toString();
     }
