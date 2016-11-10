@@ -17,13 +17,19 @@
  */
 package org.ice4j.ice;
 
-import java.beans.*;
-import java.util.*;
-import java.util.logging.*;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
 import java.util.logging.Logger;
 
-import org.ice4j.*;
-import org.ice4j.util.*;
+import org.ice4j.TransportAddress;
 
 /**
  * The class represents a media stream from the ICE perspective, i.e. a
@@ -351,12 +357,15 @@ public class IceMediaStream
         //first init the check list.
         synchronized(checkList)
         {
+        	logger.info("ICE4J: <Clearing residual checklist...>");
             checkList.clear();
+        	logger.info("ICE4J: <Creating checklist...>");
             createCheckList(checkList);
-
+        	logger.info("ICE4J: <Ordering checklist...>");
             orderCheckList();
+        	logger.info("ICE4J: <Pruning checklist...>");
             pruneCheckList(checkList);
-            logger.finest("Checklist initialized.");
+        	logger.info("ICE4J: <Checklist initialized.>");
         }
     }
 
@@ -380,35 +389,44 @@ public class IceMediaStream
      * pair and extract.
      * @param checkList the list that we need to update with the new pairs.
      */
-    private void createCheckList(final Component           component,
-                                 final List<CandidatePair> checkList)
-    {
+    private void createCheckList(final Component component,
+    		final List<CandidatePair> checkList) {
+    	logger.info("ICE4J: {Will create CheckList for Component " + component + "}");
         List<LocalCandidate> localCnds = component.getLocalCandidates();
+    	logger.info("ICE4J: {Component's local candidates: " + localCnds + "}");
         List<RemoteCandidate> remoteCnds = component.getRemoteCandidates();
+    	logger.info("ICE4J: {Component's remote candidates: " + remoteCnds + "}");
         LocalCandidate upnpBase = null;
 
-        for(LocalCandidate lc : localCnds)
-        {
+        for(LocalCandidate lc : localCnds) {
             // XXX do we assume a single UPNPCandidate here?
-            if(lc instanceof UPNPCandidate)
-                upnpBase = lc.getBase();
+            if(lc instanceof UPNPCandidate) {
+            	upnpBase = lc.getBase();
+            	logger.info("ICE4J: {UPnP base was set to " + upnpBase + "}");
+            }
         }
 
-        for(LocalCandidate localCnd : localCnds)
-        {
+    	logger.info("ICE4J: {For each local candidate, do:}");
+        for(LocalCandidate localCnd : localCnds) {
             // Don't take into consideration UPnP base candidate
-            if(localCnd == upnpBase)
-                continue;
+            if(localCnd == upnpBase) {
+            	logger.info("ICE4J: {UPnP base ignored}");
+            	continue;
+            }
 
-            for(RemoteCandidate remoteCnd : remoteCnds)
-            {
+        	logger.info("ICE4J: {For each remote candidate, do:}");
+            for(RemoteCandidate remoteCnd : remoteCnds) {
+            	logger.info("ICE4J: {Can this localCandidate " + localCnd
+        			+ " reach this remoteCandidate " + remoteCnd + "?}");
                 if(localCnd.canReach(remoteCnd)
-                        && remoteCnd.getTransportAddress().getPort() != 0)
-                {
-                    CandidatePair pair
-                        = getParentAgent()
-                            .createCandidatePair(localCnd, remoteCnd);
+                        && remoteCnd.getTransportAddress().getPort() != 0) {
+                    CandidatePair pair = getParentAgent()
+                        .createCandidatePair(localCnd, remoteCnd);
                     checkList.add(pair);
+                	logger.info("ICE4J: {Yes, it can, so they compose a new pair "
+            			+ "which gets added into the CheckList!}");
+                } else {
+                	logger.info("ICE4J: {NOOOO, IT CAN'T!}");
                 }
             }
         }

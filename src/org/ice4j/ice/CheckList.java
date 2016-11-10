@@ -305,50 +305,63 @@ public class CheckList
      * component ID to Waiting. If there is more than one such pair, the one
      * with the highest priority is used.
      */
-    protected synchronized void computeInitialCheckListPairStates()
-    {
+    protected synchronized void computeInitialCheckListPairStates() {
         Map<String, CandidatePair> pairsToWait = new Hashtable<>();
 
         //first, determine the pairs that we'd need to put in the waiting state.
-        for(CandidatePair pair : this)
-        {
+        logger.info("ICE4J: <Will iterate on all candidate pairs: " + this + ">");
+        for (CandidatePair pair : this) {
             //we need to check whether the pair is already in the wait list. if
             //so we'll compare it with this one and determine which of the two
             //needs to stay.
             CandidatePair prevPair = pairsToWait.get(pair.getFoundation());
+            logger.info("ICE4J: <Previous pair in the waiting list: " + prevPair + ">");
 
-            if(prevPair == null)
-            {
+            if (prevPair == null) {
                 //first pair with this foundation.
+                logger.info("ICE4J: <No previous pair -- this is the first one with this foundation>");
                 pairsToWait.put(pair.getFoundation(), pair);
+                logger.info("ICE4J: <So we put it in the waiting list>");
                 continue;
             }
 
             //we already have a pair with the same foundation. determine which
             //of the two has the lower component id and higher priority and
             //keep that one in the list.
-            if( prevPair.getParentComponent() == pair.getParentComponent())
-            {
-                if(pair.getPriority() > prevPair.getPriority())
-                {
+            logger.info("ICE4J: <Now figuring out which between " + pair + " and "
+        		+ prevPair + " should be in the waiting list>");
+            if (prevPair.getParentComponent() == pair.getParentComponent()) {
+                logger.info("ICE4J: <These pairs share the same parent component>");
+                if (pair.getPriority() > prevPair.getPriority()) {
                     //need to replace the pair in the list.
+                    logger.info("ICE4J: <Pair " + pair + " has priority over "
+                		+ prevPair + " so it steals the spot in the waiting list>");
                     pairsToWait.put(pair.getFoundation(), pair);
+                } else {
+                    logger.info("ICE4J: <Pair " + prevPair + " has priority over "
+                		+ pair + " so it remains in the waiting list>");
                 }
-            }
-            else
-            {
-                if(pair.getParentComponent().getComponentID()
-                            < prevPair.getParentComponent().getComponentID())
-                {
+            } else {
+                logger.info("ICE4J: <These pairs don't share the same parent component>");
+                if (pair.getParentComponent().getComponentID() 
+                		< prevPair.getParentComponent().getComponentID()) {
                     //need to replace the pair in the list.
+                    logger.info("ICE4J: <Pair " + pair + "'s parent component has lower componentId than "
+                		+ prevPair + "'s parent component's so it steals the spot in the waiting list>");
                     pairsToWait.put(pair.getFoundation(), pair);
+                } else {
+                    logger.info("ICE4J: <Pair " + prevPair + "'s parent component has lower componentId than "
+                		+ pair + "'s parent component's so it remains in the waiting list>");
                 }
             }
         }
 
         //now put the pairs we've selected in the Waiting state.
-        for (CandidatePair pairToWait : pairsToWait.values())
-            pairToWait.setStateWaiting();
+        logger.info("ICE4J: <Now setting each pair in the waiting list's state into Waiting>");
+        for (CandidatePair pairToWait : pairsToWait.values()) {
+            logger.info("ICE4J: <Pair " + pairToWait + " is now WAITING>");
+        	pairToWait.setStateWaiting();
+        }
     }
 
     /**

@@ -842,33 +842,38 @@ public class Agent
      * Creates, initializes and orders the list of candidate pairs that would
      * be used for the connectivity checks for all components in this stream.
      */
-    protected void initCheckLists()
-    {
-        //first init the check list.
-        List<IceMediaStream> streams
-            = getStreamsWithPendingConnectivityEstablishment();
-        int streamCount = streams.size();
+    protected void initCheckLists() {
+    	logger.info("ICE4J: Initializing check lists...");
 
-        //init the maximum number of check list entries per stream.
-        int maxCheckListSize = Integer.getInteger(
-               StackProperties.MAX_CHECK_LIST_SIZE,
-               DEFAULT_MAX_CHECK_LIST_SIZE);
+    	//first init the check list.
+        List<IceMediaStream> streams = getStreamsWithPendingConnectivityEstablishment();
+    	logger.info("ICE4J: Streams: " + streams);
 
-        int maxPerStreamSize =
-                streamCount == 0
-                ? 0
-                : maxCheckListSize / streamCount;
+    	int streamCount = streams.size();
+    	logger.info("ICE4J: StreamCount: " + streamCount);
 
-        for(IceMediaStream stream : streams)
-        {
-            logger.info("Init checklist for stream " + stream.getName());
+    	//init the maximum number of check list entries per stream.
+        int maxCheckListSize = Integer.getInteger
+    		(StackProperties.MAX_CHECK_LIST_SIZE, DEFAULT_MAX_CHECK_LIST_SIZE);
+    	logger.info("ICE4J: maxCheckListSize: " + maxCheckListSize);
+
+    	int maxPerStreamSize = streamCount == 0
+			? 0 : maxCheckListSize / streamCount;
+    	logger.info("ICE4J: maxPerStreamSize: " + maxPerStreamSize);
+
+        for(IceMediaStream stream : streams) {
+            logger.info("ICE4J: <Initializing checklist for stream " + stream.getName() + ".>");
             stream.setMaxCheckListSize(maxPerStreamSize);
             stream.initCheckList();
+        	logger.info("ICE4J: <Checklist for stream " + stream.getName() + " initialized.>");
         }
 
         //init the states of the first media stream as per 5245
-        if (streamCount > 0)
-            streams.get(0).getCheckList().computeInitialCheckListPairStates();
+        if (streamCount > 0) {
+        	logger.info("ICE4J: <Now compute initial check list pair states...>");
+        	streams.get(0).getCheckList().computeInitialCheckListPairStates();
+        	logger.info("ICE4J: <Initial check list pair states computed.>");
+        }
     }
 
     /**

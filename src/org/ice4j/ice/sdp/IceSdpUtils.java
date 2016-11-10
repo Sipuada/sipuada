@@ -182,31 +182,28 @@ public class IceSdpUtils
             }
 
             //set the default candidate
-            TransportAddress defaultAddress = firstComponent
-                .getDefaultCandidate().getTransportAddress();
+            LocalCandidate defaultCandidate = firstComponent.getDefaultCandidate();
+            if (defaultCandidate != null) {
+                TransportAddress defaultAddress = defaultCandidate.getTransportAddress();
+                mediaDescription.getMedia().setMediaPort(defaultAddress.getPort());
 
-            mediaDescription.getMedia().setMediaPort(
-                defaultAddress.getPort());
+                String addressFamily = defaultAddress.isIPv6()
+            		? Connection.IP6 : Connection.IP4;
 
-            String addressFamily = defaultAddress.isIPv6()
-                                ? Connection.IP6
-                                : Connection.IP4;
+                mediaDescription.setConnection(sdpFactory.createConnection(
+                    "IN", addressFamily, defaultAddress.getHostAddress()));
 
-            mediaDescription.setConnection(sdpFactory.createConnection(
-                "IN", addressFamily, defaultAddress.getHostAddress()));
+                //now check if the RTCP port for the default candidate is different
+                //than RTP.port +1, in which case we need to mention it.
+                Component rtcpComponent = iceMediaStream.getComponent(Component.RTCP);
 
-            //now check if the RTCP port for the default candidate is different
-            //than RTP.port +1, in which case we need to mention it.
-            Component rtcpComponent
-                = iceMediaStream.getComponent(Component.RTCP);
-
-            if( rtcpComponent != null )
-            {
-                TransportAddress defaultRtcpCandidate = rtcpComponent
-                    .getDefaultCandidate().getTransportAddress();
-                mediaDescription.setAttribute(RTCP, String.format(Locale.US,
-            		"%d %s %s %s", defaultRtcpCandidate.getPort(), SDPKeywords.IN,
-            		SDPKeywords.IPV4, defaultRtcpCandidate.getAddress().getHostAddress()));
+                if (rtcpComponent != null) {
+                    TransportAddress defaultRtcpCandidate = rtcpComponent
+                        .getDefaultCandidate().getTransportAddress();
+                    mediaDescription.setAttribute(RTCP, String.format(Locale.US,
+                		"%d %s %s %s", defaultRtcpCandidate.getPort(), SDPKeywords.IN,
+                		SDPKeywords.IPV4, defaultRtcpCandidate.getAddress().getHostAddress()));
+                }
             }
         }
         catch (SdpException exc)
@@ -236,7 +233,7 @@ public class IceSdpUtils
         //now add ICE options
         StringBuilder allOptionsBuilder = new StringBuilder();
 
-        //if(agent.supportsTrickle())
+        if(agent.isTrickling())
             allOptionsBuilder.append(ICE_OPTION_TRICKLE).append(" ");
 
         String allOptions = allOptionsBuilder.toString().trim();
@@ -252,36 +249,37 @@ public class IceSdpUtils
                     sdpFactory.createAttribute(ICE_OPTIONS, allOptions));
             }
 
-            //take care of the origin: first extract one of the default
-            // addresses so that we could set the origin.
-            TransportAddress defaultAddress = agent.getStreams().get(0)
-                .getComponent(Component.RTP).getDefaultCandidate()
-                    .getTransportAddress();
+            if (!agent.getStreams().isEmpty()) {
+                LocalCandidate defaultCandidate = agent.getStreams().get(0)
+                    .getComponent(Component.RTP).getDefaultCandidate();
+                if (defaultCandidate != null) {
+                    //take care of the origin: first extract one of the default
+                    // addresses so that we could set the origin.
+                    TransportAddress defaultAddress = defaultCandidate.getTransportAddress();
 
-            String addressFamily = defaultAddress.isIPv6()
-                                        ? Connection.IP6
-                                        : Connection.IP4;
+                    String addressFamily = defaultAddress.isIPv6()
+                		? Connection.IP6 : Connection.IP4;
 
-            //origin
-            Origin o = sDes.getOrigin();
+                    //origin
+                    Origin o = sDes.getOrigin();
 
-            if( o == null || "user".equals(o.getUsername()))
-            {
-                //looks like there wasn't any origin set: jain-sdp creates a
-                //default origin that has "user" as the user name so we use this
-                //to detect it. it's quite hacky but couldn't fine another way.
-                o = sdpFactory.createOrigin("ice4j.org", 0, 0, "IN",
-                        addressFamily, defaultAddress.getHostAddress());
+                    if (o == null || "user".equals(o.getUsername())) {
+                        //looks like there wasn't any origin set: jain-sdp creates a
+                        //default origin that has "user" as the user name so we use this
+                        //to detect it. it's quite hacky but couldn't fine another way.
+                        o = sdpFactory.createOrigin("ice4j.org", 0, 0, "IN",
+                                addressFamily, defaultAddress.getHostAddress());
+                    }
+                    else {
+                        //if an origin existed, we just make sure it has the right
+                        // address now and are careful not to touch anything else.
+                        o.setAddress(defaultAddress.getHostAddress());
+                        o.setAddressType(addressFamily);
+                    }
+
+                    sDes.setOrigin(o);
+                }
             }
-            else
-            {
-                //if an origin existed, we just make sure it has the right
-                // address now and are careful not to touch anything else.
-                o.setAddress(defaultAddress.getHostAddress());
-                o.setAddressType(addressFamily);
-            }
-
-            sDes.setOrigin(o);
 
 //            //m lines
 //            List<IceMediaStream> streams = agent.getStreams();

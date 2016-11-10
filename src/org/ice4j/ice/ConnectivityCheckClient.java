@@ -126,11 +126,11 @@ class ConnectivityCheckClient
 
         if (streamsWithPendingConnectivityEstablishment.size() > 0)
         {
-            logger.info("Start connectivity checks. Local ufrag "
-                            + parentAgent.getLocalUfrag());
-            startChecks(
-                    streamsWithPendingConnectivityEstablishment
-                        .get(0).getCheckList());
+            logger.info("ICE4J: <Start connectivity checks. Local ufrag "
+                + parentAgent.getLocalUfrag() + ">");
+            logger.info("ICE4J: <Streams with pending connectivity establishment: "
+                + streamsWithPendingConnectivityEstablishment + ">");
+            startChecks(streamsWithPendingConnectivityEstablishment.get(0).getCheckList());
         }
         else
         {
@@ -148,13 +148,18 @@ class ConnectivityCheckClient
      */
     public void startChecks(CheckList checkList)
     {
+    	logger.info("ICE4J: <Starting checks with following CheckList: " + checkList + "!>");
         PaceMaker paceMaker = new PaceMaker(checkList);
 
         synchronized (paceMakers)
         {
+        	logger.info("ICE4J: <First, adding PaceMaker Thread to list.>");
             paceMakers.add(paceMaker);
+        	logger.info("ICE4J: <PaceMaker Thread added to list.>");
         }
+    	logger.info("ICE4J: <Then scheduling start of PaceMaker Thread...>");
         paceMaker.start();
+    	logger.info("ICE4J: <Start of PaceMaker Thread scheduled.>");
     }
 
     /**
@@ -908,42 +913,45 @@ class ConnectivityCheckClient
          * or the regular check lists.
          */
         @Override
-        public synchronized void run()
-        {
-            try
-            {
-                while(running)
-                {
-                    long waitFor = getNextWaitInterval();
+        public synchronized void run() {
+        	logger.info("ICE4J: Starting a PaceMaker Thread.");
+            try {
+            	logger.info("ICE4J: <Will start looping indefinitely, right? R: " + running);
+                while(running) {
+                	logger.info("ICE4j: <Looping once more...>");
+                	long waitFor = getNextWaitInterval();
+                	logger.info("ICE4J: <Now the waitFor is " + waitFor + ">");
 
-                    if(waitFor > 0)
-                    {
+                    if(waitFor > 0) {
                         /*
                          * waitFor will be 0 for the first check since we won't
                          * have any active check lists at that point yet.
                          */
-                        try
-                        {
+                        try {
                             wait(waitFor);
+                            logger.info("ICE4J: <Just finished waitingFor during " + waitFor + ">");
                         }
-                        catch (InterruptedException e)
-                        {
-                            logger.log(Level.FINER, "PaceMaker got interrupted",
-                                    e);
+                        catch (InterruptedException ignore) {
+                            logger.info("ICE4J: <PaceMaker got interrupted>");
+                            logger.log(Level.FINER, "PaceMaker got interrupted", ignore);
                         }
 
-                        if (!running)
+                        if (!running) {
+                        	logger.info("ICE4J: <Not running anymore>");
                             break;
+                        }
                     }
 
                     CandidatePair pairToCheck = checkList.popTriggeredCheck();
 
                     //if there are no triggered checks, go for an ordinary one.
-                    if(pairToCheck == null)
+                    logger.info("ICE4J: <Triggered PairToCheck: " + pairToCheck + ">");
+                    if(pairToCheck == null) {
                         pairToCheck = checkList.getNextOrdinaryPairToCheck();
+                        logger.info("ICE4J: <Ordinary PairToCheck: " + pairToCheck + ">");
+                    }
 
-                    if(pairToCheck != null)
-                    {
+                    if(pairToCheck != null) {
                         /*
                          * Since we suspect that it is possible to
                          * startCheckForPair, processSuccessResponse and only
@@ -951,41 +959,36 @@ class ConnectivityCheckClient
                          * synchronization root is the one of the
                          * CandidatePair#setState method.
                          */
-                        synchronized (pairToCheck)
-                        {
-                            TransactionID transactionID
-                                = startCheckForPair(pairToCheck);
+                        synchronized (pairToCheck) {
+                            TransactionID transactionID = startCheckForPair(pairToCheck);
 
-                            if(transactionID == null)
-                            {
-                                logger.info(
-                                        "Pair failed: "
-                                            + pairToCheck.toShortString());
+                            if(transactionID == null) {
+                                logger.info("ICE4J: <Pair failed: " + pairToCheck.toShortString() + ">");
                                 pairToCheck.setStateFailed();
+                            } else {
+                                logger.info("ICE4J: <Pair in progress: " + pairToCheck.toShortString() + ">");
+                            	pairToCheck.setStateInProgress(transactionID);
                             }
-                            else
-                                pairToCheck.setStateInProgress(transactionID);
                         }
                     }
-                    else
-                    {
+                    else {
                         /*
                          * We are done sending checks for this list. We'll set
                          * its final state in either the processResponse(),
                          * processTimeout() or processFailure() method.
                          */
+                        logger.info("ICE4J: <No pair left to check so we are done! Scheduling final state...>");
                         logger.finest("will skip a check beat.");
                         checkList.fireEndOfOrdinaryChecks();
                     }
                 }
             }
-            finally
-            {
-                synchronized (paceMakers)
-                {
-                    synchronized(this)
-                    {
+            finally {
+            	logger.info("ICE4J: Stopping a PaceMaker Thread.");
+                synchronized (paceMakers) {
+                    synchronized(this) {
                         paceMakers.remove(this);
+                    	logger.info("ICE4J: <Removed this PaceMaker Thread from the paceMakers list.>");
                     }
                 }
             }
