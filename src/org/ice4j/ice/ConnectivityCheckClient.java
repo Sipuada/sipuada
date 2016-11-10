@@ -918,9 +918,9 @@ class ConnectivityCheckClient
             try {
             	logger.info("ICE4J: <Will start looping indefinitely, right? R: " + running);
                 while(running) {
-                	logger.info("ICE4j: <Looping once more...>");
+                	logger.finest("ICE4j: <Looping once more...>");
                 	long waitFor = getNextWaitInterval();
-                	logger.info("ICE4J: <Now the waitFor is " + waitFor + ">");
+                	logger.finest("ICE4J: <Now the waitFor is " + waitFor + ">");
 
                     if(waitFor > 0) {
                         /*
@@ -929,7 +929,7 @@ class ConnectivityCheckClient
                          */
                         try {
                             wait(waitFor);
-                            logger.info("ICE4J: <Just finished waitingFor during " + waitFor + ">");
+                            logger.finest("ICE4J: <Just finished waitingFor during " + waitFor + ">");
                         }
                         catch (InterruptedException ignore) {
                             logger.info("ICE4J: <PaceMaker got interrupted>");
@@ -977,7 +977,7 @@ class ConnectivityCheckClient
                          * its final state in either the processResponse(),
                          * processTimeout() or processFailure() method.
                          */
-                        logger.info("ICE4J: <No pair left to check so we are done! Scheduling final state...>");
+                        logger.finest("ICE4J: <No pair left to check so we are done! Scheduling final state...>");
                         logger.finest("will skip a check beat.");
                         checkList.fireEndOfOrdinaryChecks();
                     }
