@@ -97,27 +97,31 @@ public enum Transport
      * not a valid or currently supported transport.
      */
     public static Transport parse(String transportName)
-        throws IllegalArgumentException
-    {
-        if(UDP.toString().equals(transportName))
-            return UDP;
+    		throws IllegalArgumentException {
 
-        if(TCP.toString().equals(transportName))
-            return TCP;
-
-        if(TLS.toString().equals(transportName))
-            return TLS;
-
-        if(SCTP.toString().equals(transportName))
-            return SCTP;
-
-        if(DTLS.toString().equals(transportName))
-            return DTLS;
-
-        if(SSLTCP.toString().equals(transportName))
-            return SSLTCP;
-
-        throw new IllegalArgumentException(
-            transportName + " is not a currently supported Transport");
+    	if (transportName != null) {
+    		transportName = transportName.trim().toLowerCase();
+    	}
+    	if (UDP.toString().equals(transportName)) {
+        	return UDP;
+        }
+        if (TCP.toString().equals(transportName)) {
+        	return TCP;
+        }
+        if (TLS.toString().equals(transportName)) {
+        	return TLS;
+        }
+        if (SCTP.toString().equals(transportName)) {
+        	return SCTP;
+        }
+        if (DTLS.toString().equals(transportName)) {
+        	return DTLS;
+        }
+        if (SSLTCP.toString().equals(transportName)) {
+        	return SSLTCP;
+        }
+        throw new IllegalArgumentException
+        	(transportName + " is not a currently supported Transport");
     }
+
 }
