@@ -231,8 +231,12 @@ public class SipUserAgentServer {
 			if (requestUriUser.equals(identityUser) &&
 					requestUriHost.equals(identityHost)) {
 				shouldNotFound = false;
-			}
-			else {
+			} else if (requestUriUser.equals(identityUser)) {
+				logger.info("Request destined to (Request URI = {}) arrived but this UAC" +
+					" is bound to {}@{}, so assuming that's another viable path to this UAC.",
+					requestUri, identityUser, identityHost);
+				shouldNotFound = false;
+			} else {
 				logger.info("Request destined to (Request URI = {}) arrived but this UAC" +
 						" is bound to {}@{}, so about to respond with 404 Not Found.",
 						requestUri, identityUser, identityHost);

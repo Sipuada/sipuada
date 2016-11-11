@@ -945,10 +945,10 @@ class ConnectivityCheckClient
                     CandidatePair pairToCheck = checkList.popTriggeredCheck();
 
                     //if there are no triggered checks, go for an ordinary one.
-                    logger.info("ICE4J: <Triggered PairToCheck: " + pairToCheck + ">");
+                    logger.finest("ICE4J: <Triggered PairToCheck: " + pairToCheck + ">");
                     if(pairToCheck == null) {
                         pairToCheck = checkList.getNextOrdinaryPairToCheck();
-                        logger.info("ICE4J: <Ordinary PairToCheck: " + pairToCheck + ">");
+                        logger.finest("ICE4J: <Ordinary PairToCheck: " + pairToCheck + ">");
                     }
 
                     if(pairToCheck != null) {
