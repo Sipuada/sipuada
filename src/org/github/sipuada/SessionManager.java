@@ -1,6 +1,7 @@
 package org.github.sipuada;
 
 import java.text.ParseException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.github.sipuada.Constants.RequestMethod;
@@ -26,6 +27,8 @@ public class SessionManager {
 	private final Map<RequestMethod, SipuadaPlugin> sessionPlugins;
 	private final SipUserAgentRole role;
 	private final String localAddress;
+	private final Map<String, SessionType> requestSdpUsedInSomeSession = new HashMap<>();
+	private final Map<String, SessionType> responseSdpUsedInSomeSession = new HashMap<>();
 
 	public enum SipUserAgentRole {
 		UAC, UAS;
@@ -54,15 +57,14 @@ public class SessionManager {
 		boolean contentDispositionMatters = request != null
 			&& request.getContentDisposition() != null;
 		String dispositionType = type.getDisposition();
-//		if (contentDispositionMatters) {
-//			dispositionType = request.getContentDisposition().getDispositionType();
-//		}
 		logger.debug("$ Processing Req sdp... $");
 		boolean requestHasSdp = messageHasSdpOfInterest(request,
-			contentDispositionMatters, dispositionType);
+			contentDispositionMatters, dispositionType)
+			&& !requestSdpIsUsedInSomeOtherSession(callId, type);
 		logger.debug("$ Processing Res sdp... $");
 		boolean responseHasSdp = messageHasSdpOfInterest(response,
-			contentDispositionMatters, dispositionType);
+			contentDispositionMatters, dispositionType)
+			&& !responseSdpIsUsedInSomeOtherSession(callId, type);
 		logger.debug("$ Processing Ack sdp... $");
 		boolean ackRequestHasSdp = messageHasSdpOfInterest(ackRequest,
 			contentDispositionMatters, dispositionType);
@@ -73,7 +75,7 @@ public class SessionManager {
 			//if UAS: OFFER at Response only
 			return role == SipUserAgentRole.UAC
 				? generateOffer(sessionPlugin, callId, type,
-					request, true/*FIXME should be: true*/)
+					request, contentDispositionMatters/*FIXME should be: true*/)
 				: generateOffer(sessionPlugin, callId, type,
 					response, contentDispositionMatters);
 		} else if (requestHasSdp && !responseHasSdp && !ackRequestHasSdp) {
@@ -93,7 +95,8 @@ public class SessionManager {
 			//if UAS: just do nothing, since session was already established
 			//when I sent my ANSWER at Response to OFFER at Request
 			return role == SipUserAgentRole.UAC
-				? receiveAnswerToAcceptedOffer(sessionPlugin, callId, type, response) : true;
+				? receiveAnswerToAcceptedOffer(sessionPlugin,
+					callId, type, response) : true;
 		} else if (!requestHasSdp && responseHasSdp && ackRequestHasSdp) {
 			//if UAC: just do nothing, since session was already established
 			//when I sent my ANSWER at AckRequest to OFFER at Response
@@ -157,6 +160,20 @@ public class SessionManager {
 		return messageHasSdpOfInterest;
 	}
 
+	private boolean requestSdpIsUsedInSomeOtherSession(String callId, SessionType type) {
+		boolean veredict = (requestSdpUsedInSomeSession.get(callId) != null
+			&& requestSdpUsedInSomeSession.get(callId) != type);
+		logger.debug("$ Req SDP is used in some other session {!{}}: {}. $", type, veredict);
+		return veredict;
+	}
+
+	private boolean responseSdpIsUsedInSomeOtherSession(String callId, SessionType type) {
+		boolean veredict = (responseSdpUsedInSomeSession.get(callId) != null
+			&& responseSdpUsedInSomeSession.get(callId) != type);
+		logger.debug("$ Res SDP is used in some other session {!{}}: {}. $", type, veredict);
+		return veredict;
+	}
+
 	private boolean generateOffer(SipuadaPlugin sessionPlugin, String callId,
 			SessionType type, Message offerMessage, boolean dispositionMatters) {
 		String offerMessageIdentifier = offerMessage instanceof Request
@@ -193,6 +210,11 @@ public class SessionManager {
 			}
 			logger.info("{}'s plug-in-generated offer \n{}\n inserted into {}.",
 				role, offer.toString(), offerMessageIdentifier);
+			if (offerMessage instanceof Request) {
+				requestSdpUsedInSomeSession.put(callId, type);
+			} else if (offerMessage instanceof Response) {
+				responseSdpUsedInSomeSession.put(callId, type);
+			}
 			return true;
 		} catch (ParseException parseException) {
 			logger.error("{}'s plug-in-generated offer \n{}\n by could not "
@@ -251,6 +273,10 @@ public class SessionManager {
 			if (dispositionMatters) {
 				answerMessage.setContentDisposition(headerMaker
 					.createContentDispositionHeader(type.getDisposition()));
+			}
+			responseSdpUsedInSomeSession.put(callId, type);
+			if (answerMessage instanceof Response) {
+				requestSdpUsedInSomeSession.put(callId, type);
 			}
 		} catch (ParseException parseException) {
 			logger.error("{}'s plug-in-generated answer \n{}\n to offer \n{}\n in {} "
