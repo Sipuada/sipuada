@@ -597,17 +597,19 @@ public class SipUserAgentClient {
 				.getNewClientTransaction(prackRequest);
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
-			if (putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-				callId, SessionType.EARLY, request, response, prackRequest)) {
-				logger.info("UAC could provide suitable answer to {} offer, so, "
-					+ "sending {} to {} response to {} request (from {}:{})...",
-					SessionType.EARLY, method, response.getStatusCode(),
-					request.getMethod(), localIp, localPort);
-				logger.debug("Request Dump:\n{}\n", prackRequest);
-			} else {
-				//No need for caller to wait for remote responses.
-				return false;
-			}
+			boolean pluginAnswerGenerated = false;
+			try {
+				if (putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
+						callId, SessionType.EARLY, request, response, prackRequest)) {
+					logger.info("UAC could provide suitable answer to {} offer, so, "
+						+ "sending {} to {} response to {} request (from {}:{})...",
+						SessionType.EARLY, method, response.getStatusCode(),
+						request.getMethod(), localIp, localPort);
+					logger.debug("Request Dump:\n{}\n", prackRequest);
+					pluginAnswerGenerated = true;
+				}
+			} catch (Throwable ignore) {}
+			final boolean pluginAnswerSuccessfullyGenerated = pluginAnswerGenerated;
 			new Thread(new Runnable() {
 
 				@Override
@@ -617,9 +619,20 @@ public class SipUserAgentClient {
 							logger.info("{} response to {} arrived, so {} "
 								+ "sent by {}:{} through {}.", response.getStatusCode(),
 								request.getMethod(), method, localIp, localPort, transport);
-							bus.post(new CallInvitationRinging(callId, clientTransaction, true));
-							bus.post(new EarlyMediaSessionEstablished(callId));
-							logger.info("Early media session established: {}.", callId);
+							bus.post(new CallInvitationRinging(callId,
+								clientTransaction, pluginAnswerSuccessfullyGenerated));
+							if (pluginAnswerSuccessfullyGenerated) {
+								bus.post(new EarlyMediaSessionEstablished(callId));
+								logger.info("Early media session established: {}.", callId);
+							} else {
+								logger.error("{} response to {} arrived, but UAC cannot "
+									+ "provide suitable answer to {} offer , so treating "
+									+ "response as 180 and aborting early media session "
+									+ "negotiation attempt.", response.getStatusCode(),
+									request.getMethod(), SessionType.EARLY);
+								//TODO send UPDATE request with empty SDP
+								//to mute possibly existing early media session
+							}
 							return;
 						}
 						else {
@@ -686,13 +699,6 @@ public class SipUserAgentClient {
 		return sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
 			callIdHeader, cseq, content, contentTypeHeader, additionalHeaders);
 	}
-
-//	private boolean sendRequest(final RequestMethod method, URI requestUri,
-//			URI addresserUri, URI addresseeUri, final Dialog dialog,
-//			final CallIdHeader callIdHeader, long cseq, Header... additionalHeaders) {
-//		return sendRequest(method, requestUri, addresserUri, addresseeUri, dialog,
-//			callIdHeader, cseq, null, null, additionalHeaders);
-//	}
 
 	private boolean sendRequest(final RequestMethod method, URI requestUri,
 			URI addresserUri, URI addresseeUri, final Dialog dialog,
@@ -778,12 +784,11 @@ public class SipUserAgentClient {
 			for (int i=0; i<additionalHeaders.length; i++) {
 				request.addHeader(additionalHeaders[i]);
 			}
-			final ClientTransaction clientTransaction = provider
-					.getNewClientTransaction(request);
+			final ClientTransaction clientTransaction = provider.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
 			if (isDialogCreatingRequest(method)) {
-				putOfferIntoRequestIfApplicable(method, callId, SessionType.REGULAR, request);
+				putOfferIntoRequestIfApplicable(method, callId, SessionType.EARLY, request);
 			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
 				request.setContent(content, contentTypeHeader);
 			}
@@ -793,42 +798,42 @@ public class SipUserAgentClient {
 				public void run() {
 					try {
 						if (doSendRequest(request, clientTransaction, dialog)) {
-							logger.info("{} request sent by {}:{} through {}.", method,
-									localIp, localPort, transport);
+							logger.info("{} request sent by {}:{} through {}.",
+								method, localIp, localPort, transport);
 						}
 						else {
 							logger.error("Could not send this {} request.", method);
 							reportRequestError(callId, clientTransaction,
-									"Request could not be parsed or contained invalid state.");
+								"Request could not be parsed or contained invalid state.");
 						}
 					} catch (SipException requestCouldNotBeSent) {
 						logger.error("Could not send this {} request: {} ({}).",
-								method, requestCouldNotBeSent.getMessage(),
-								requestCouldNotBeSent.getCause().getMessage());
+							method, requestCouldNotBeSent.getMessage(),
+							requestCouldNotBeSent.getCause().getMessage());
 						reportRequestError(callId, clientTransaction,
-								"Request could not be sent: " + String.format("%s (%s).",
-										requestCouldNotBeSent.getMessage(),
-										requestCouldNotBeSent.getCause().getMessage()));
+							"Request could not be sent: " + String.format("%s (%s).",
+							requestCouldNotBeSent.getMessage(),
+							requestCouldNotBeSent.getCause().getMessage()));
 					}
 				}
 
 			}).start();
 			return true;
 		} catch (ParseException requestCouldNotBeBuilt) {
-			logger.error("Could not properly create mandatory headers for " +
-					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
-					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
-					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
-					requestCouldNotBeBuilt.getMessage());
+			logger.error("Could not properly create mandatory headers for "
+				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
+				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+				requestCouldNotBeBuilt.getMessage());
 		} catch (TransactionUnavailableException requestCouldNotBeBuilt) {
-			logger.error("Could not properly create client transaction to handle" +
-					" this {} request: {}.", method, requestCouldNotBeBuilt.getMessage());
+			logger.error("Could not properly create client transaction to handle"
+				+ " this {} request: {}.", method, requestCouldNotBeBuilt.getMessage());
 		} catch (InvalidArgumentException requestCouldNotBeBuilt) {
-			logger.error("Could not properly create mandatory headers for " +
-					"this {} request.\nVia: [localIp: {}, localPort: {}, " +
-					"transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
-					viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
-					requestCouldNotBeBuilt.getMessage());
+			logger.error("Could not properly create mandatory headers for "
+				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
+				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+				requestCouldNotBeBuilt.getMessage());
 		}
 		//No need for caller to wait for remote responses.
 		return false;
@@ -864,40 +869,6 @@ public class SipUserAgentClient {
 			+ "expecting to put offer into Req! $");
 		sessionManager.performOfferAnswerExchangeStep
 			(callId, type, request, null, null);
-//		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
-//		if (sessionPlugin == null) {
-//			logger.info("No plug-in available to generate {} offer to be "
-//				+ "inserted into {} request.", type, method);
-//			return;
-//		}
-//		SessionDescription offer = null;
-//		try {
-//			offer = sessionPlugin.generateOffer(callId, type, method, localIp);
-//			logger.debug("* UAC just generated {} offer \n{}\n in "
-//				+ "context of call {}! *", type, offer, callId);
-//		} catch (Throwable unexpectedException) {
-//			logger.error("Bad plug-in crashed while trying to generate {} offer " +
-//				"to be inserted into {} request.", type, method, unexpectedException);
-//			return;
-//		}
-//		if (offer == null) {
-//			logger.error("Plug-in {} generated no {} offer to be inserted into {} request.",
-//				sessionPlugin.getClass().getName(), type, method);
-//			return;
-//		}
-//		try {
-//			request.setContent(offer, headerMaker
-//				.createContentTypeHeader("application", "sdp"));
-//			request.setContentDisposition(headerMaker
-//				.createContentDispositionHeader(type.getDisposition()));
-//		} catch (ParseException parseException) {
-//			logger.error("Plug-in-generated {} offer {{}} by {} "
-//				+ "could not be inserted into {} request.", type, offer.toString(),
-//				sessionPlugin.getClass().getName(), method, parseException);
-//			return;
-//		}
-//		logger.info("Plug-in-generated {} offer {{}} by {} inserted into {} request.",
-//			type, offer.toString(), sessionPlugin.getClass().getName(), method);
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
@@ -1772,8 +1743,7 @@ public class SipUserAgentClient {
 					}
 					if (earlyMediaIsSupported) {
 						if (!sendPrackRequest(dialog, request, response)) {
-							logger.error("{} response to {} arrived, but UAC cannot provide suitable "
-								+ "answer to {} offer or PRACK could not be sent, so treating "
+							logger.error("{} response to {} arrived, PRACK could not be sent, so treating "
 								+ "response as 180 and aborting early media session negotiation attempt.",
 								statusCode, request.getMethod(), SessionType.EARLY);
 							bus.post(new CallInvitationRinging(callId, clientTransaction));
@@ -1803,94 +1773,6 @@ public class SipUserAgentClient {
 			+ "expecting put answer into Ack or parse answer from Res! $");
 		return sessionManager.performOfferAnswerExchangeStep
 			(callId, type, request, response, ackRequest);
-//		if (request.getContent() != null && request.getContentDisposition()
-//				.getDispositionType().toLowerCase().trim().equals(type.getDisposition())) {
-//			boolean responseArrivedWithNoAnswer = response.getContent() == null
-//				|| !response.getContentDisposition().getDispositionType()
-//					.toLowerCase().trim().equals(type.getDisposition());
-//			if (responseArrivedWithNoAnswer) {
-//				logger.error("{} request was sent with an {} offer but {} response " +
-//					"arrived with no {} answer so this UAC will terminate the dialog right away.",
-//					method, type, response.getStatusCode(), type);
-//			}
-//			else {
-//				try {
-//					SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
-//					if (sessionPlugin != null) {
-//						SessionDescription answer = SdpFactory.getInstance()
-//							.createSessionDescriptionFromString(new String(response.getRawContent()));
-//						try {
-//							logger.debug("* UAC will process {} answer \n{}\n in context"
-//								+ " of call {}! *", type, answer, callId);
-//							sessionPlugin.receiveAnswerToAcceptedOffer(callId, type, answer);
-//						} catch (Throwable unexpectedException) {
-//							logger.error("Bad plug-in crashed while receiving {} answer " +
-//								"that arrived alongside {} response to {} request. The UAC will terminate " +
-//								"the dialog right away.", type, response.getStatusCode(),
-//								method, unexpectedException);
-//							return false;
-//						}
-//					}
-//				} catch (SdpParseException parseException) {
-//					logger.error("{} answer arrived in {} response to {} request, but could not be properly" +
-//						" parsed, so it was discarded. The UAC will terminate the dialog right away.",
-//						type, response.getStatusCode(), method, parseException);
-//					return false;
-//				}
-//			}
-//			return !responseArrivedWithNoAnswer;
-//		}
-//		if (response.getContent() == null || !response.getContentDisposition().getDispositionType()
-//				.toLowerCase().trim().equals(type.getDisposition())) {
-//			logger.info("No {} offer/answer exchange performed in this transaction.", type);
-//			return true;
-//		}
-//		SessionDescription offer;
-//		try {
-//			offer = SdpFactory.getInstance()
-//				.createSessionDescriptionFromString(new String(response.getRawContent()));
-//		} catch (SdpParseException parseException) {
-//			logger.error("{} offer arrived in {} response to {} request, but could not be properly parsed, " +
-//				"so it was discarded.", type, response.getStatusCode(), method, parseException);
-//			return false;
-//		}
-//		SipuadaPlugin sessionPlugin = sessionPlugins.get(method);
-//		if (sessionPlugin == null) {
-//			logger.info("No plug-in available to generate valid {} answer to {} offer {} in {} response " +
-//				"to {} request.", type, type, offer.toString(), response.getStatusCode(), method);
-//			return false;
-//		}
-//		SessionDescription answer = null;
-//		try {
-//			answer = sessionPlugin.generateAnswer(callId, type, method, offer, localIp);
-//			logger.debug("* UAC just generated {} answer \n{}\n to offer \n{}\n in "
-//				+ "context of call {}! *", type, answer, offer, callId);
-//		} catch (Throwable unexpectedException) {
-//			logger.error("Bad plug-in crashed while trying to generate {} answer " +
-//				"to be inserted into {} for {} response to {} request. The UAC will terminate the dialog " +
-//				"right away.", type, ackRequest.getMethod(), response.getStatusCode(), method, unexpectedException);
-//			return false;
-//		}
-//		if (answer == null) {
-//			logger.error("Plug-in {} could not generate valid {} answer to {} offer {} in {} response " +
-//				"to {} request.", sessionPlugin.getClass().getName(), type, type, offer.toString(),
-//				response.getStatusCode(), method);
-//			return false;
-//		}
-//		try {
-//			ackRequest.setContent(answer, headerMaker.createContentTypeHeader("application", "sdp"));
-//			ackRequest.setContentDisposition(headerMaker.createContentDispositionHeader(type.getDisposition()));
-//		} catch (ParseException parseException) {
-//			logger.error("Plug-in-generated {} answer {{}} to {} offer {{}} by {} could not be inserted into {} " +
-//				"for {} response to {} request.", type, answer.toString(), type, offer.toString(),
-//				sessionPlugin.getClass().getName(), ackRequest.getMethod(), response.getStatusCode(),
-//				method, parseException);
-//			return false;
-//		}
-//		logger.info("Plug-in-generated {} answer {{}} to {} offer {{}} by {} inserted into {} for {} response" +
-//			" to {} request.", type, answer.toString(), type, offer.toString(), sessionPlugin.getClass().getName(),
-//			ackRequest.getMethod(), response.getStatusCode(), method);
-//		return true;
 	}
 
 	private void handleByeResponse(int statusCode, Response response,

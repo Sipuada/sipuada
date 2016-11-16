@@ -53,14 +53,17 @@ public class SessionManager {
 		}
 		boolean contentDispositionMatters = request != null
 			&& request.getContentDisposition() != null;
-		String dispositionType = null;
-		if (contentDispositionMatters) {
-			dispositionType = request.getContentDisposition().getDispositionType();
-		}
+		String dispositionType = type.getDisposition();
+//		if (contentDispositionMatters) {
+//			dispositionType = request.getContentDisposition().getDispositionType();
+//		}
+		logger.debug("$ Processing Req sdp... $");
 		boolean requestHasSdp = messageHasSdpOfInterest(request,
 			contentDispositionMatters, dispositionType);
+		logger.debug("$ Processing Res sdp... $");
 		boolean responseHasSdp = messageHasSdpOfInterest(response,
 			contentDispositionMatters, dispositionType);
+		logger.debug("$ Processing Ack sdp... $");
 		boolean ackRequestHasSdp = messageHasSdpOfInterest(ackRequest,
 			contentDispositionMatters, dispositionType);
 		logger.debug("$ Messages: Req: {{}}, Res: {{}}, Ack: {{}}! $",
@@ -69,8 +72,10 @@ public class SessionManager {
 			//if UAC: OFFER at Request only
 			//if UAS: OFFER at Response only
 			return role == SipUserAgentRole.UAC
-				? generateOffer(sessionPlugin, callId, request, contentDispositionMatters/*FIXME should be: true*/)
-				: generateOffer(sessionPlugin, callId, response, contentDispositionMatters);
+				? generateOffer(sessionPlugin, callId, type,
+					request, true/*FIXME should be: true*/)
+				: generateOffer(sessionPlugin, callId, type,
+					response, contentDispositionMatters);
 		} else if (requestHasSdp && !responseHasSdp && !ackRequestHasSdp) {
 			//if UAC: ERROR -> no ANSWER at Response
 			//if UAS: ANSWER at Response only
@@ -125,6 +130,7 @@ public class SessionManager {
 	private boolean messageHasSdpOfInterest(Message message,
 			boolean dispositionMatters, String dispositionType) {
 		boolean messageHasContent = message != null && message.getContent() != null;
+		logger.debug("$ Has content: {} $", messageHasContent);
 		ContentTypeHeader contentTypeHeader = null;
 		if (message != null) {
 			contentTypeHeader = (ContentTypeHeader) message
@@ -135,18 +141,24 @@ public class SessionManager {
 				.toLowerCase().trim().equals("application")
 			&& contentTypeHeader.getContentSubType()
 				.toLowerCase().trim().equals("sdp");
+		logger.debug("$ And content is application/sdp: {} $", contentIsSdp);
 		boolean messageHasSdpOfInterest = messageHasContent && contentIsSdp;
 		if (dispositionMatters && dispositionType != null
 				&& !dispositionType.trim().isEmpty()) {
 			messageHasSdpOfInterest &= message != null
-				&& message.getContentDisposition().getDispositionType()
-				.toLowerCase().trim().equals(dispositionType);
+				&& (message.getContentDisposition() == null
+				|| message.getContentDisposition().getDispositionType()
+				.toLowerCase().trim().equals(dispositionType));
+			logger.debug("$ And since disposition type {} matters, this "
+				+ "SDP is interesting: {} $", dispositionType, messageHasSdpOfInterest);
+		} else {
+			logger.debug("$ And the disposition type doesn't matter. $");
 		}
 		return messageHasSdpOfInterest;
 	}
 
-	private boolean generateOffer(SipuadaPlugin sessionPlugin,
-			String callId, Message offerMessage, boolean dispositionMatters) {
+	private boolean generateOffer(SipuadaPlugin sessionPlugin, String callId,
+			SessionType type, Message offerMessage, boolean dispositionMatters) {
 		String offerMessageIdentifier = offerMessage instanceof Request
 			? ((Request) offerMessage).getMethod()
 			: Integer.toString(((Response) offerMessage).getStatusCode());
@@ -157,7 +169,7 @@ public class SessionManager {
 		}
 		SessionDescription offer = null;
 		try {
-			offer = sessionPlugin.generateOffer(callId, localAddress);
+			offer = sessionPlugin.generateOffer(callId, type, localAddress);
 			logger.debug("* {} just generated offer \n{}\n to be inserted into {} in "
 				+ "context of call {}! *", role, offer, offerMessageIdentifier, callId);
 		} catch (Throwable unexpectedException) {
@@ -177,7 +189,7 @@ public class SessionManager {
 				.createContentTypeHeader("application", "sdp"));
 			if (dispositionMatters) {
 				offerMessage.setContentDisposition(headerMaker
-					.createContentDispositionHeader(SessionType.EARLY.getDisposition()));
+					.createContentDispositionHeader(type.getDisposition()));
 			}
 			logger.info("{}'s plug-in-generated offer \n{}\n inserted into {}.",
 				role, offer.toString(), offerMessageIdentifier);
@@ -304,9 +316,9 @@ public class SessionManager {
 		if (sessionPlugin == null) {
 			return true;
 		}
-		if (!sessionPlugin.isSessionOngoing(callId, sessionType)) {
-			return true;
-		}
+//		if (!sessionPlugin.isSessionOngoing(callId, sessionType)) {
+//			return true;
+//		}
 		return sessionPlugin.performSessionTermination(callId, sessionType);
 	}
 

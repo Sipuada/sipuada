@@ -27,7 +27,7 @@ public interface SipuadaPlugin {
 	 * @return a SessionDescription representing an offer or null if the plug-in
 	 * wishes to propose no offer to a request of given method.
 	 */
-	SessionDescription generateOffer(String callId, String localAddress);
+	SessionDescription generateOffer(String callId, SessionType type, String localAddress);
 
 	/**
 	 * Feeds the accepted answer to a given offer back to the plug-in that generated
