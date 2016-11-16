@@ -21,7 +21,13 @@ import android.javax.sip.message.Response;
 
 public class SessionManager {
 
-	private final static Logger logger = LoggerFactory.getLogger(SessionManager.class);
+	public static final EarlyMediaModel prioritaryEMModel = EarlyMediaModel.APPLICATION_SERVER;
+
+	public enum EarlyMediaModel {
+		APPLICATION_SERVER, GATEWAY;
+	}
+
+	private static final Logger logger = LoggerFactory.getLogger(SessionManager.class);
 
 	private final HeaderFactory headerMaker;
 	private final Map<RequestMethod, SipuadaPlugin> sessionPlugins;
@@ -75,7 +81,8 @@ public class SessionManager {
 			//if UAS: OFFER at Response only
 			return role == SipUserAgentRole.UAC
 				? generateOffer(sessionPlugin, callId, type,
-					request, contentDispositionMatters/*FIXME should be: true*/)
+					request, prioritaryEMModel != EarlyMediaModel.GATEWAY
+						? true : contentDispositionMatters)
 				: generateOffer(sessionPlugin, callId, type,
 					response, contentDispositionMatters);
 		} else if (requestHasSdp && !responseHasSdp && !ackRequestHasSdp) {
@@ -342,9 +349,6 @@ public class SessionManager {
 		if (sessionPlugin == null) {
 			return true;
 		}
-//		if (!sessionPlugin.isSessionOngoing(callId, sessionType)) {
-//			return true;
-//		}
 		return sessionPlugin.performSessionTermination(callId, sessionType);
 	}
 
