@@ -21,7 +21,7 @@ import android.javax.sip.message.Response;
 
 public class SessionManager {
 
-	public static final EarlyMediaModel prioritaryEMModel = EarlyMediaModel.APPLICATION_SERVER;
+	public static final EarlyMediaModel prioritaryEarlyMediaModel = EarlyMediaModel.APPLICATION_SERVER;
 
 	public enum EarlyMediaModel {
 		APPLICATION_SERVER, GATEWAY;
@@ -81,7 +81,7 @@ public class SessionManager {
 			//if UAS: OFFER at Response only
 			return role == SipUserAgentRole.UAC
 				? generateOffer(sessionPlugin, callId, type,
-					request, prioritaryEMModel != EarlyMediaModel.GATEWAY
+					request, prioritaryEarlyMediaModel != EarlyMediaModel.GATEWAY
 						? true : contentDispositionMatters)
 				: generateOffer(sessionPlugin, callId, type,
 					response, contentDispositionMatters);
