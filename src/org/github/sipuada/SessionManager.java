@@ -93,7 +93,14 @@ public class SessionManager {
 					request, response, contentDispositionMatters);
 		} else if (!requestHasSdp && responseHasSdp && !ackRequestHasSdp) {
 			//if UAC: ANSWER at AckRequest only
-			//if UAS: ERROR -> no ANSWER at AckRequest
+			//if UAS: ERROR -> no ANSWER at AckRequest... //TODO but as fallback,
+			//if Request had an OFFER used in the EARLY media session,
+			//consider reusing ANSWER previously sent in the EARLY media session,
+			//to setup the REGULAR media session
+			//* OR *
+			//consider sending UPDATE request passing the previously generated
+			//OFFER to which no ANSWER came in the AckRequest
+			//(^ THIS IS MOST LIKELY THE CORRECT SOLUTION ^)
 			return role == SipUserAgentRole.UAC
 				? generateAnswer(sessionPlugin, callId, type,
 					response, ackRequest, contentDispositionMatters) : false;
