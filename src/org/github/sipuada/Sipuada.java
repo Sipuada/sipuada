@@ -205,10 +205,12 @@ public class Sipuada implements SipuadaApi {
 			}
 			Set<SipUserAgent> userAgents = transportToUserAgents.get(transport);
 			SipProvider sipProvider;
+			final String stackName;
 			try {
 				SipStack stack = listeningPointToStack.get(listeningPoint);
 				sipProvider = stack.createSipProvider(listeningPoint);
 				stack.start();
+				stackName = stack.getStackName();
 			} catch (ObjectInUseException unexpectedException) {
 				logger.error("Unexpected problem: {}.", unexpectedException.getMessage(),
 						unexpectedException.getCause());
@@ -220,7 +222,7 @@ public class Sipuada implements SipuadaApi {
 				throw new SipuadaException("Unexpected problem: "
 						+ unexpectedException.getMessage(), unexpectedException);
 			}
-			SipUserAgent userAgent = new SipUserAgent(eventBus, sipProvider, sipuadaListener,
+			SipUserAgent userAgent = new SipUserAgent(stackName, eventBus, sipProvider, sipuadaListener,
 					registeredPlugins, sipUsername, sipPrimaryHost, sipPassword,
 					listeningPoint.getIPAddress(), Integer.toString(listeningPoint.getPort()),
 					rawTransport, callIdToActiveUserAgent, activeUserAgentCallIds,
@@ -288,7 +290,7 @@ public class Sipuada implements SipuadaApi {
 	private SipStack generateSipStack() {
 		Properties properties = new Properties();
 		properties.setProperty("android.javax.sip.STACK_NAME", String.format("%s_%s",
-				STACK_NAME_PREFIX, Utils.getInstance().generateTag()));
+			STACK_NAME_PREFIX, Utils.getInstance().generateTag()));
 		SipFactory factory = SipFactory.getInstance();
 		try {
 			return factory.createSipStack(properties);
@@ -947,11 +949,12 @@ public class Sipuada implements SipuadaApi {
 					}
 				}
 				Set<SipUserAgent> userAgents = transportToUserAgents.get(transport);
-				SipUserAgent userAgent = new SipUserAgent(eventBus, sipProvider, listener, registeredPlugins,
-						username, primaryHost, password, listeningPoint.getIPAddress(),
-						Integer.toString(listeningPoint.getPort()), rawTransport,
-						callIdToActiveUserAgent, activeUserAgentCallIds,
-						registerCallIds, registerCSeqs, intolerantModeEnabled);
+				SipUserAgent userAgent = new SipUserAgent(stack.getStackName(),
+					eventBus, sipProvider, listener, registeredPlugins,
+					username, primaryHost, password, listeningPoint.getIPAddress(),
+					Integer.toString(listeningPoint.getPort()), rawTransport,
+					callIdToActiveUserAgent, activeUserAgentCallIds,
+					registerCallIds, registerCSeqs, intolerantModeEnabled);
 				userAgents.add(userAgent);
 				activeUserAgentCallIds.put(userAgent, Collections
 						.synchronizedSet(new HashSet<String>()));

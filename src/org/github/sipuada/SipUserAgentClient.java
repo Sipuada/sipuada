@@ -27,6 +27,7 @@ import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EarlyMediaSessionEstablished;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
+import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.MessageNotSent;
 import org.github.sipuada.events.MessageSent;
 import org.github.sipuada.events.RegistrationFailed;
@@ -95,6 +96,7 @@ public class SipUserAgentClient {
 
 	private final Logger logger = LoggerFactory.getLogger(SipUserAgentClient.class);
 
+	private final String stackName;
 	private final EventBus bus;
 	private final SipProvider provider;
 	private final MessageFactory messenger;
@@ -117,10 +119,11 @@ public class SipUserAgentClient {
 
 	private final URI registerRequestUri;
 
-	public SipUserAgentClient(EventBus eventBus, SipProvider sipProvider,
+	public SipUserAgentClient(String name, EventBus eventBus, SipProvider sipProvider,
 			Map<RequestMethod, SipuadaPlugin> plugins, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
 			Map<URI, Long> globalRegisterCSeqs, String... credentialsAndAddress) {
+		stackName = name;
 		bus = eventBus;
 		provider = sipProvider;
 		messenger = messageFactory;
@@ -148,8 +151,9 @@ public class SipUserAgentClient {
 			throw new SipuadaException(String
 					.format("Invalid host '%s'.", primaryHost), parseException);
 		}
-		sessionManager = new SessionManager(plugins,
+		sessionManager = new SessionManager(plugins, bus,
 			SipUserAgentRole.UAC, localIp, headerMaker);
+		logger.debug("UAC {} created, bound to {}:{}.", stackName, localIp, localPort);
 	}
 
 	public boolean sendRegisterRequest(CallIdHeader callIdHeader, int expires, String... addresses) {
@@ -501,6 +505,142 @@ public class SipUserAgentClient {
 			additionalHeadersList.toArray(new Header[additionalHeadersList.size()]));
 	}
 
+	public boolean sendUpdateRequest(final Dialog dialog, SessionType type,
+			String... additionalHeaders) {
+		final RequestMethod method = RequestMethod.UPDATE;
+		List<Header> additionalHeadersList = new ArrayList<Header>();
+		for (String additionalHeader : additionalHeaders) {
+			if (additionalHeader != null) {
+				String[] split = additionalHeader.split("\\:");
+				String headerName = split[0].trim();
+				if (headerName.isEmpty()) {
+					continue;
+				}
+				String headerValue = split.length > 1 ? split[1].trim() : "";
+				try {
+					Header header = headerMaker.createHeader(headerName, headerValue);
+					additionalHeadersList.add(header);
+				} catch (ParseException parseException) {
+					continue;
+				}
+			}
+		}
+		URI addresseeUri = dialog.getRemoteParty().getURI();
+		URI requestUri = (URI) addresseeUri.clone();
+		CallIdHeader callIdHeader = dialog.getCallId();
+		long cseq = dialog.getLocalSeqNumber();
+		if (cseq == 0) {
+			cseq = localCSeq + 1;
+		}
+		if (localCSeq < cseq) {
+			localCSeq = cseq;
+		}
+		Address from, to;
+		String fromTag, toTag;
+		List<Address> canonRouteSet = new LinkedList<>();
+		final URI remoteTargetUri;
+		remoteTargetUri = dialog.getRemoteTarget().getURI();
+		from = addressMaker.createAddress(dialog.getLocalParty().getURI());
+		fromTag = dialog.getLocalTag();
+		to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
+		toTag = dialog.getRemoteTag();
+		Iterator<?> routeHeaders = dialog.getRouteSet();
+		while (routeHeaders.hasNext()) {
+			RouteHeader routeHeader = (RouteHeader) routeHeaders.next();
+			canonRouteSet.add(routeHeader.getAddress());
+		}
+		List<Address> normalizedRouteSet = new LinkedList<>();
+		if (!canonRouteSet.isEmpty()) {
+			if (((SipURI)canonRouteSet.get(0).getURI()).hasLrParam()) {
+				requestUri = remoteTargetUri;
+				for (Address address : canonRouteSet) {
+					normalizedRouteSet.add(address);
+				}
+			}
+			else {
+				requestUri = canonRouteSet.get(0).getURI();
+				for (int i=1; i<canonRouteSet.size(); i++) {
+					normalizedRouteSet.add(canonRouteSet.get(i));
+				}
+				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
+				normalizedRouteSet.add(remoteTargetAddress);
+			}
+		}
+		else {
+			requestUri = (URI) remoteTargetUri.clone();
+		}
+		ViaHeader viaHeader = null;
+		try {
+			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
+			FromHeader fromHeader = headerMaker.createFromHeader(from, fromTag);
+			ToHeader toHeader = headerMaker.createToHeader(to, toTag);
+			final Request request = messenger.createRequest(requestUri, method.toString(),
+				callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
+				fromHeader, toHeader, Collections.singletonList(viaHeader),
+				headerMaker.createMaxForwardsHeader(70));
+			if (!normalizedRouteSet.isEmpty()) {
+				for (Address routeAddress : normalizedRouteSet) {
+					RouteHeader routeHeader = headerMaker.createRouteHeader(routeAddress);
+					request.addHeader(routeHeader);
+				}
+			}
+			else {
+				request.removeHeader(RouteHeader.NAME);
+			}
+			for (int i=0; i<additionalHeadersList.size(); i++) {
+				request.addHeader(additionalHeadersList.get(i));
+			}
+			final ClientTransaction clientTransaction = provider.getNewClientTransaction(request);
+			viaHeader.setBranch(clientTransaction.getBranchId());
+			final String callId = callIdHeader.getCallId();
+			putOfferIntoRequestIfApplicable(method, callId, dialog, type, request);
+			new Thread(new Runnable() {
+
+				@Override
+				public void run() {
+					try {
+						if (doSendRequest(request, clientTransaction, dialog)) {
+							logger.info("{} request sent by {}:{} through {}.",
+								method, localIp, localPort, transport);
+						}
+						else {
+							logger.error("Could not send this {} request.", method);
+							reportRequestError(callId, clientTransaction,
+								"Request could not be parsed or contained invalid state.");
+						}
+					} catch (SipException requestCouldNotBeSent) {
+						logger.error("Could not send this {} request: {} ({}).",
+							method, requestCouldNotBeSent.getMessage(),
+							requestCouldNotBeSent.getCause().getMessage());
+						reportRequestError(callId, clientTransaction,
+							"Request could not be sent: " + String.format("%s (%s).",
+							requestCouldNotBeSent.getMessage(),
+							requestCouldNotBeSent.getCause().getMessage()));
+					}
+				}
+
+			}).start();
+			return true;
+		} catch (ParseException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create mandatory headers for "
+				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
+				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+				requestCouldNotBeBuilt.getMessage());
+		} catch (TransactionUnavailableException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create client transaction to handle"
+				+ " this {} request: {}.", method, requestCouldNotBeBuilt.getMessage());
+		} catch (InvalidArgumentException requestCouldNotBeBuilt) {
+			logger.error("Could not properly create mandatory headers for "
+				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
+				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+				requestCouldNotBeBuilt.getMessage());
+		}
+		//No need for caller to wait for remote responses.
+		return false;
+	}
+
 	private boolean sendPrackRequest(final Dialog dialog, final Request request,
 			final Response response) {
 		final String method = RequestMethod.PRACK.toString();
@@ -600,7 +740,7 @@ public class SipUserAgentClient {
 			boolean pluginAnswerGenerated = false;
 			try {
 				if (putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-						callId, SessionType.EARLY, request, response, prackRequest)) {
+						callId, dialog, SessionType.EARLY, request, response, prackRequest)) {
 					logger.info("UAC could provide suitable answer to {} offer, so, "
 						+ "sending {} to {} response to {} request (from {}:{})...",
 						SessionType.EARLY, method, response.getStatusCode(),
@@ -788,7 +928,7 @@ public class SipUserAgentClient {
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
 			if (isDialogCreatingRequest(method)) {
-				putOfferIntoRequestIfApplicable(method, callId, SessionType.EARLY, request);
+				putOfferIntoRequestIfApplicable(method, callId, dialog, SessionType.EARLY, request);
 			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
 				request.setContent(content, contentTypeHeader);
 			}
@@ -864,11 +1004,11 @@ public class SipUserAgentClient {
 	}
 
 	private void putOfferIntoRequestIfApplicable(RequestMethod method,
-			String callId, SessionType type, Request request) {
+			String callId, Dialog dialog, SessionType type, Request request) {
 		logger.debug("$ About to perform OFFER/ANSWER exchange step "
 			+ "expecting to put offer into Req! $");
 		sessionManager.performOfferAnswerExchangeStep
-			(callId, type, request, null, null);
+			(callId, dialog, type, request, null, null);
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
@@ -1024,6 +1164,8 @@ public class SipUserAgentClient {
 					case MESSAGE:
 						handleMessageResponse(statusCode, response, clientTransaction);
 						break;
+					case UPDATE:
+						handleUpdateResponse(statusCode, response, clientTransaction);
 					case UNKNOWN:
 					default:
 						break;
@@ -1688,7 +1830,7 @@ public class SipUserAgentClient {
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
 					boolean sendByeRightAway = false;
 					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-							callId, SessionType.REGULAR, request, response, ackRequest)) {
+							callId, dialog, SessionType.REGULAR, request, response, ackRequest)) {
 						sendByeRightAway = true;
 					}
 					logger.info("Sending {} to {} response to {} request (from {}:{})...",
@@ -1768,11 +1910,11 @@ public class SipUserAgentClient {
 	}
 
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
-			SessionType type, Request request, Response response, Request ackRequest) {
+			Dialog dialog, SessionType type, Request request, Response response, Request ackRequest) {
 		logger.debug("$ About to perform OFFER/ANSWER exchange step "
 			+ "expecting put answer into Ack or parse answer from Res! $");
 		return sessionManager.performOfferAnswerExchangeStep
-			(callId, type, request, response, ackRequest);
+			(callId, dialog, type, request, response, ackRequest);
 	}
 
 	private void handleByeResponse(int statusCode, Response response,
@@ -1868,6 +2010,37 @@ public class SipUserAgentClient {
 			CallIdHeader callIdHeader = (CallIdHeader) response.getHeader(CallIdHeader.NAME);
 			final String callId = (callIdHeader).getCallId();
 			bus.post(new MessageSent(callId));
+		}
+	}
+
+	private void handleUpdateResponse(int statusCode, Response response,
+			ClientTransaction clientTransaction) {
+		logger.info("{} response arrived.", statusCode);
+		Request request = clientTransaction.getRequest();
+		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
+		Dialog dialog = clientTransaction.getDialog();
+		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+			if (dialog != null) {
+				boolean sendByeRightAway = false;
+				if (!sessionManager.performOfferAnswerExchangeStep
+						(callId, dialog, sessionManager.isSessionOngoing(callId, SessionType.EARLY)
+							? SessionType.EARLY : SessionType.REGULAR, request, response, null)
+						&& !sessionManager.isSessionOngoing(callId, SessionType.REGULAR)
+						&& !sessionManager.isSessionOngoing(callId, SessionType.EARLY)) {
+					sendByeRightAway = true;
+				}
+				logger.info("{} response to {} arrived.", statusCode, RequestMethod.UPDATE);
+				logger.info("Call updated: {}.", callId);
+				if (sendByeRightAway) {
+					sendByeRequest(dialog, true, "Media types negotiation failed.");
+				}
+				bus.post(new EstablishedCallStarted(callId, dialog));
+			} else {
+				logger.error("Could not process {} response to {} request: dialog is missing!" +
+					response.getStatusCode(), request.getMethod());
+				throw new InternalJainSipException("Cannot process successful response "
+					+ "to INVITE: dialog is missing!", null);
+			}
 		}
 	}
 

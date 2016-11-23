@@ -5,14 +5,18 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.github.sipuada.Constants.RequestMethod;
+import org.github.sipuada.events.SendUpdateEvent;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.eventbus.EventBus;
+
 import android.javax.sdp.SdpFactoryImpl;
 import android.javax.sdp.SdpParseException;
 import android.javax.sdp.SessionDescription;
+import android.javax.sip.Dialog;
 import android.javax.sip.header.ContentTypeHeader;
 import android.javax.sip.header.HeaderFactory;
 import android.javax.sip.message.Message;
@@ -29,10 +33,11 @@ public class SessionManager {
 
 	private static final Logger logger = LoggerFactory.getLogger(SessionManager.class);
 
-	private final HeaderFactory headerMaker;
+	private final EventBus bus;
 	private final Map<RequestMethod, SipuadaPlugin> sessionPlugins;
 	private final SipUserAgentRole role;
 	private final String localAddress;
+	private final HeaderFactory headerMaker;
 	private final Map<String, SessionType> requestSdpUsedInSomeSession = new HashMap<>();
 	private final Map<String, SessionType> responseSdpUsedInSomeSession = new HashMap<>();
 
@@ -40,24 +45,25 @@ public class SessionManager {
 		UAC, UAS;
 	}
 
-	public SessionManager(Map<RequestMethod, SipuadaPlugin> sessionPlugins,
+	public SessionManager(Map<RequestMethod, SipuadaPlugin> sessionPlugins, EventBus bus,
 		SipUserAgentRole role, String localAddress, HeaderFactory headerMaker) {
-		this.headerMaker = headerMaker;
+		this.bus = bus;
 		this.sessionPlugins = sessionPlugins;
 		this.role = role;
 		this.localAddress = localAddress;
+		this.headerMaker = headerMaker;
 	}
 
-	public boolean performOfferAnswerExchangeStep(String callId, SessionType type,
-			Request request, Response response, Request ackRequest) {
+	public boolean performOfferAnswerExchangeStep(String callId, Dialog dialog,
+			SessionType type, Request request, Response response, Request ackRequest) {
 		logger.debug("$ Performing OFFER/ANSWER exchange step {}/{}! $", callId, type);
 		SipuadaPlugin sessionPlugin = null;
 		if (request != null) {
-			RequestMethod requestMethod = RequestMethod.UNKNOWN;
-			try {
-				requestMethod = RequestMethod.valueOf
-					(request.getMethod().toUpperCase().trim());
-			} catch (IllegalArgumentException ignore) {}
+			RequestMethod requestMethod = RequestMethod.INVITE;
+//			try {
+//				requestMethod = RequestMethod.valueOf
+//					(request.getMethod().toUpperCase().trim());
+//			} catch (IllegalArgumentException ignore) {}
 			sessionPlugin = sessionPlugins.get(requestMethod);
 		}
 		boolean contentDispositionMatters = request != null
@@ -95,15 +101,12 @@ public class SessionManager {
 			//if UAC: ANSWER at AckRequest only
 			//if UAS: ERROR -> no ANSWER at AckRequest... //TODO but as fallback,
 			//if Request had an OFFER used in the EARLY media session,
-			//consider reusing ANSWER previously sent in the EARLY media session,
-			//to setup the REGULAR media session
-			//* OR *
-			//consider sending UPDATE request passing the previously generated
-			//OFFER to which no ANSWER came in the AckRequest
-			//(^ THIS IS MOST LIKELY THE CORRECT SOLUTION ^)
+			//consider sending UPDATE request passing a new OFFER
 			return role == SipUserAgentRole.UAC
 				? generateAnswer(sessionPlugin, callId, type,
-					response, ackRequest, contentDispositionMatters) : false;
+					response, ackRequest, contentDispositionMatters)
+				: requestSdpIsUsedInSomeOtherSession(callId, type)
+					? sendUpdatedOffer(callId, dialog, type) : false;
 		} else if (requestHasSdp && responseHasSdp && !ackRequestHasSdp) {
 			//if UAC: ANSWER at Response to my OFFER at Request has arrived
 			//if UAS: just do nothing, since session was already established
@@ -329,11 +332,22 @@ public class SessionManager {
 					role, unexpectedException);
 			}
 		} catch (SdpParseException parseException) {
-			logger.error("Answer arrived in {}, but could not be properly" +
-				" parsed, so it was discarded. The {} will terminate the dialog right away.",
+			logger.error("Answer arrived in {}, but could not be properly parsed, so "
+				+ "it was discarded. The {} will terminate the dialog right away.",
 				answerMessageIdentifier, role, parseException);
 		}
 		return false;
+	}
+
+	private boolean sendUpdatedOffer(String callId, Dialog dialog, SessionType type) {
+		bus.post(new SendUpdateEvent(callId, dialog, type));
+		return true;
+	}
+
+	public boolean isSessionOngoing(String callId, SessionType type) {
+		RequestMethod requestMethod = RequestMethod.INVITE;
+		SipuadaPlugin sessionPlugin = sessionPlugins.get(requestMethod);
+		return sessionPlugin.isSessionOngoing(callId, type);
 	}
 
 	public static boolean performSessionSetup(SipuadaPlugin sessionPlugin,

@@ -35,6 +35,7 @@ import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.events.MessageSent;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
+import org.github.sipuada.events.SendUpdateEvent;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
@@ -77,7 +78,8 @@ public class SipUserAgent implements SipListener {
 		RequestMethod.INFO,
 		RequestMethod.ACK,
 		RequestMethod.PRACK,
-		RequestMethod.BYE
+		RequestMethod.BYE,
+		RequestMethod.UPDATE
 	};
 	protected static final String X_FAILURE_REASON_HEADER = "XFailureReason";
 
@@ -101,6 +103,7 @@ public class SipUserAgent implements SipListener {
 	private SipUserAgentClient uac;
 	private SipUserAgentServer uas;
 
+	private final String stackName;
 	private final Map<RequestMethod, SipuadaPlugin> registeredPlugins;
 	private final String username;
 	private final String primaryHost;
@@ -117,11 +120,12 @@ public class SipUserAgent implements SipListener {
 	private final int minTolerableTimeout = 2;
 	private float currentTolerableTimeout = (maxTolerableTimeout + minTolerableTimeout) / 2;
 
-	public SipUserAgent(EventBus eventBus, SipProvider sipProvider, SipuadaListener sipuadaListener,
+	public SipUserAgent(String name, EventBus eventBus, SipProvider sipProvider, SipuadaListener sipuadaListener,
 			Map<RequestMethod, SipuadaPlugin> plugins, String username, String primaryHost, String password,
 			String localIp, String localPort, String transport, Map<String, SipUserAgent> callIdToActiveUserAgent,
 			Map<SipUserAgent, Set<String>> activeUserAgentCallIds, Map<String, CallIdHeader> globalRegisterCallIds,
 			Map<URI, Long> globalRegisterCSeqs, boolean intolerantModeIsEnabled) {
+		stackName = name;
 		sipuadaEventBus = eventBus;
 		provider = sipProvider;
 		listener = sipuadaListener;
@@ -133,9 +137,9 @@ public class SipUserAgent implements SipListener {
 			MessageFactory messenger = factory.createMessageFactory();
 			HeaderFactory headerMaker = factory.createHeaderFactory();
 			AddressFactory addressMaker = factory.createAddressFactory();
-			uac = new SipUserAgentClient(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
+			uac = new SipUserAgentClient(stackName, internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					globalRegisterCSeqs, username, primaryHost, password, localIp, localPort, transport);
-			uas = new SipUserAgentServer(internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
+			uas = new SipUserAgentServer(stackName, internalEventBus, provider, plugins, messenger, headerMaker, addressMaker,
 					username, localIp, localPort, transport);
 		} catch (PeerUnavailableException ignore){
 			ignore.printStackTrace();
@@ -1101,9 +1105,44 @@ public class SipUserAgent implements SipListener {
 		return false;
 	}
 
+	private boolean sendUpdateRequest(final String callId, final Dialog dialog, SessionType type,
+			final BasicRequestCallback callback, String... additionalHeaders) {
+		synchronized (establishedCalls) {
+			if (dialog != null && dialog.getCallId().getCallId().equals(callId)) {
+				return uac.sendUpdateRequest(dialog, type, additionalHeaders);
+			}
+		}
+		logger.error("Cannot send message.\nCall with callId " + "'{}' not found.", callId);
+		return false;
+	}
+
+	@Subscribe
+	public void onEvent(SendUpdateEvent event) {
+		final String callId = event.getCallId();
+		final Dialog dialog = event.getDialog();
+		final SessionType sessionType = event.getSessionType();
+		logger.debug("(SendUpdateEvent scheduled; callId=[{}], dialog=[{}], sessionType=[{}].)",
+			callId, dialog, sessionType);
+		sendUpdateRequest(callId, dialog, sessionType, new BasicRequestCallback() {
+
+			@Override
+			public void onRequestSuccess(String localUser, String localDomain, Object... response) {
+				logger.debug("(UPDATE request sent successfully. localUser=[{}], localDomain=[{}].)",
+					localUser, localDomain);
+			}
+
+			@Override
+			public void onRequestFailed(String localUser, String localDomain, String reason) {
+				logger.debug("(UPDATE request failed. localUser=[{}], localDomain=[{}], reason=[{}].)",
+					localUser, localDomain, reason);
+			}
+
+		});
+	}
+
 	@Subscribe
 	public void onEvent(DeadEvent deadEvent) {
-		System.out.println("Dead event: " + deadEvent.getEvent().getClass());
+		logger.error("Dead event: {}.", deadEvent.getEvent().getClass());
 	}
 
 }
