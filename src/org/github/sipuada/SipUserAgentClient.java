@@ -1829,10 +1829,10 @@ public class SipUserAgentClient {
 					CSeqHeader cseqHeader = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
 					boolean sendByeRightAway = false;
-					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-							callId, dialog, SessionType.REGULAR, request, response, ackRequest)) {
-						sendByeRightAway = true;
-					}
+//					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
+//							callId, dialog, SessionType.REGULAR, request, response, ackRequest)) {
+//						sendByeRightAway = true;
+//					}
 					logger.info("Sending {} to {} response to {} request (from {}:{})...",
 						RequestMethod.ACK, response.getStatusCode(), request.getMethod(),
 						localIp, localPort);

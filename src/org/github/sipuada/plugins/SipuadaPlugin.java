@@ -1428,7 +1428,7 @@ public abstract class SipuadaPlugin {
 						&& answerControlPort == remoteControlPort)) {
 					logger.debug("%% Prepared a {} ({}) stream from "
 						+ "[rtp = {}:{}, rtcp = {}:{}] to [rtp = {}:{},"
-						+ " rtcp = {}:{}]! %%", mediaCodecOfInterest,
+						+ " rtcp = {}:{}]! %%", mediaCodecOfInterest.getEncoding(),
 						offerDirection, offerDataAddress, offerDataPort,
 						offerControlAddress, offerControlPort, answerDataAddress,
 						answerDataPort, answerControlAddress, answerControlPort);
@@ -1440,7 +1440,8 @@ public abstract class SipuadaPlugin {
 				} else {
 					logger.debug("%% Prepared a {} ({}) stream from "
 						+ "[rtp = {}:{}, rtcp = {}:{}] to [rtp = {}:{} --> {}:{},"
-						+ " rtcp = {}:{} --> {}:{}]! %%", mediaCodecOfInterest,
+						+ " rtcp = {}:{} --> {}:{}]! %%",
+						mediaCodecOfInterest.getEncoding(),
 						offerDirection, offerDataAddress, offerDataPort,
 						offerControlAddress, offerControlPort, answerDataAddress,
 						answerDataPort, remoteDataAddress, remoteDataPort,
@@ -1462,7 +1463,7 @@ public abstract class SipuadaPlugin {
 						&& offerControlPort == remoteControlPort)) {
 					logger.debug("%% Prepared a {} ({}) stream from "
 						+ "[rtp = {}:{}, rtcp = {}:{}] to [rtp = {}:{},"
-						+ " rtcp = {}:{}]! %%", mediaCodecOfInterest,
+						+ " rtcp = {}:{}]! %%", mediaCodecOfInterest.getEncoding(),
 						answerDirection, answerDataAddress, answerDataPort,
 						answerControlAddress, answerControlPort, offerDataAddress,
 						offerDataPort, offerControlAddress, offerControlPort);
@@ -1474,7 +1475,8 @@ public abstract class SipuadaPlugin {
 				} else {
 					logger.debug("%% Prepared a {} ({}) stream from "
 						+ "[rtp = {}:{}, rtcp = {}:{}] to [rtp = {}:{} --> {}:{},"
-						+ " rtcp = {}:{} --> {}:{}]! %%", mediaCodecOfInterest,
+						+ " rtcp = {}:{} --> {}:{}]! %%",
+						mediaCodecOfInterest.getEncoding(),
 						answerDirection, answerDataAddress, answerDataPort,
 						answerControlAddress, answerControlPort, offerDataAddress,
 						offerDataPort, remoteDataAddress, remoteDataPort,
@@ -1495,7 +1497,7 @@ public abstract class SipuadaPlugin {
 			logger.debug("%% If there was a scheduled setup, it was canceled,"
 				+ " so, prepared {} ({}) stream discarded. Otherwise, stream "
 				+ "was prepared and is ready to be setup. %%",
-				mediaCodecOfInterest, answerDirection);
+				mediaCodecOfInterest.getEncoding(), answerDirection);
 		}
 	}
 
@@ -1529,6 +1531,7 @@ public abstract class SipuadaPlugin {
 					+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
 					pluginClass, callId, roles.get(getSessionKey
 						(callId, type)), offer, answer);
+				postponedStreams.put(getSessionKey(callId, type), userAgent);
 				return true;
 			} else if (!preparedStreams.containsKey((getSessionKey(callId, type)))) {
 				logger.info("^^ {} postponed session setup in context of call {}...\n"
