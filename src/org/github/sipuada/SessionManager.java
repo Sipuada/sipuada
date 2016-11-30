@@ -2,7 +2,9 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.plugins.SipuadaPlugin;
@@ -185,15 +187,18 @@ public class SessionManager {
 					boolean regularGenerated = generateAnswer(sessionPlugin, callId,
 						SessionType.REGULAR, request, provisionalResponse,
 						contentDispositionMatters);
-					if (reqHasEarlySdp) {
-						return regularGenerated && generateAnswer(sessionPlugin, callId,
-							SessionType.EARLY, request, provisionalResponse,
-							contentDispositionMatters);
-					} else {
-						return regularGenerated && generateOffer(sessionPlugin, callId,
-							SessionType.EARLY, provisionalResponse,
-							contentDispositionMatters);
+					if (messageIsMultipart(request)) {
+						if (reqHasEarlySdp) {
+							return regularGenerated && generateAnswer(sessionPlugin,
+								callId, SessionType.EARLY, request,
+								provisionalResponse, contentDispositionMatters);
+						} else {
+							return regularGenerated && generateOffer(sessionPlugin,
+								callId, SessionType.EARLY, provisionalResponse,
+								contentDispositionMatters);
+						}
 					}
+					return regularGenerated;
 				}
 			}
 		} else if (!reqHasSdp && provResHasSdp && !prackHasSdp
@@ -205,7 +210,7 @@ public class SessionManager {
 					boolean regularGenerated = generateAnswer(sessionPlugin, callId,
 						SessionType.REGULAR, provisionalResponse, prackRequest,
 						contentDispositionMatters);
-					if (provResHasEarlySdp) {
+					if (messageIsMultipart(provisionalResponse) && provResHasEarlySdp) {
 						return regularGenerated && generateAnswer(sessionPlugin, callId,
 							SessionType.EARLY, provisionalResponse, prackRequest,
 							contentDispositionMatters);
@@ -218,18 +223,22 @@ public class SessionManager {
 			if (role == SipUserAgentRole.UAS) {
 				return true;
 			} else {
-				boolean regularReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
-					SessionType.REGULAR, provisionalResponse);
+				boolean regularReceived = receiveAnswerToAcceptedOffer
+					(sessionPlugin, callId, SessionType.REGULAR, provisionalResponse);
 				if (prackRequest != null && provResHasEarlySdp) {
 					boolean contentDispositionMatters = contentDispositionMatters
 						(provisionalResponse);
-					if (reqHasEarlySdp) {
-						return regularReceived && receiveAnswerToAcceptedOffer(sessionPlugin,
-							callId, SessionType.EARLY, provisionalResponse);
-					} else {
-						return regularReceived && generateAnswer(sessionPlugin, callId,
-							SessionType.EARLY, provisionalResponse, prackRequest,
-							contentDispositionMatters);
+					if (messageIsMultipart(request)) {
+						if (reqHasEarlySdp) {
+							return regularReceived && receiveAnswerToAcceptedOffer
+								(sessionPlugin, callId, SessionType.EARLY,
+									provisionalResponse);
+						} else {
+							return regularReceived && generateAnswer(sessionPlugin,
+								callId, SessionType.EARLY, provisionalResponse,
+								prackRequest, contentDispositionMatters);
+						}
+						
 					}
 				}
 				return regularReceived;
@@ -239,11 +248,11 @@ public class SessionManager {
 			if (role == SipUserAgentRole.UAC) {
 				return true;
 			} else {
-				boolean regularReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
-					SessionType.REGULAR, prackRequest);
-				if (provResHasEarlySdp) {
-					return regularReceived && receiveAnswerToAcceptedOffer(sessionPlugin,
-						callId, SessionType.EARLY, prackRequest);
+				boolean regularReceived = receiveAnswerToAcceptedOffer
+					(sessionPlugin, callId, SessionType.REGULAR, prackRequest);
+				if (messageIsMultipart(provisionalResponse) && provResHasEarlySdp) {
+					return regularReceived && receiveAnswerToAcceptedOffer
+						(sessionPlugin, callId, SessionType.EARLY, prackRequest);
 				}
 				return regularReceived;
 			}
@@ -269,20 +278,13 @@ public class SessionManager {
 							SessionType.REGULAR, prackRequest, prackResponse,
 							contentDispositionMatters);
 					}
-					if (prackHasEarlySdp) {
+					if ((!prackHasRegularSdp || messageIsMultipart
+							(prackRequest)) && prackHasEarlySdp) {
 						earlyGenerated = generateAnswer(sessionPlugin, callId,
 							SessionType.EARLY, prackRequest, prackResponse,
 							contentDispositionMatters);
 					}
 					return regularGenerated && earlyGenerated;
-				}
-				if (provResHasEarlySdp) {
-					if (reqHasEarlySdp) {
-						return true;
-					} else {
-						return receiveAnswerToAcceptedOffer(sessionPlugin, callId,
-							SessionType.EARLY, prackRequest);
-					}
 				}
 			}
 		} else if (reqHasSdp && provResHasSdp && prackHasSdp
@@ -293,7 +295,8 @@ public class SessionManager {
 					regularReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
 						SessionType.REGULAR, prackResponse);
 				}
-				if (prackHasEarlySdp) {
+				if ((!prackHasRegularSdp || messageIsMultipart
+						(prackRequest)) && prackHasEarlySdp) {
 					earlyReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
 						SessionType.EARLY, prackResponse);
 				}
@@ -334,7 +337,7 @@ public class SessionManager {
 		return false;
 	}
 
-	private void recordOfferAnswerExchangeMessages(String callId,
+	public void recordOfferAnswerExchangeMessages(String callId,
 			Request request, Response provisionalResponse, Request prackRequest,
 			Response prackResponse, Response finalResponse, Request ackRequest) {
 		if (request != null) {
@@ -497,13 +500,50 @@ public class SessionManager {
 		return false;
 	}
 
+	private boolean messageIsMultipart(Message message) {
+		ContentTypeHeader contentTypeHeader = null;
+		if (message != null) {
+			contentTypeHeader = (ContentTypeHeader) message
+				.getHeader(ContentTypeHeader.NAME);
+		}
+		if (contentTypeHeader != null && contentTypeHeader.getContentType()
+				.toLowerCase().trim().equals("multipart")
+				&& contentTypeHeader.getContentSubType()
+				.toLowerCase().trim().equals("mixed")) {
+			String boundary = contentTypeHeader.getParameter("boundary");
+			String content = new String(message.getRawContent());
+			String[] sdps = content.substring(boundary.length() + 3, content.length())
+				.replace(boundary + "--", boundary).split("\\s*--" + boundary + "\\s*");
+			int interestingSdpCount = 0;
+			for (String sdpWithHeaders : sdps) {
+				boolean contentIsSession = false;
+				boolean contentIsEarlySession = false;
+				String[] headers = sdpWithHeaders.split("\\n\\n")[0].split("\\n");
+				for (String header : headers) {
+					header = header.trim();
+					String headerKey = header.split(":")[0].trim().toLowerCase();
+					String headerValue = header.split(":")[1].trim().toLowerCase();
+					if (headerKey.equals("content-disposition")) {
+						contentIsSession = headerValue.equals("session");
+						contentIsEarlySession = headerValue.equals("early-session");
+					}
+				}
+				if (contentIsSession || contentIsEarlySession) {
+					interestingSdpCount++;
+				}
+			}
+			return interestingSdpCount > 1;
+		}
+		return false;
+	}
+
 	public boolean messageHasSdp(Message message, boolean withContentDisposition) {
 		boolean messageHasSdp = messageHasSdpOfInterest(message, false, null);
 		return withContentDisposition == (message.getContentDisposition() != null)
 			&& messageHasSdp;
 	}
 
-	private boolean messageHasSdpOfInterest(Message message,
+	public boolean messageHasSdpOfInterest(Message message,
 			boolean dispositionMatters, String dispositionType) {
 		boolean messageHasContent = message != null && message.getContent() != null;
 		logger.debug("$ Has content: {} $", messageHasContent);
@@ -562,6 +602,8 @@ public class SessionManager {
 		}
 		try {
 			Object currentContent = offerMessage.getContent();
+			ContentTypeHeader currentContentTypeHeader = (ContentTypeHeader) offerMessage
+				.getHeader(ContentTypeHeader.NAME);
 			if (currentContent == null || currentContent.toString().trim().isEmpty()) {
 				offerMessage.setContent(offer, headerMaker
 					.createContentTypeHeader("application", "sdp"));
@@ -569,6 +611,51 @@ public class SessionManager {
 					offerMessage.setContentDisposition(headerMaker
 						.createContentDispositionHeader(type.getDisposition()));
 				}
+			} else if (currentContentTypeHeader != null
+					&& currentContentTypeHeader.getContentType().equals("multipart")
+					&& currentContentTypeHeader.getContentSubType().equals("mixed")) {
+				String boundary = currentContentTypeHeader.getParameter("boundary");
+				StringBuilder content = new StringBuilder(currentContent.toString()
+					.replace("--" + boundary + "--", "--" + boundary + "\n"));
+				content.append("Content-Type: application/sdp\n");
+				if (dispositionMatters) {
+					content.append(String.format(Locale.US,
+						"Content-Disposition: %s\n", type.getDisposition()));
+				}
+				content.append(String.format(Locale.US, "\n%s\n", offer.toString()));
+				content.append(String.format(Locale.US, "--%s--", boundary));
+				ContentTypeHeader multipartMixedContentTypeHeader = headerMaker
+					.createContentTypeHeader("multipart", "mixed");
+				multipartMixedContentTypeHeader.setParameter("boundary", boundary);
+				offerMessage.setContent(content, multipartMixedContentTypeHeader);
+				offerMessage.setContentDisposition(null);
+			} else {
+				StringBuilder content = new StringBuilder();
+				String boundary = UUID.randomUUID().toString().substring(0, 8);
+				content.append(String.format(Locale.US, "--%s\n", boundary));
+				if (currentContentTypeHeader != null) {
+					content.append(String.format(Locale.US, "Content-Type: %s/%s\n",
+						currentContentTypeHeader.getContentType(),
+						currentContentTypeHeader.getContentSubType()));
+				}
+				if (offerMessage.getContentDisposition() != null) {
+					content.append(String.format(Locale.US, "Content-Disposition: %s\n",
+						offerMessage.getContentDisposition().getDispositionType()));
+				}
+				content.append(String.format(Locale.US, "\n%s\n", currentContent));
+				content.append(String.format(Locale.US, "--%s\n", boundary));
+				content.append("Content-Type: application/sdp\n");
+				if (dispositionMatters) {
+					content.append(String.format(Locale.US,
+						"Content-Disposition: %s\n", type.getDisposition()));
+				}
+				content.append(String.format(Locale.US, "\n%s\n", offer.toString()));
+				content.append(String.format(Locale.US, "--%s--", boundary));
+				ContentTypeHeader multipartMixedContentTypeHeader = headerMaker
+						.createContentTypeHeader("multipart", "mixed");
+				multipartMixedContentTypeHeader.setParameter("boundary", boundary);
+				offerMessage.setContent(content, multipartMixedContentTypeHeader);
+				offerMessage.setContentDisposition(null);
 			}
 			logger.info("{}'s plug-in-generated offer \n{}\n inserted into {}.",
 				role, offer.toString(), offerMessageIdentifier);
@@ -598,8 +685,7 @@ public class SessionManager {
 		}
 		SessionDescription offer;
 		try {
-			offer = SdpFactoryImpl.getInstance().createSessionDescriptionFromString
-				(new String(offerMessage.getRawContent()));
+			offer = extractRelevantSdp(offerMessage, type);
 		} catch (SdpParseException parseException) {
 			logger.error("Offer arrived in {}, but could not be properly parsed,"
 				+ " so it was discarded.", offerMessageIdentifier, parseException);
@@ -654,8 +740,7 @@ public class SessionManager {
 					+ " has arrived within {}.", answerMessageIdentifier);
 				return false;
 			}
-			SessionDescription answer = SdpFactoryImpl.getInstance()
-				.createSessionDescriptionFromString(new String(answerMessage.getRawContent()));
+			SessionDescription answer = extractRelevantSdp(answerMessage, type);
 			try {
 				logger.debug("{}'s plug-in will process answer \n{}\n in context"
 					+ " of call {}!", role, answer.toString(), callId);
@@ -675,6 +760,58 @@ public class SessionManager {
 		return false;
 	}
 
+	private SessionDescription extractRelevantSdp(Message message,
+			SessionType preferredType) throws SdpParseException {
+		Object currentContent = message.getContent();
+		ContentTypeHeader currentContentTypeHeader
+			= (ContentTypeHeader) message.getHeader(ContentTypeHeader.NAME);
+		if (currentContent == null || currentContent.toString().trim().isEmpty()) {
+			return null;
+		} else if (currentContentTypeHeader != null
+				&& currentContentTypeHeader.getContentType().equals("multipart")
+				&& currentContentTypeHeader.getContentSubType().equals("mixed")) {
+			String boundary = currentContentTypeHeader.getParameter("boundary");
+			String content = new String(message.getRawContent());
+			String[] sdps = content.substring(boundary.length() + 3, content.length())
+				.replace(boundary + "--", boundary).split("\\s*--" + boundary + "\\s*");
+			String sessionSdp = null;
+			for (String sdpWithHeaders : sdps) {
+				String[] headers = sdpWithHeaders.split("\\n\\n")[0].split("\\n");
+				String sdp = sdpWithHeaders.split("\\n\\n")[1];
+				for (String header : headers) {
+					header = header.trim();
+					String headerKey = header.split(":")[0].trim().toLowerCase();
+					String headerValue = header.split(":")[1].trim().toLowerCase();
+					if (headerKey.equals("content-type")) {
+						if (!headerValue.equals("application/sdp")) {
+							continue;
+						}
+					} else if (headerKey.equals("content-disposition")) {
+						if (headerValue.equals("session")) {
+							sessionSdp = sdp;
+						}
+						if (headerValue.equals("session")
+								&& preferredType == SessionType.REGULAR) {
+							return SdpFactoryImpl.getInstance()
+								.createSessionDescriptionFromString
+								(new String(sessionSdp));
+						} else if (headerValue.equals("early-session")
+								&& preferredType == SessionType.EARLY) {
+							return SdpFactoryImpl.getInstance()
+								.createSessionDescriptionFromString
+								(new String(sdp));
+						}
+					}
+				}
+			}
+			return sessionSdp == null ? null : SdpFactoryImpl.getInstance()
+				.createSessionDescriptionFromString(new String(sessionSdp));
+		} else {
+			return SdpFactoryImpl.getInstance().createSessionDescriptionFromString
+				(new String(message.getRawContent()));
+		}
+	}
+
 	public boolean isSessionOngoing(String callId, SessionType type) {
 		RequestMethod requestMethod = RequestMethod.INVITE;
 		SipuadaPlugin sessionPlugin = sessionPlugins.get(requestMethod);
@@ -692,8 +829,13 @@ public class SessionManager {
 				veredict &= performSessionTermination(sessionPlugin, callId, type);
 			}
 		}
-		return veredict && sessionPlugin.performSessionSetup
-				(callId, sessionType, sipUserAgent);
+		veredict &= sessionPlugin.performSessionSetup
+			(callId, sessionType, sipUserAgent);
+		if (!veredict && sessionType == SessionType.EARLY) {
+			veredict &= sessionPlugin.performSessionSetup
+				(callId, SessionType.REGULAR, sipUserAgent);
+		}
+		return veredict;
 	}
 
 	public static boolean performSessionTermination(SipuadaPlugin sessionPlugin,

@@ -1525,25 +1525,22 @@ public abstract class SipuadaPlugin {
 			SessionDescription offer = record != null ? record.getOffer() : null;
 			SessionDescription answer = record != null ? record.getAnswer() : null;
 			if (record == null || offer == null || answer == null) {
-				logger.info("^^ {} aborted session setup attempt in context of call {}"
-					+ " and will rely upon new offer/answer exchange initiated"
-					+ " by a recently sent UPDATE request...\n"
+				logger.info("^^ {} aborted session setup attempt in context of call {}/{}...\n"
 					+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-					pluginClass, callId, roles.get(getSessionKey
+					pluginClass, callId, type, roles.get(getSessionKey
 						(callId, type)), offer, answer);
-				postponedStreams.put(getSessionKey(callId, type), userAgent);
-				return true;
+				return false;
 			} else if (!preparedStreams.containsKey((getSessionKey(callId, type)))) {
-				logger.info("^^ {} postponed session setup in context of call {}...\n"
+				logger.info("^^ {} postponed session setup in context of call {}/{}...\n"
 					+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-					pluginClass, callId, roles.get(getSessionKey
+					pluginClass, callId, type, roles.get(getSessionKey
 						(callId, type)), offer, answer);
 				postponedStreams.put(getSessionKey(callId, type), userAgent);
 				return true;
 			}
-			logger.info("^^ {} performing session setup in context of call {}...\n"
+			logger.info("^^ {} performing session setup in context of call {}/{}...\n"
 				+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-				pluginClass, callId, roles.get(getSessionKey
+				pluginClass, callId, type, roles.get(getSessionKey
 					(callId, type)), offer, answer);
 			doSetupPreparedStreams(callId, type, preparedStreams);
 			postponedStreams.remove(getSessionKey(callId, type));
@@ -1564,16 +1561,16 @@ public abstract class SipuadaPlugin {
 	public synchronized boolean performSessionTermination(String callId, SessionType type) {
 		logger.debug("===*** performSessionTermination -> {}", getSessionKey(callId, type));
 		synchronized (this) {
-			records.remove(getSessionKey(callId, type));
+//			records.remove(getSessionKey(callId, type));
 			if (preparedStreams.get(getSessionKey(callId, type)) != null) {
 				logger.info("^^ {} performing session tear down in context "
-					+ "of call {}... ^^", pluginClass, callId);
+					+ "of call {}/{}... ^^", pluginClass, callId, type);
 				doTerminateStreams(callId, type, preparedStreams);
-				preparedStreams.remove(getSessionKey(callId, type));
+//				preparedStreams.remove(getSessionKey(callId, type));
 			} else {
 				logger.info("^^ {} canceled session setup "
-					+ "in context of call {}. ^^",
-					pluginClass, callId);
+					+ "in context of call {}/{}. ^^",
+					pluginClass, callId, type);
 			}
 			postponedStreams.remove(getSessionKey(callId, type));
 			startedStreams.put(getSessionKey(callId, type), false);

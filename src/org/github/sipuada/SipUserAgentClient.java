@@ -1866,8 +1866,7 @@ public class SipUserAgentClient {
 			ListIterator<Header> requireHeaders = response.getHeaders(RequireHeader.NAME);
 			while (requireHeaders != null && requireHeaders.hasNext()) {
 				RequireHeader requireHeader = (RequireHeader) requireHeaders.next();
-				if (requireHeader.getOptionTag().toLowerCase()
-						.contains(SessionType.EARLY.getDisposition())) {
+				if (requireHeader.getOptionTag().toLowerCase().contains("100rel")) {
 					responseWasReliable = true;
 					break;
 				}
@@ -1907,15 +1906,27 @@ public class SipUserAgentClient {
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
 			SessionType type, Request request, Response response, Request ackRequest) {
 		if (type == SessionType.REGULAR) {
-			logger.debug("$ About to perform OFFER/ANSWER exchange step "
-				+ "expecting put answer into Ack or parse answer from Res! $");
-			return sessionManager.performOfferAnswerExchangeStep
-				(callId, request, null, null, null, response, ackRequest);
+			if (!sessionManager.messageHasSdpOfInterest(response, false, null)) {
+				sessionManager.recordOfferAnswerExchangeMessages
+					(callId, request, null, null, null, response, ackRequest);
+				return true;
+			} else {
+				logger.debug("$ About to perform OFFER/ANSWER exchange step "
+					+ "expecting put answer into Ack or parse answer from Res! $");
+				return sessionManager.performOfferAnswerExchangeStep
+					(callId, request, null, null, null, response, ackRequest);
+			}
 		} else {
-			logger.debug("$ About to perform OFFER/ANSWER exchange step "
-				+ "expecting put answer into Prack or parse answer from ProvRes! $");
-			return sessionManager.performOfferAnswerExchangeStep
-				(callId, request, response, ackRequest, null, null, null);
+			if (!sessionManager.messageHasSdpOfInterest(response, false, null)) {
+				sessionManager.recordOfferAnswerExchangeMessages
+					(callId, request, response, ackRequest, null, null, null);
+				return true;
+			} else {
+				logger.debug("$ About to perform OFFER/ANSWER exchange step "
+					+ "expecting put answer into Prack or parse answer from ProvRes! $");
+				return sessionManager.performOfferAnswerExchangeStep
+					(callId, request, response, ackRequest, null, null, null);
+			}
 		}
 	}
 
@@ -2023,8 +2034,14 @@ public class SipUserAgentClient {
 		Dialog dialog = clientTransaction.getDialog();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			if (dialog != null) {
-				sessionManager.performOfferAnswerExchangeStep
-					(callId, null, null, request, response, null, null);
+				if (sessionManager.messageHasSdpOfInterest(request, false, null)
+					|| sessionManager.messageHasSdpOfInterest(response, false, null)) {
+					sessionManager.performOfferAnswerExchangeStep
+						(callId, null, null, request, response, null, null);
+				} else {
+					sessionManager.recordOfferAnswerExchangeMessages
+						(callId, null, null, request, response, null, null);
+				}
 				logger.info("{} response to {} arrived.", statusCode, RequestMethod.PRACK);
 				logger.info("Early media session established: {}.", callId);
 				bus.post(new EarlyMediaSessionEstablished(callId));
