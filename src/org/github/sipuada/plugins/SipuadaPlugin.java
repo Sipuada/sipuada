@@ -490,7 +490,7 @@ public abstract class SipuadaPlugin {
 	private CandidateHarvester createStunHarvester() {
     	try {
 			return new StunCandidateHarvester(new TransportAddress
-				(InetAddress.getByName("stun.icchw2.jflddns.com.br"), 19302, Transport.UDP));
+				(InetAddress.getByName("stun4.l.google.com"), 19302, Transport.UDP));
 		} catch (UnknownHostException stunServerUnavailable) {
 			stunServerUnavailable.printStackTrace();
 	    	return null;

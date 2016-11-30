@@ -2,12 +2,10 @@ package org.github.sipuada;
 
 import java.text.ParseException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Locale;
 import java.util.Map;
 
 import org.github.sipuada.Constants.RequestMethod;
@@ -77,9 +75,6 @@ public class SipUserAgentServer {
 	private final int localPort;
 	private final String transport;
 
-	private final Map<String, Request> requestsHandled = new HashMap<>();
-	private final Map<String, Response> responsesSent = new HashMap<>();
-
 	public SipUserAgentServer(String name, EventBus eventBus, SipProvider sipProvider,
 			Map<RequestMethod, SipuadaPlugin> plugins, MessageFactory messageFactory,
 			HeaderFactory headerFactory, AddressFactory addressFactory,
@@ -142,9 +137,9 @@ public class SipUserAgentServer {
 					case MESSAGE:
 						handleMessageRequest(request, serverTransaction);
 						break;
-					case UPDATE:
-						handleUpdateRequest(request, serverTransaction);
-						break;
+//					case UPDATE:
+//						handleUpdateRequest(request, serverTransaction);
+//						break;
 					case UNKNOWN:
 					default:
 						throw new RequestCouldNotBeAddressed();
@@ -357,9 +352,7 @@ public class SipUserAgentServer {
 		logger.debug("$ About to perform OFFER/ANSWER exchange step "
 			+ "expecting to setup regular session! $");
 		boolean sendByeRightAway = !sessionManager.performOfferAnswerExchangeStep
-			(callId, dialog, SessionType.REGULAR, requestsHandled.get
-			(getSessionKey(callId, SessionType.REGULAR)), responsesSent.get
-			(getSessionKey(callId, SessionType.REGULAR)), ackRequest);
+			(callId, null, null, null, null, null, ackRequest);
 		bus.post(new EstablishedCallStarted(callId, dialog));
 		logger.info("New call established: {}.", callId);
 		if (sendByeRightAway) {
@@ -381,23 +374,10 @@ public class SipUserAgentServer {
 	}
 
 	private void handlePrackRequest(Request prackRequest, ServerTransaction serverTransaction) {
-		CallIdHeader callIdHeader = (CallIdHeader) prackRequest.getHeader(CallIdHeader.NAME);
-		final String callId = callIdHeader.getCallId();
-		final Dialog dialog = serverTransaction.getDialog();
-		Request originalRequest = requestsHandled.get(getSessionKey(callId, SessionType.EARLY));
-		Response originalResponse = responsesSent.get(getSessionKey(callId, SessionType.EARLY));
 		if (doSendResponse(Response.OK, RequestMethod.PRACK,
-				prackRequest, serverTransaction) != null) {
-			logger.debug("$ About to perform OFFER/ANSWER exchange step "
-				+ "expecting to setup early media session! $");
-			if (sessionManager.performOfferAnswerExchangeStep(callId, dialog, SessionType.EARLY,
-					originalRequest, originalResponse, prackRequest)) {
-				bus.post(new EarlyMediaSessionEstablished(callId));
-				logger.info("Early media session established: {}.", callId);
-			}
-			return;
+				prackRequest, serverTransaction) == null) {
+			throw new RequestCouldNotBeAddressed();
 		}
-		throw new RequestCouldNotBeAddressed();
 	}
 
 	private void handleByeRequest(Request request, ServerTransaction serverTransaction) {
@@ -467,22 +447,22 @@ public class SipUserAgentServer {
 		throw new RequestCouldNotBeAddressed();
 	}
 
-	private void handleUpdateRequest(Request request, ServerTransaction serverTransaction) {
-		List<Header> allowHeaders = new ArrayList<>();
-		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
-			try {
-				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
-				allowHeaders.add(allowHeader);
-			} catch (ParseException ignore) {
-				ignore.printStackTrace();
-			}
-		}
-		if (doSendResponse(Response.OK, RequestMethod.UPDATE, request,
-			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()])) != null) {
-			return;
-		}
-		throw new RequestCouldNotBeAddressed();
-	}
+//	private void handleUpdateRequest(Request request, ServerTransaction serverTransaction) {
+//		List<Header> allowHeaders = new ArrayList<>();
+//		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
+//			try {
+//				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+//				allowHeaders.add(allowHeader);
+//			} catch (ParseException ignore) {
+//				ignore.printStackTrace();
+//			}
+//		}
+//		if (doSendResponse(Response.OK, RequestMethod.UPDATE, request,
+//			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()])) != null) {
+//			return;
+//		}
+//		throw new RequestCouldNotBeAddressed();
+//	}
 
 	public void processRetransmission(TimeoutEvent retransmissionEvent) {
 		if (retransmissionEvent.isServerTransaction()) {
@@ -638,15 +618,14 @@ public class SipUserAgentServer {
 				|| (responseClass == ResponseClass.PROVISIONAL && type == SessionType.EARLY);
 			if (addSessionPayload && isDialogCreatingOrSessionUpdatingRequest(method)
 					&& isSuccessOrProvisionalEarlyMediaResponse) {
-				if (method == RequestMethod.UPDATE) {
-					type = sessionManager.isSessionOngoing(callId, SessionType.EARLY)
-						? SessionType.EARLY : SessionType.REGULAR;
-				}
-				Dialog dialog = newServerTransaction.getDialog();
+//				if (method == RequestMethod.UPDATE) {
+//					type = sessionManager.isSessionOngoing(callId, SessionType.EARLY)
+//						? SessionType.EARLY : SessionType.REGULAR;
+//				}
 				logger.debug("$ About to perform OFFER/ANSWER exchange step "
 					+ "expecting to update existing session! $");
-				if (!putOfferOrAnswerIntoResponseIfApplicable(method,
-						callId, dialog, type, request, response)) {
+				if (!putOfferOrAnswerIntoResponseIfApplicable
+						(callId, request, method, response, responseClass)) {
 					final String errorMessage;
 					if (method == RequestMethod.UPDATE) {
 						statusCode = Response.NOT_ACCEPTABLE_HERE;
@@ -673,6 +652,9 @@ public class SipUserAgentServer {
 						bus.post(new CallInvitationCanceled(errorMessage, callId, false));
 					}
 					return null;
+				} else if (method == RequestMethod.PRACK) {
+					bus.post(new EarlyMediaSessionEstablished(callId));
+					logger.info("Early media session established: {}.", callId);
 				}
 			}
 			logger.info("Sending {} response to {} request (from {}:{})...", statusCode, method,
@@ -684,8 +666,6 @@ public class SipUserAgentServer {
 				} else {
 					newServerTransaction.getDialog().sendReliableProvisionalResponse(response);
 				}
-				requestsHandled.put(getSessionKey(callId, type), request);
-				responsesSent.put(getSessionKey(callId, type), response);
 			} catch (RuntimeException lowLevelStackFailed) {
 				logger.error("{} response to {} request could not be sent due to a " +
 					"JAINSIP-level failure.", statusCode, method, lowLevelStackFailed);
@@ -711,6 +691,7 @@ public class SipUserAgentServer {
 		switch (method) {
 			case OPTIONS:
 			case INVITE:
+			case PRACK:
 			case UPDATE:
 				return true;
 			default:
@@ -718,16 +699,26 @@ public class SipUserAgentServer {
 		}
 	}
 
-	private boolean putOfferOrAnswerIntoResponseIfApplicable(RequestMethod method,
-			String callId, Dialog dialog, SessionType type, Request request, Response response) {
-		logger.debug("$ About to perform OFFER/ANSWER exchange step "
-			+ "expecting to put offer into Res or put answer into Res! $");
-		return sessionManager.performOfferAnswerExchangeStep
-			(callId, dialog, type, request, response, null);
-	}
-
-	private String getSessionKey(String callId, SessionType type) {
-		return String.format(Locale.US, "%s_(%s)", callId, type);
+	private boolean putOfferOrAnswerIntoResponseIfApplicable(String callId, Request request,
+			RequestMethod method, Response response, ResponseClass responseClass) {
+		if (method == RequestMethod.INVITE && responseClass == ResponseClass.SUCCESS) {
+			logger.debug("$ About to perform OFFER/ANSWER exchange step "
+				+ "expecting to put offer into Res or put answer into Res! $");
+			return sessionManager.performOfferAnswerExchangeStep(callId,
+				request, null, null, null, response, null);
+		} else if (method == RequestMethod.INVITE && responseClass == ResponseClass.PROVISIONAL) {
+			logger.debug("$ About to perform OFFER/ANSWER exchange step "
+				+ "expecting to put offer into ProvRes or put answer into ProvRes! $");
+			return sessionManager.performOfferAnswerExchangeStep(callId,
+				request, response, null, null, null, null);
+		} else if (method == RequestMethod.PRACK) {
+			logger.debug("$ About to perform OFFER/ANSWER exchange step "
+				+ "expecting to put offer into PrackRes or put answer into PrackRes! $");
+			return sessionManager.performOfferAnswerExchangeStep(callId,
+				null, null, request, response, null, null);
+		}
+		//TODO add case for UPDATE requests.
+		return true;
 	}
 
 }

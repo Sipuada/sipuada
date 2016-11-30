@@ -35,7 +35,6 @@ import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.events.MessageSent;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
-import org.github.sipuada.events.SendUpdateEvent;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
 import org.github.sipuada.plugins.SipuadaPlugin;
 import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
@@ -1105,40 +1104,40 @@ public class SipUserAgent implements SipListener {
 		return false;
 	}
 
-	private boolean sendUpdateRequest(final String callId, final Dialog dialog, SessionType type,
-			final BasicRequestCallback callback, String... additionalHeaders) {
-		synchronized (establishedCalls) {
-			if (dialog != null && dialog.getCallId().getCallId().equals(callId)) {
-				return uac.sendUpdateRequest(dialog, type, additionalHeaders);
-			}
-		}
-		logger.error("Cannot send message.\nCall with callId " + "'{}' not found.", callId);
-		return false;
-	}
+//	private boolean sendUpdateRequest(final String callId, final Dialog dialog, SessionType type,
+//			final BasicRequestCallback callback, String... additionalHeaders) {
+//		synchronized (establishedCalls) {
+//			if (dialog != null && dialog.getCallId().getCallId().equals(callId)) {
+//				return uac.sendUpdateRequest(dialog, type, additionalHeaders);
+//			}
+//		}
+//		logger.error("Cannot send message.\nCall with callId " + "'{}' not found.", callId);
+//		return false;
+//	}
 
-	@Subscribe
-	public void onEvent(SendUpdateEvent event) {
-		final String callId = event.getCallId();
-		final Dialog dialog = event.getDialog();
-		final SessionType sessionType = event.getSessionType();
-		logger.debug("(SendUpdateEvent scheduled; callId=[{}], dialog=[{}], sessionType=[{}].)",
-			callId, dialog, sessionType);
-		sendUpdateRequest(callId, dialog, sessionType, new BasicRequestCallback() {
-
-			@Override
-			public void onRequestSuccess(String localUser, String localDomain, Object... response) {
-				logger.debug("(UPDATE request sent successfully. localUser=[{}], localDomain=[{}].)",
-					localUser, localDomain);
-			}
-
-			@Override
-			public void onRequestFailed(String localUser, String localDomain, String reason) {
-				logger.debug("(UPDATE request failed. localUser=[{}], localDomain=[{}], reason=[{}].)",
-					localUser, localDomain, reason);
-			}
-
-		});
-	}
+//	@Subscribe
+//	public void onEvent(SendUpdateEvent event) {
+//		final String callId = event.getCallId();
+//		final Dialog dialog = event.getDialog();
+//		final SessionType sessionType = event.getSessionType();
+//		logger.debug("(SendUpdateEvent scheduled; callId=[{}], dialog=[{}], sessionType=[{}].)",
+//			callId, dialog, sessionType);
+//		sendUpdateRequest(callId, dialog, sessionType, new BasicRequestCallback() {
+//
+//			@Override
+//			public void onRequestSuccess(String localUser, String localDomain, Object... response) {
+//				logger.debug("(UPDATE request sent successfully. localUser=[{}], localDomain=[{}].)",
+//					localUser, localDomain);
+//			}
+//
+//			@Override
+//			public void onRequestFailed(String localUser, String localDomain, String reason) {
+//				logger.debug("(UPDATE request failed. localUser=[{}], localDomain=[{}], reason=[{}].)",
+//					localUser, localDomain, reason);
+//			}
+//
+//		});
+//	}
 
 	@Subscribe
 	public void onEvent(DeadEvent deadEvent) {

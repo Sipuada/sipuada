@@ -27,7 +27,6 @@ import org.github.sipuada.events.CallInvitationWaiting;
 import org.github.sipuada.events.EarlyMediaSessionEstablished;
 import org.github.sipuada.events.EstablishedCallFailed;
 import org.github.sipuada.events.EstablishedCallFinished;
-import org.github.sipuada.events.EstablishedCallStarted;
 import org.github.sipuada.events.MessageNotSent;
 import org.github.sipuada.events.MessageSent;
 import org.github.sipuada.events.RegistrationFailed;
@@ -291,19 +290,7 @@ public class SipUserAgentClient {
 		}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-//		try {
-//			contactHeader.setExpires(60);
-//		} catch (ParseException ignore) {
-//			ignore.printStackTrace();
-//		}
 		additionalHeaders.add(contactHeader);
-//		try {
-//			ExpiresHeader expiresHeader = headerMaker.createExpiresHeader(120);
-//			additionalHeaders.add(expiresHeader);
-//		} catch (InvalidArgumentException ignore) {
-//			ignore.printStackTrace();
-//		}
-
 		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
@@ -505,141 +492,142 @@ public class SipUserAgentClient {
 			additionalHeadersList.toArray(new Header[additionalHeadersList.size()]));
 	}
 
-	public boolean sendUpdateRequest(final Dialog dialog, SessionType type,
-			String... additionalHeaders) {
-		final RequestMethod method = RequestMethod.UPDATE;
-		List<Header> additionalHeadersList = new ArrayList<Header>();
-		for (String additionalHeader : additionalHeaders) {
-			if (additionalHeader != null) {
-				String[] split = additionalHeader.split("\\:");
-				String headerName = split[0].trim();
-				if (headerName.isEmpty()) {
-					continue;
-				}
-				String headerValue = split.length > 1 ? split[1].trim() : "";
-				try {
-					Header header = headerMaker.createHeader(headerName, headerValue);
-					additionalHeadersList.add(header);
-				} catch (ParseException parseException) {
-					continue;
-				}
-			}
-		}
-		URI addresseeUri = dialog.getRemoteParty().getURI();
-		URI requestUri = (URI) addresseeUri.clone();
-		CallIdHeader callIdHeader = dialog.getCallId();
-		long cseq = dialog.getLocalSeqNumber();
-		if (cseq == 0) {
-			cseq = localCSeq + 1;
-		}
-		if (localCSeq < cseq) {
-			localCSeq = cseq;
-		}
-		Address from, to;
-		String fromTag, toTag;
-		List<Address> canonRouteSet = new LinkedList<>();
-		final URI remoteTargetUri;
-		remoteTargetUri = dialog.getRemoteTarget().getURI();
-		from = addressMaker.createAddress(dialog.getLocalParty().getURI());
-		fromTag = dialog.getLocalTag();
-		to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
-		toTag = dialog.getRemoteTag();
-		Iterator<?> routeHeaders = dialog.getRouteSet();
-		while (routeHeaders.hasNext()) {
-			RouteHeader routeHeader = (RouteHeader) routeHeaders.next();
-			canonRouteSet.add(routeHeader.getAddress());
-		}
-		List<Address> normalizedRouteSet = new LinkedList<>();
-		if (!canonRouteSet.isEmpty()) {
-			if (((SipURI)canonRouteSet.get(0).getURI()).hasLrParam()) {
-				requestUri = remoteTargetUri;
-				for (Address address : canonRouteSet) {
-					normalizedRouteSet.add(address);
-				}
-			}
-			else {
-				requestUri = canonRouteSet.get(0).getURI();
-				for (int i=1; i<canonRouteSet.size(); i++) {
-					normalizedRouteSet.add(canonRouteSet.get(i));
-				}
-				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
-				normalizedRouteSet.add(remoteTargetAddress);
-			}
-		}
-		else {
-			requestUri = (URI) remoteTargetUri.clone();
-		}
-		ViaHeader viaHeader = null;
-		try {
-			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
-			FromHeader fromHeader = headerMaker.createFromHeader(from, fromTag);
-			ToHeader toHeader = headerMaker.createToHeader(to, toTag);
-			final Request request = messenger.createRequest(requestUri, method.toString(),
-				callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
-				fromHeader, toHeader, Collections.singletonList(viaHeader),
-				headerMaker.createMaxForwardsHeader(70));
-			if (!normalizedRouteSet.isEmpty()) {
-				for (Address routeAddress : normalizedRouteSet) {
-					RouteHeader routeHeader = headerMaker.createRouteHeader(routeAddress);
-					request.addHeader(routeHeader);
-				}
-			}
-			else {
-				request.removeHeader(RouteHeader.NAME);
-			}
-			for (int i=0; i<additionalHeadersList.size(); i++) {
-				request.addHeader(additionalHeadersList.get(i));
-			}
-			final ClientTransaction clientTransaction = provider.getNewClientTransaction(request);
-			viaHeader.setBranch(clientTransaction.getBranchId());
-			final String callId = callIdHeader.getCallId();
-			putOfferIntoRequestIfApplicable(method, callId, dialog, type, request);
-			new Thread(new Runnable() {
-
-				@Override
-				public void run() {
-					try {
-						if (doSendRequest(request, clientTransaction, dialog)) {
-							logger.info("{} request sent by {}:{} through {}.",
-								method, localIp, localPort, transport);
-						}
-						else {
-							logger.error("Could not send this {} request.", method);
-							reportRequestError(callId, clientTransaction,
-								"Request could not be parsed or contained invalid state.");
-						}
-					} catch (SipException requestCouldNotBeSent) {
-						logger.error("Could not send this {} request: {} ({}).",
-							method, requestCouldNotBeSent.getMessage(),
-							requestCouldNotBeSent.getCause().getMessage());
-						reportRequestError(callId, clientTransaction,
-							"Request could not be sent: " + String.format("%s (%s).",
-							requestCouldNotBeSent.getMessage(),
-							requestCouldNotBeSent.getCause().getMessage()));
-					}
-				}
-
-			}).start();
-			return true;
-		} catch (ParseException requestCouldNotBeBuilt) {
-			logger.error("Could not properly create mandatory headers for "
-				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
-				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
-				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
-				requestCouldNotBeBuilt.getMessage());
-		} catch (TransactionUnavailableException requestCouldNotBeBuilt) {
-			logger.error("Could not properly create client transaction to handle"
-				+ " this {} request: {}.", method, requestCouldNotBeBuilt.getMessage());
-		} catch (InvalidArgumentException requestCouldNotBeBuilt) {
-			logger.error("Could not properly create mandatory headers for "
-				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
-				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
-				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
-				requestCouldNotBeBuilt.getMessage());
-		}
-		//No need for caller to wait for remote responses.
-		return false;
-	}
+//	public boolean sendUpdateRequest(final Dialog dialog, SessionType type,
+//			String... additionalHeaders) {
+//		final RequestMethod method = RequestMethod.UPDATE;
+//		List<Header> additionalHeadersList = new ArrayList<Header>();
+//		for (String additionalHeader : additionalHeaders) {
+//			if (additionalHeader != null) {
+//				String[] split = additionalHeader.split("\\:");
+//				String headerName = split[0].trim();
+//				if (headerName.isEmpty()) {
+//					continue;
+//				}
+//				String headerValue = split.length > 1 ? split[1].trim() : "";
+//				try {
+//					Header header = headerMaker.createHeader(headerName, headerValue);
+//					additionalHeadersList.add(header);
+//				} catch (ParseException parseException) {
+//					continue;
+//				}
+//			}
+//		}
+//		URI addresseeUri = dialog.getRemoteParty().getURI();
+//		URI requestUri = (URI) addresseeUri.clone();
+//		CallIdHeader callIdHeader = dialog.getCallId();
+//		long cseq = dialog.getLocalSeqNumber();
+//		if (cseq == 0) {
+//			cseq = localCSeq + 1;
+//		}
+//		if (localCSeq < cseq) {
+//			localCSeq = cseq;
+//		}
+//		Address from, to;
+//		String fromTag, toTag;
+//		List<Address> canonRouteSet = new LinkedList<>();
+//		final URI remoteTargetUri;
+//		remoteTargetUri = dialog.getRemoteTarget().getURI();
+//		from = addressMaker.createAddress(dialog.getLocalParty().getURI());
+//		fromTag = dialog.getLocalTag();
+//		to = addressMaker.createAddress(dialog.getRemoteParty().getURI());
+//		toTag = dialog.getRemoteTag();
+//		Iterator<?> routeHeaders = dialog.getRouteSet();
+//		while (routeHeaders.hasNext()) {
+//			RouteHeader routeHeader = (RouteHeader) routeHeaders.next();
+//			canonRouteSet.add(routeHeader.getAddress());
+//		}
+//		List<Address> normalizedRouteSet = new LinkedList<>();
+//		if (!canonRouteSet.isEmpty()) {
+//			if (((SipURI)canonRouteSet.get(0).getURI()).hasLrParam()) {
+//				requestUri = remoteTargetUri;
+//				for (Address address : canonRouteSet) {
+//					normalizedRouteSet.add(address);
+//				}
+//			}
+//			else {
+//				requestUri = canonRouteSet.get(0).getURI();
+//				for (int i=1; i<canonRouteSet.size(); i++) {
+//					normalizedRouteSet.add(canonRouteSet.get(i));
+//				}
+//				Address remoteTargetAddress = addressMaker.createAddress(remoteTargetUri);
+//				normalizedRouteSet.add(remoteTargetAddress);
+//			}
+//		}
+//		else {
+//			requestUri = (URI) remoteTargetUri.clone();
+//		}
+//		ViaHeader viaHeader = null;
+//		try {
+//			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
+//			FromHeader fromHeader = headerMaker.createFromHeader(from, fromTag);
+//			ToHeader toHeader = headerMaker.createToHeader(to, toTag);
+//			final Request request = messenger.createRequest(requestUri, method.toString(),
+//				callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
+//				fromHeader, toHeader, Collections.singletonList(viaHeader),
+//				headerMaker.createMaxForwardsHeader(70));
+//			if (!normalizedRouteSet.isEmpty()) {
+//				for (Address routeAddress : normalizedRouteSet) {
+//					RouteHeader routeHeader = headerMaker.createRouteHeader(routeAddress);
+//					request.addHeader(routeHeader);
+//				}
+//			}
+//			else {
+//				request.removeHeader(RouteHeader.NAME);
+//			}
+//			for (int i=0; i<additionalHeadersList.size(); i++) {
+//				request.addHeader(additionalHeadersList.get(i));
+//			}
+//			final ClientTransaction clientTransaction = provider
+//				.getNewClientTransaction(request);
+//			viaHeader.setBranch(clientTransaction.getBranchId());
+//			final String callId = callIdHeader.getCallId();
+//			putOfferIntoRequestIfApplicable(callId, request);
+//			new Thread(new Runnable() {
+//
+//				@Override
+//				public void run() {
+//					try {
+//						if (doSendRequest(request, clientTransaction, dialog)) {
+//							logger.info("{} request sent by {}:{} through {}.",
+//								method, localIp, localPort, transport);
+//						}
+//						else {
+//							logger.error("Could not send this {} request.", method);
+//							reportRequestError(callId, clientTransaction,
+//								"Request could not be parsed or contained invalid state.");
+//						}
+//					} catch (SipException requestCouldNotBeSent) {
+//						logger.error("Could not send this {} request: {} ({}).",
+//							method, requestCouldNotBeSent.getMessage(),
+//							requestCouldNotBeSent.getCause().getMessage());
+//						reportRequestError(callId, clientTransaction,
+//							"Request could not be sent: " + String.format("%s (%s).",
+//							requestCouldNotBeSent.getMessage(),
+//							requestCouldNotBeSent.getCause().getMessage()));
+//					}
+//				}
+//
+//			}).start();
+//			return true;
+//		} catch (ParseException requestCouldNotBeBuilt) {
+//			logger.error("Could not properly create mandatory headers for "
+//				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
+//				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+//				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+//				requestCouldNotBeBuilt.getMessage());
+//		} catch (TransactionUnavailableException requestCouldNotBeBuilt) {
+//			logger.error("Could not properly create client transaction to handle"
+//				+ " this {} request: {}.", method, requestCouldNotBeBuilt.getMessage());
+//		} catch (InvalidArgumentException requestCouldNotBeBuilt) {
+//			logger.error("Could not properly create mandatory headers for "
+//				+ "this {} request.\nVia: [localIp: {}, localPort: {}, "
+//				+ "transport: {}, remotePort: {}]: {}.", method, viaHeader.getHost(),
+//				viaHeader.getPort(), viaHeader.getTransport(), viaHeader.getRPort(),
+//				requestCouldNotBeBuilt.getMessage());
+//		}
+//		//No need for caller to wait for remote responses.
+//		return false;
+//	}
 
 	private boolean sendPrackRequest(final Dialog dialog, final Request request,
 			final Response response) {
@@ -740,7 +728,7 @@ public class SipUserAgentClient {
 			boolean pluginAnswerGenerated = false;
 			try {
 				if (putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-						callId, dialog, SessionType.EARLY, request, response, prackRequest)) {
+						callId, SessionType.EARLY, request, response, prackRequest)) {
 					logger.info("UAC could provide suitable answer to {} offer, so, "
 						+ "sending {} to {} response to {} request (from {}:{})...",
 						SessionType.EARLY, method, response.getStatusCode(),
@@ -761,10 +749,7 @@ public class SipUserAgentClient {
 								request.getMethod(), method, localIp, localPort, transport);
 							bus.post(new CallInvitationRinging(callId,
 								clientTransaction, pluginAnswerSuccessfullyGenerated));
-							if (pluginAnswerSuccessfullyGenerated) {
-								bus.post(new EarlyMediaSessionEstablished(callId));
-								logger.info("Early media session established: {}.", callId);
-							} else {
+							if (!pluginAnswerSuccessfullyGenerated) {
 								logger.error("{} response to {} arrived, but UAC cannot "
 									+ "provide suitable answer to {} offer , so treating "
 									+ "response as 180 and aborting early media session "
@@ -903,15 +888,12 @@ public class SipUserAgentClient {
 		ViaHeader viaHeader = null;
 		try {
 			viaHeader = headerMaker.createViaHeader(localIp, localPort, transport, null);
-			//viaHeader.setRPort(); // Don't allow rport as 'rport='. Must be 'rport' or 'rport=15324' for example. Use rport only for UDP.
 			FromHeader fromHeader = headerMaker.createFromHeader(from, fromTag);
-//			fromHeader.setParameter("transport", "tcp");
 			ToHeader toHeader = headerMaker.createToHeader(to, toTag);
-//			toHeader.setParameter("transport", "tcp");
 			final Request request = messenger.createRequest(requestUri, method.toString(),
-					callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
-					fromHeader, toHeader, Collections.singletonList(viaHeader),
-					headerMaker.createMaxForwardsHeader(70));
+				callIdHeader, headerMaker.createCSeqHeader(cseq, method.toString()),
+				fromHeader, toHeader, Collections.singletonList(viaHeader),
+				headerMaker.createMaxForwardsHeader(70));
 			if (!normalizedRouteSet.isEmpty()) {
 				for (Address routeAddress : normalizedRouteSet) {
 					RouteHeader routeHeader = headerMaker.createRouteHeader(routeAddress);
@@ -928,7 +910,7 @@ public class SipUserAgentClient {
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
 			if (isDialogCreatingRequest(method)) {
-				putOfferIntoRequestIfApplicable(method, callId, dialog, SessionType.EARLY, request);
+				putOfferIntoRequestIfApplicable(callId, request);
 			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
 				request.setContent(content, contentTypeHeader);
 			}
@@ -982,7 +964,6 @@ public class SipUserAgentClient {
 	private boolean isDialogCreatingRequest(RequestMethod method) {
 		switch (method) {
 			case INVITE:
-			case OPTIONS:
 				return true;
 			default:
 				return false;
@@ -1003,12 +984,11 @@ public class SipUserAgentClient {
 		}
 	}
 
-	private void putOfferIntoRequestIfApplicable(RequestMethod method,
-			String callId, Dialog dialog, SessionType type, Request request) {
+	private void putOfferIntoRequestIfApplicable(String callId, Request request) {
 		logger.debug("$ About to perform OFFER/ANSWER exchange step "
 			+ "expecting to put offer into Req! $");
 		sessionManager.performOfferAnswerExchangeStep
-			(callId, dialog, type, request, null, null);
+			(callId, request, null, null, null, null, null);
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {
@@ -1164,8 +1144,12 @@ public class SipUserAgentClient {
 					case MESSAGE:
 						handleMessageResponse(statusCode, response, clientTransaction);
 						break;
-					case UPDATE:
-						handleUpdateResponse(statusCode, response, clientTransaction);
+					case PRACK:
+						handlePrackResponse(statusCode, response, clientTransaction);
+						break;
+//					case UPDATE:
+//						handleUpdateResponse(statusCode, response, clientTransaction);
+//						break;
 					case UNKNOWN:
 					default:
 						break;
@@ -1817,6 +1801,7 @@ public class SipUserAgentClient {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	private void handleInviteResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
 		logger.info("{} response arrived.", statusCode);
@@ -1829,10 +1814,10 @@ public class SipUserAgentClient {
 					CSeqHeader cseqHeader = (CSeqHeader) request.getHeader(CSeqHeader.NAME);
 					Request ackRequest = dialog.createAck(cseqHeader.getSeqNumber());
 					boolean sendByeRightAway = false;
-//					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
-//							callId, dialog, SessionType.REGULAR, request, response, ackRequest)) {
-//						sendByeRightAway = true;
-//					}
+					if (!putAnswerIntoAckRequestIfApplicable(RequestMethod.INVITE,
+							callId, SessionType.REGULAR, request, response, ackRequest)) {
+						sendByeRightAway = true;
+					}
 					logger.info("Sending {} to {} response to {} request (from {}:{})...",
 						RequestMethod.ACK, response.getStatusCode(), request.getMethod(),
 						localIp, localPort);
@@ -1867,54 +1852,71 @@ public class SipUserAgentClient {
 			}
 		}
 		else if (ResponseClass.PROVISIONAL == Constants.getResponseClass(statusCode)) {
-			if (statusCode == Response.RINGING) {
-				logger.info("Ringing!");
-				bus.post(new CallInvitationRinging(callId, clientTransaction));
-			} else if (statusCode == Response.SESSION_PROGRESS) {
-				if (dialog != null) {
-					boolean earlyMediaIsSupported = false;
-					@SuppressWarnings("unchecked")
-					ListIterator<Header> supportedHeaders = response.getHeaders(SupportedHeader.NAME);
-					while (supportedHeaders != null && supportedHeaders.hasNext()) {
-						SupportedHeader supportedHeader = (SupportedHeader) supportedHeaders.next();
-						if (supportedHeader.getOptionTag().toLowerCase()
-								.contains(SessionType.EARLY.getDisposition())) {
-							earlyMediaIsSupported = true;
-							break;
-						}
-					}
-					if (earlyMediaIsSupported) {
-						if (!sendPrackRequest(dialog, request, response)) {
-							logger.error("{} response to {} arrived, PRACK could not be sent, so treating "
-								+ "response as 180 and aborting early media session negotiation attempt.",
-								statusCode, request.getMethod(), SessionType.EARLY);
-							bus.post(new CallInvitationRinging(callId, clientTransaction));
-						}
-					} else {
-						logger.error("{} response to {} arrived, but remote UAS hasn't indicated "
-							+ "support for {{}} negotiations, so treating response as 180 and aborting "
-							+ "early media session negotiation attempt.", statusCode,
-							request.getMethod(), SessionType.EARLY.getDisposition());
+			boolean earlyMediaIsSupported = false;
+			ListIterator<Header> supportedHeaders = response.getHeaders(SupportedHeader.NAME);
+			while (supportedHeaders != null && supportedHeaders.hasNext()) {
+				SupportedHeader supportedHeader = (SupportedHeader) supportedHeaders.next();
+				if (supportedHeader.getOptionTag().toLowerCase()
+						.contains(SessionType.EARLY.getDisposition())) {
+					earlyMediaIsSupported = true;
+					break;
+				}
+			}
+			boolean responseWasReliable = false;
+			ListIterator<Header> requireHeaders = response.getHeaders(RequireHeader.NAME);
+			while (requireHeaders != null && requireHeaders.hasNext()) {
+				RequireHeader requireHeader = (RequireHeader) requireHeaders.next();
+				if (requireHeader.getOptionTag().toLowerCase()
+						.contains(SessionType.EARLY.getDisposition())) {
+					responseWasReliable = true;
+					break;
+				}
+			}
+			if (dialog != null) {
+				if (earlyMediaIsSupported && responseWasReliable) {
+					if (!sendPrackRequest(dialog, request, response)) {
+						logger.error("{} response to {} arrived, PRACK could not be sent, so treating "
+							+ "response as 180 and aborting early media session negotiation attempt.",
+							statusCode, request.getMethod(), SessionType.EARLY);
 						bus.post(new CallInvitationRinging(callId, clientTransaction));
 					}
 				} else {
-					logger.error("Could not process {} response to {} request: dialog is missing!" +
-						response.getStatusCode(), request.getMethod());
-					throw new InternalJainSipException("Cannot process successful response "
-						+ "to INVITE: dialog is missing!", null);
+					if (statusCode != Response.RINGING && statusCode != Response.SESSION_PROGRESS) {
+						bus.post(new CallInvitationWaiting(callId, clientTransaction));
+					} else {
+						if (statusCode == Response.RINGING) {
+							logger.info("Ringing!");
+						} else {
+							logger.error("{} response to {} arrived, but remote UAS hasn't indicated "
+								+ "support for {{}} negotiations, so treating response as 180 and aborting "
+								+ "early media session negotiation attempt.", statusCode,
+								request.getMethod(), SessionType.EARLY.getDisposition());
+						}
+						bus.post(new CallInvitationRinging(callId, clientTransaction));
+					}
 				}
 			} else {
-				bus.post(new CallInvitationWaiting(callId, clientTransaction));
+				logger.error("Could not process {} response to {} request: dialog is missing!" +
+					response.getStatusCode(), request.getMethod());
+				throw new InternalJainSipException("Cannot process successful response "
+					+ "to INVITE: dialog is missing!", null);
 			}
 		}
 	}
 
 	private boolean putAnswerIntoAckRequestIfApplicable(RequestMethod method, String callId,
-			Dialog dialog, SessionType type, Request request, Response response, Request ackRequest) {
-		logger.debug("$ About to perform OFFER/ANSWER exchange step "
-			+ "expecting put answer into Ack or parse answer from Res! $");
-		return sessionManager.performOfferAnswerExchangeStep
-			(callId, dialog, type, request, response, ackRequest);
+			SessionType type, Request request, Response response, Request ackRequest) {
+		if (type == SessionType.REGULAR) {
+			logger.debug("$ About to perform OFFER/ANSWER exchange step "
+				+ "expecting put answer into Ack or parse answer from Res! $");
+			return sessionManager.performOfferAnswerExchangeStep
+				(callId, request, null, null, null, response, ackRequest);
+		} else {
+			logger.debug("$ About to perform OFFER/ANSWER exchange step "
+				+ "expecting put answer into Prack or parse answer from ProvRes! $");
+			return sessionManager.performOfferAnswerExchangeStep
+				(callId, request, response, ackRequest, null, null, null);
+		}
 	}
 
 	private void handleByeResponse(int statusCode, Response response,
@@ -2013,36 +2015,58 @@ public class SipUserAgentClient {
 		}
 	}
 
-	private void handleUpdateResponse(int statusCode, Response response,
+	private void handlePrackResponse(int statusCode, Response response,
 			ClientTransaction clientTransaction) {
-		logger.info("{} response arrived.", statusCode);
+		logger.info("{} response to PRACK arrived.", statusCode);
 		Request request = clientTransaction.getRequest();
 		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
 		Dialog dialog = clientTransaction.getDialog();
 		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
 			if (dialog != null) {
-				boolean sendByeRightAway = false;
-				if (!sessionManager.performOfferAnswerExchangeStep
-						(callId, dialog, sessionManager.isSessionOngoing(callId, SessionType.EARLY)
-							? SessionType.EARLY : SessionType.REGULAR, request, response, null)
-						&& !sessionManager.isSessionOngoing(callId, SessionType.REGULAR)
-						&& !sessionManager.isSessionOngoing(callId, SessionType.EARLY)) {
-					sendByeRightAway = true;
-				}
-				logger.info("{} response to {} arrived.", statusCode, RequestMethod.UPDATE);
-				logger.info("Call updated: {}.", callId);
-				if (sendByeRightAway) {
-					sendByeRequest(dialog, true, "Media types negotiation failed.");
-				}
-				bus.post(new EstablishedCallStarted(callId, dialog));
+				sessionManager.performOfferAnswerExchangeStep
+					(callId, null, null, request, response, null, null);
+				logger.info("{} response to {} arrived.", statusCode, RequestMethod.PRACK);
+				logger.info("Early media session established: {}.", callId);
+				bus.post(new EarlyMediaSessionEstablished(callId));
 			} else {
-				logger.error("Could not process {} response to {} request: dialog is missing!" +
-					response.getStatusCode(), request.getMethod());
+				logger.error("Could not process {} response to {} request: "
+					+ "dialog is missing!" + response.getStatusCode(), request.getMethod());
 				throw new InternalJainSipException("Cannot process successful response "
 					+ "to INVITE: dialog is missing!", null);
 			}
 		}
 	}
+
+//	private void handleUpdateResponse(int statusCode, Response response,
+//			ClientTransaction clientTransaction) {
+//		logger.info("{} response arrived.", statusCode);
+//		Request request = clientTransaction.getRequest();
+//		String callId = ((CallIdHeader) request.getHeader(CallIdHeader.NAME)).getCallId();
+//		Dialog dialog = clientTransaction.getDialog();
+//		if (ResponseClass.SUCCESS == Constants.getResponseClass(statusCode)) {
+//			if (dialog != null) {
+//				boolean sendByeRightAway = false;
+//				if (!sessionManager.performOfferAnswerExchangeStep
+//						(callId, dialog, sessionManager.isSessionOngoing(callId, SessionType.EARLY)
+//							? SessionType.EARLY : SessionType.REGULAR, request, response, null)
+//						&& !sessionManager.isSessionOngoing(callId, SessionType.REGULAR)
+//						&& !sessionManager.isSessionOngoing(callId, SessionType.EARLY)) {
+//					sendByeRightAway = true;
+//				}
+//				logger.info("{} response to {} arrived.", statusCode, RequestMethod.UPDATE);
+//				logger.info("Call updated: {}.", callId);
+//				if (sendByeRightAway) {
+//					sendByeRequest(dialog, true, "Media types negotiation failed.");
+//				}
+//				bus.post(new EstablishedCallStarted(callId, dialog));
+//			} else {
+//				logger.error("Could not process {} response to {} request: dialog is missing!" +
+//					response.getStatusCode(), request.getMethod());
+//				throw new InternalJainSipException("Cannot process successful response "
+//					+ "to INVITE: dialog is missing!", null);
+//			}
+//		}
+//	}
 
 	private boolean doSendRequest(Request request,
 			ClientTransaction clientTransaction, Dialog dialog)
