@@ -26,8 +26,7 @@ import android.javax.sip.message.Response;
 
 public class SessionManager {
 
-	public static final EarlyMediaModel PRIORITARY_EARLY_MEDIA_MODEL
-		= EarlyMediaModel.APPLICATION_SERVER;
+	public static final EarlyMediaModel PRIORITARY_EARLY_MEDIA_MODEL = EarlyMediaModel.GATEWAY;
 
 	public enum EarlyMediaModel {
 		APPLICATION_SERVER, GATEWAY;
@@ -156,23 +155,29 @@ public class SessionManager {
 			if (request != null) {
 				boolean contentDispositionMatters = contentDispositionMatters(request);
 				if (role == SipUserAgentRole.UAC) {
-					return generateOffer(sessionPlugin, callId, SessionType.REGULAR, request,
-						PRIORITARY_EARLY_MEDIA_MODEL != EarlyMediaModel.GATEWAY
-						? true : contentDispositionMatters);
+					return generateOffer(sessionPlugin, callId, SessionType.REGULAR,
+						request, contentDispositionMatters);
+//					CODE BELOW WAS REPLACED BY SNIPPET ABOVE
+//					return generateOffer(sessionPlugin, callId, SessionType.REGULAR, request,
+//						PRIORITARY_EARLY_MEDIA_MODEL != EarlyMediaModel.GATEWAY
+//						? true : contentDispositionMatters);
 				} else {
 					if (finalResponse != null) {
 						return generateOffer(sessionPlugin, callId, SessionType.REGULAR,
 							finalResponse, contentDispositionMatters);
 					} else if (provisionalResponse != null) {
-						boolean regularGenerated = generateOffer(sessionPlugin, callId,
-							SessionType.REGULAR, provisionalResponse,
-							contentDispositionMatters);
-						if (PRIORITARY_EARLY_MEDIA_MODEL != EarlyMediaModel.GATEWAY) {
-							return regularGenerated && generateOffer(sessionPlugin, callId,
-								SessionType.EARLY, provisionalResponse,
-								contentDispositionMatters);
-						}
-						return regularGenerated;
+						return generateOffer(sessionPlugin, callId, SessionType.EARLY,
+							provisionalResponse, contentDispositionMatters);
+//						CODE BELOW WAS REPLACED BY SNIPPET ABOVE
+//						boolean regularGenerated = generateOffer(sessionPlugin, callId,
+//							SessionType.REGULAR, provisionalResponse,
+//							contentDispositionMatters);
+//						if (PRIORITARY_EARLY_MEDIA_MODEL != EarlyMediaModel.GATEWAY) {
+//							return regularGenerated && generateOffer(sessionPlugin, callId,
+//								SessionType.EARLY, provisionalResponse,
+//								contentDispositionMatters);
+//						}
+//						return regularGenerated;
 					}
 				}
 			}
@@ -184,21 +189,24 @@ public class SessionManager {
 					return generateAnswer(sessionPlugin, callId, SessionType.REGULAR,
 						request, finalResponse, contentDispositionMatters);
 				} else if (provisionalResponse != null) {
-					boolean regularGenerated = generateAnswer(sessionPlugin, callId,
-						SessionType.REGULAR, request, provisionalResponse,
-						contentDispositionMatters);
-					if (messageIsMultipart(request)) {
-						if (reqHasEarlySdp) {
-							return regularGenerated && generateAnswer(sessionPlugin,
-								callId, SessionType.EARLY, request,
-								provisionalResponse, contentDispositionMatters);
-						} else {
-							return regularGenerated && generateOffer(sessionPlugin,
-								callId, SessionType.EARLY, provisionalResponse,
-								contentDispositionMatters);
-						}
-					}
-					return regularGenerated;
+					return generateAnswer(sessionPlugin, callId, SessionType.EARLY,
+						request, provisionalResponse, contentDispositionMatters);
+//					CODE BELOW WAS REPLACED BY SNIPPET ABOVE
+//					boolean regularGenerated = generateAnswer(sessionPlugin, callId,
+//						SessionType.REGULAR, request, provisionalResponse,
+//						contentDispositionMatters);
+//					if (messageIsMultipart(request)) {
+//						if (reqHasEarlySdp) {
+//							return regularGenerated && generateAnswer(sessionPlugin,
+//								callId, SessionType.EARLY, request,
+//								provisionalResponse, contentDispositionMatters);
+//						} else {
+//							return regularGenerated && generateOffer(sessionPlugin,
+//								callId, SessionType.EARLY, provisionalResponse,
+//								contentDispositionMatters);
+//						}
+//					}
+//					return regularGenerated;
 				}
 			}
 		} else if (!reqHasSdp && provResHasSdp && !prackHasSdp
@@ -207,15 +215,18 @@ public class SessionManager {
 				boolean contentDispositionMatters = contentDispositionMatters
 					(provisionalResponse);
 				if (prackRequest != null) {
-					boolean regularGenerated = generateAnswer(sessionPlugin, callId,
-						SessionType.REGULAR, provisionalResponse, prackRequest,
-						contentDispositionMatters);
-					if (messageIsMultipart(provisionalResponse) && provResHasEarlySdp) {
-						return regularGenerated && generateAnswer(sessionPlugin, callId,
-							SessionType.EARLY, provisionalResponse, prackRequest,
-							contentDispositionMatters);
-					}
-					return regularGenerated;
+					return generateAnswer(sessionPlugin, callId, SessionType.EARLY,
+						provisionalResponse, prackRequest, contentDispositionMatters);
+//					CODE BELOW WAS REPLACED BY SNIPPET ABOVE
+//					boolean regularGenerated = generateAnswer(sessionPlugin, callId,
+//						SessionType.REGULAR, provisionalResponse, prackRequest,
+//						contentDispositionMatters);
+//					if (messageIsMultipart(provisionalResponse) && provResHasEarlySdp) {
+//						return regularGenerated && generateAnswer(sessionPlugin, callId,
+//							SessionType.EARLY, provisionalResponse, prackRequest,
+//							contentDispositionMatters);
+//					}
+//					return regularGenerated;
 				}
 			}
 		} else if (reqHasSdp && provResHasSdp && !prackHasSdp
@@ -223,84 +234,100 @@ public class SessionManager {
 			if (role == SipUserAgentRole.UAS) {
 				return true;
 			} else {
-				boolean regularReceived = receiveAnswerToAcceptedOffer
-					(sessionPlugin, callId, SessionType.REGULAR, provisionalResponse);
-				if (prackRequest != null && provResHasEarlySdp) {
-					boolean contentDispositionMatters = contentDispositionMatters
-						(provisionalResponse);
-					if (messageIsMultipart(request)) {
-						if (reqHasEarlySdp) {
-							return regularReceived && receiveAnswerToAcceptedOffer
-								(sessionPlugin, callId, SessionType.EARLY,
-									provisionalResponse);
-						} else {
-							return regularReceived && generateAnswer(sessionPlugin,
-								callId, SessionType.EARLY, provisionalResponse,
-								prackRequest, contentDispositionMatters);
-						}
-						
-					}
-				}
-				return regularReceived;
+				return receiveAnswerToAcceptedOffer(sessionPlugin, callId,
+					SessionType.EARLY, provisionalResponse);
+//				CODE BELOW WAS REPLACED BY SNIPPET ABOVE
+//				boolean regularReceived = receiveAnswerToAcceptedOffer
+//					(sessionPlugin, callId, SessionType.REGULAR, provisionalResponse);
+//				if (prackRequest != null && provResHasEarlySdp) {
+//					boolean contentDispositionMatters = contentDispositionMatters
+//						(provisionalResponse);
+//					if (messageIsMultipart(request)) {
+//						if (reqHasEarlySdp) {
+//							return regularReceived && receiveAnswerToAcceptedOffer
+//								(sessionPlugin, callId, SessionType.EARLY,
+//									provisionalResponse);
+//						} else {
+//							return regularReceived && generateAnswer(sessionPlugin,
+//								callId, SessionType.EARLY, provisionalResponse,
+//								prackRequest, contentDispositionMatters);
+//						}
+//					}
+//				}
+//				return regularReceived;
 			}
 		} else if (!reqHasSdp && provResHasSdp && prackHasSdp
 				&& !prackResHasSdp && !resHasSdp && !ackHasSdp) {
 			if (role == SipUserAgentRole.UAC) {
 				return true;
 			} else {
-				boolean regularReceived = receiveAnswerToAcceptedOffer
-					(sessionPlugin, callId, SessionType.REGULAR, prackRequest);
-				if (messageIsMultipart(provisionalResponse) && provResHasEarlySdp) {
-					return regularReceived && receiveAnswerToAcceptedOffer
-						(sessionPlugin, callId, SessionType.EARLY, prackRequest);
-				}
-				return regularReceived;
+				return receiveAnswerToAcceptedOffer(sessionPlugin, callId,
+					SessionType.EARLY, prackRequest);
+//				CODE BELOW WAS REPLACED BY SNIPPET ABOVE
+//				boolean regularReceived = receiveAnswerToAcceptedOffer
+//					(sessionPlugin, callId, SessionType.REGULAR, prackRequest);
+//				if (messageIsMultipart(provisionalResponse) && provResHasEarlySdp) {
+//					return regularReceived && receiveAnswerToAcceptedOffer
+//						(sessionPlugin, callId, SessionType.EARLY, prackRequest);
+//				}
+//				return regularReceived;
 			}
 		} else if (reqHasSdp && provResHasSdp && prackHasSdp
 				&& !prackResHasSdp && !resHasSdp && !ackHasSdp) {
 			if (role == SipUserAgentRole.UAS) {
 				boolean contentDispositionMatters = contentDispositionMatters(prackRequest);
-				if (!reqHasEarlySdp && !provResHasEarlySdp && prackResponse != null) {
-					return generateAnswer(sessionPlugin, callId, SessionType.REGULAR,
+				if (reqHasEarlySdp) {
+					return generateAnswer(sessionPlugin, callId, SessionType.EARLY,
 						prackRequest, prackResponse, contentDispositionMatters);
-				} else if (!reqHasEarlySdp && provResHasEarlySdp) {
-					boolean earlyReceived = receiveAnswerToAcceptedOffer(sessionPlugin,
-						callId, SessionType.EARLY, prackRequest);
-					if (prackHasRegularSdp && prackResponse != null) {
-						return earlyReceived && generateAnswer(sessionPlugin, callId,
-							SessionType.REGULAR, prackRequest, prackResponse,
-							contentDispositionMatters);
-					}
-				} else if (reqHasEarlySdp && provResHasEarlySdp && prackResponse != null) {
-					boolean regularGenerated = true, earlyGenerated = true;
-					if (prackHasRegularSdp) {
-						regularGenerated = generateAnswer(sessionPlugin, callId,
-							SessionType.REGULAR, prackRequest, prackResponse,
-							contentDispositionMatters);
-					}
-					if ((!prackHasRegularSdp || messageIsMultipart
-							(prackRequest)) && prackHasEarlySdp) {
-						earlyGenerated = generateAnswer(sessionPlugin, callId,
-							SessionType.EARLY, prackRequest, prackResponse,
-							contentDispositionMatters);
-					}
-					return regularGenerated && earlyGenerated;
+				} else {
+					return receiveAnswerToAcceptedOffer(sessionPlugin, callId,
+						SessionType.EARLY, prackRequest);
 				}
+//				CODE BELOW WAS REPLACED BY SNIPPET ABOVE FIXME MAKE SURE IT WORKS, THOUGH
+//				if (!reqHasEarlySdp && !provResHasEarlySdp && prackResponse != null) {
+//					return generateAnswer(sessionPlugin, callId, SessionType.REGULAR,
+//						prackRequest, prackResponse, contentDispositionMatters);
+//				} else if (!reqHasEarlySdp && provResHasEarlySdp) {
+//					boolean earlyReceived = receiveAnswerToAcceptedOffer(sessionPlugin,
+//						callId, SessionType.EARLY, prackRequest);
+//					if (prackHasRegularSdp && prackResponse != null) {
+//						return earlyReceived && generateAnswer(sessionPlugin, callId,
+//							SessionType.REGULAR, prackRequest, prackResponse,
+//							contentDispositionMatters);
+//					}
+//				} else if (reqHasEarlySdp && provResHasEarlySdp && prackResponse != null) {
+//					boolean regularGenerated = true, earlyGenerated = true;
+//					if (prackHasRegularSdp) {
+//						regularGenerated = generateAnswer(sessionPlugin, callId,
+//							SessionType.REGULAR, prackRequest, prackResponse,
+//							contentDispositionMatters);
+//					}
+//					if ((!prackHasRegularSdp || messageIsMultipart
+//							(prackRequest)) && prackHasEarlySdp) {
+//						earlyGenerated = generateAnswer(sessionPlugin, callId,
+//							SessionType.EARLY, prackRequest, prackResponse,
+//							contentDispositionMatters);
+//					}
+//					return regularGenerated && earlyGenerated;
+//				}
 			}
 		} else if (reqHasSdp && provResHasSdp && prackHasSdp
 				&& prackResHasSdp && !resHasSdp && !ackHasSdp) {
 			if (role == SipUserAgentRole.UAC) {
-				boolean regularReceived = true, earlyReceived = true;
-				if (prackHasRegularSdp) {
-					regularReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
-						SessionType.REGULAR, prackResponse);
-				}
-				if ((!prackHasRegularSdp || messageIsMultipart
-						(prackRequest)) && prackHasEarlySdp) {
-					earlyReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
-						SessionType.EARLY, prackResponse);
-				}
-				return regularReceived && earlyReceived;
+				return receiveAnswerToAcceptedOffer(sessionPlugin, callId,
+					SessionType.EARLY, prackResponse);
+//				CODE BELOW WAS REPLACED BY SNIPPET ABOVE
+//				boolean regularReceived = true, earlyReceived = true;
+//				if (prackHasRegularSdp) {
+//					regularReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
+//						SessionType.REGULAR, prackResponse);
+//				}
+//				if ((!prackHasRegularSdp || messageIsMultipart
+//						(prackRequest)) && prackHasEarlySdp) {
+//					earlyReceived = receiveAnswerToAcceptedOffer(sessionPlugin, callId,
+//						SessionType.EARLY, prackResponse);
+//				}
+//				return regularReceived && earlyReceived;
 			}
 		} else if (!reqHasSdp && !provResHasSdp && !prackHasSdp
 				&& !prackResHasSdp && resHasSdp && !ackHasSdp) {
@@ -333,6 +360,15 @@ public class SessionManager {
 			if (role == SipUserAgentRole.UAS) {
 				return true;
 			}
+		} else if (reqHasSdp && provResHasSdp && !prackHasSdp
+				&& !prackResHasSdp && resHasSdp && !ackHasSdp) {
+			return true;
+		} else if (reqHasSdp && provResHasSdp && prackHasSdp
+				&& !prackResHasSdp && resHasSdp && !ackHasSdp) {
+			return true;
+		} else if (reqHasSdp && provResHasSdp && prackHasSdp
+				&& prackResHasSdp && resHasSdp && !ackHasSdp) {
+			return true;
 		}
 		return false;
 	}
@@ -358,6 +394,15 @@ public class SessionManager {
 		if (ackRequest != null) {
 			ackStore.put(callId, ackRequest);
 		}
+	}
+
+	public void wipeOfferAnswerExchangeMessages(String callId) {
+		reqStore.put(callId, null);
+		provResStore.put(callId, null);
+		prackStore.put(callId, null);
+		prackResStore.put(callId, null);
+		resStore.put(callId, null);
+		ackStore.put(callId, null);
 	}
 
 	private boolean contentDispositionMatters(Message message) {
@@ -500,42 +545,42 @@ public class SessionManager {
 		return false;
 	}
 
-	private boolean messageIsMultipart(Message message) {
-		ContentTypeHeader contentTypeHeader = null;
-		if (message != null) {
-			contentTypeHeader = (ContentTypeHeader) message
-				.getHeader(ContentTypeHeader.NAME);
-		}
-		if (contentTypeHeader != null && contentTypeHeader.getContentType()
-				.toLowerCase().trim().equals("multipart")
-				&& contentTypeHeader.getContentSubType()
-				.toLowerCase().trim().equals("mixed")) {
-			String boundary = contentTypeHeader.getParameter("boundary");
-			String content = new String(message.getRawContent());
-			String[] sdps = content.substring(boundary.length() + 3, content.length())
-				.replace(boundary + "--", boundary).split("\\s*--" + boundary + "\\s*");
-			int interestingSdpCount = 0;
-			for (String sdpWithHeaders : sdps) {
-				boolean contentIsSession = false;
-				boolean contentIsEarlySession = false;
-				String[] headers = sdpWithHeaders.split("\\n\\n")[0].split("\\n");
-				for (String header : headers) {
-					header = header.trim();
-					String headerKey = header.split(":")[0].trim().toLowerCase();
-					String headerValue = header.split(":")[1].trim().toLowerCase();
-					if (headerKey.equals("content-disposition")) {
-						contentIsSession = headerValue.equals("session");
-						contentIsEarlySession = headerValue.equals("early-session");
-					}
-				}
-				if (contentIsSession || contentIsEarlySession) {
-					interestingSdpCount++;
-				}
-			}
-			return interestingSdpCount > 1;
-		}
-		return false;
-	}
+//	private boolean messageIsMultipart(Message message) {
+//		ContentTypeHeader contentTypeHeader = null;
+//		if (message != null) {
+//			contentTypeHeader = (ContentTypeHeader) message
+//				.getHeader(ContentTypeHeader.NAME);
+//		}
+//		if (contentTypeHeader != null && contentTypeHeader.getContentType()
+//				.toLowerCase().trim().equals("multipart")
+//				&& contentTypeHeader.getContentSubType()
+//				.toLowerCase().trim().equals("mixed")) {
+//			String boundary = contentTypeHeader.getParameter("boundary");
+//			String content = new String(message.getRawContent());
+//			String[] sdps = content.substring(boundary.length() + 3, content.length())
+//				.replace(boundary + "--", boundary).split("\\s*--" + boundary + "\\s*");
+//			int interestingSdpCount = 0;
+//			for (String sdpWithHeaders : sdps) {
+//				boolean contentIsSession = false;
+//				boolean contentIsEarlySession = false;
+//				String[] headers = sdpWithHeaders.split("\\n\\n")[0].split("\\n");
+//				for (String header : headers) {
+//					header = header.trim();
+//					String headerKey = header.split(":")[0].trim().toLowerCase();
+//					String headerValue = header.split(":")[1].trim().toLowerCase();
+//					if (headerKey.equals("content-disposition")) {
+//						contentIsSession = headerValue.equals("session");
+//						contentIsEarlySession = headerValue.equals("early-session");
+//					}
+//				}
+//				if (contentIsSession || contentIsEarlySession) {
+//					interestingSdpCount++;
+//				}
+//			}
+//			return interestingSdpCount > 1;
+//		}
+//		return false;
+//	}
 
 	public boolean messageHasSdp(Message message, boolean withContentDisposition) {
 		boolean messageHasSdp = messageHasSdpOfInterest(message, false, null);
@@ -829,13 +874,13 @@ public class SessionManager {
 				veredict &= performSessionTermination(sessionPlugin, callId, type);
 			}
 		}
-		veredict &= sessionPlugin.performSessionSetup
+		return veredict &= sessionPlugin.performSessionSetup
 			(callId, sessionType, sipUserAgent);
-		if (!veredict && sessionType == SessionType.EARLY) {
-			veredict &= sessionPlugin.performSessionSetup
-				(callId, SessionType.REGULAR, sipUserAgent);
-		}
-		return veredict;
+//		if (!veredict && sessionType == SessionType.EARLY) {
+//			veredict &= sessionPlugin.performSessionSetup
+//				(callId, SessionType.REGULAR, sipUserAgent);
+//		}
+//		return veredict;
 	}
 
 	public static boolean performSessionTermination(SipuadaPlugin sessionPlugin,

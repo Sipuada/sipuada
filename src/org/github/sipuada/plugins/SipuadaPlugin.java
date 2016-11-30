@@ -381,7 +381,8 @@ public abstract class SipuadaPlugin {
 	 */
 	public SessionDescription generateOffer(String callId, SessionType type, String localAddress) {
 		logger.debug("===*** generateOffer -> {}", getSessionKey(callId, type));
-		roles.put(getSessionKey(callId, type),  CallRole.CALLER);
+		roles.put(getSessionKey(callId, SessionType.REGULAR),  CallRole.CALLER);
+		roles.put(getSessionKey(callId, SessionType.EARLY),  CallRole.CALLER);
 		try {
 			Agent iceAgent = createOrFetchExistingAgent
 				(getSessionKey(callId, type), localAddress);
@@ -421,7 +422,15 @@ public abstract class SipuadaPlugin {
 		logger.debug("===*** receiveAnswerToAcceptedOffer -> {}", getSessionKey(callId, type));
 		Record record = records.get(getSessionKey(callId, type));
 		Agent iceAgent = iceAgents.get(getSessionKey(callId, type));
-		SessionDescription offer = record.getOffer();
+		SessionDescription offer = record == null ? null : record.getOffer();
+		if (type == SessionType.EARLY && offer == null) {
+			logger.info("Promoting REGULAR Offer context to EARLY...");
+			record = records.remove(getSessionKey(callId, SessionType.REGULAR));
+			offer = record == null ? null : record.getOffer();
+			records.put(getSessionKey(callId, SessionType.EARLY), record);
+			iceAgent = iceAgents.remove(getSessionKey(callId, SessionType.REGULAR));
+			iceAgents.put(getSessionKey(callId, SessionType.EARLY), iceAgent);
+		}
 		record.setAnswer(answer);
 		logger.info("{} received {} answer {{}} to {} offer {{}} in context of call "
 			+ "invitation {}...", pluginClass, type, answer, type, offer, callId);
@@ -441,7 +450,8 @@ public abstract class SipuadaPlugin {
 	public SessionDescription generateAnswer(String callId, SessionType type,
 			SessionDescription offer, String localAddress) {
 		logger.debug("===*** generateAnswer -> {}", getSessionKey(callId, type));
-        roles.put(getSessionKey(callId, type), CallRole.CALLEE);
+		roles.put(getSessionKey(callId, SessionType.REGULAR),  CallRole.CALLEE);
+		roles.put(getSessionKey(callId, SessionType.EARLY),  CallRole.CALLEE);
         try {
 			Agent iceAgent = createOrFetchExistingAgent
 				(getSessionKey(callId, type), localAddress);
@@ -1525,10 +1535,18 @@ public abstract class SipuadaPlugin {
 			SessionDescription offer = record != null ? record.getOffer() : null;
 			SessionDescription answer = record != null ? record.getAnswer() : null;
 			if (record == null || offer == null || answer == null) {
-				logger.info("^^ {} aborted session setup attempt in context of call {}/{}...\n"
-					+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-					pluginClass, callId, type, roles.get(getSessionKey
-						(callId, type)), offer, answer);
+				CallRole role = roles.get(getSessionKey(callId, type));
+				if (type == SessionType.REGULAR) {
+					if (role == CallRole.CALLEE) {
+						logger.info("^^ {} postponed session setup to issue additional"
+							+ " Offer/Answer exchange in context of call {}/{}...\n"
+							+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
+						pluginClass, type, callId, type, role, offer, answer);
+						userAgent.sendUpdateRequest(callId);
+					}
+					postponedStreams.put(getSessionKey(callId, type), userAgent);
+					return true;
+				}
 				return false;
 			} else if (!preparedStreams.containsKey((getSessionKey(callId, type)))) {
 				logger.info("^^ {} postponed session setup in context of call {}/{}...\n"

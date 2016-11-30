@@ -1104,16 +1104,31 @@ public class SipUserAgent implements SipListener {
 		return false;
 	}
 
-//	private boolean sendUpdateRequest(final String callId, final Dialog dialog, SessionType type,
-//			final BasicRequestCallback callback, String... additionalHeaders) {
-//		synchronized (establishedCalls) {
-//			if (dialog != null && dialog.getCallId().getCallId().equals(callId)) {
-//				return uac.sendUpdateRequest(dialog, type, additionalHeaders);
-//			}
-//		}
-//		logger.error("Cannot send message.\nCall with callId " + "'{}' not found.", callId);
-//		return false;
-//	}
+	public boolean sendUpdateRequest(final String callId, String... additionalHeaders) {
+		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot send update.\nEstablished call with callId " + "'{}' not found.", callId);
+			return false;
+		}
+		synchronized (establishedCalls) {
+			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+			if (calls == null) {
+				logger.error("Cannot send update.\nEstablished call with callId " + "'{}' not found.", callId);
+				return false;
+			}
+			synchronized (calls) {
+				Iterator<Dialog> iterator = calls.iterator();
+				while (iterator.hasNext()) {
+					Dialog dialog = iterator.next();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						return uac.sendUpdateRequest(dialog, additionalHeaders);
+					}
+				}
+			}
+		}
+		logger.error("Cannot send update.\nEstablished call with callId " + "'{}' not found.", callId);
+		return false;
+	}
 
 //	@Subscribe
 //	public void onEvent(SendUpdateEvent event) {

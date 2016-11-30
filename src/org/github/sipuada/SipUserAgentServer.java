@@ -137,9 +137,9 @@ public class SipUserAgentServer {
 					case MESSAGE:
 						handleMessageRequest(request, serverTransaction);
 						break;
-//					case UPDATE:
-//						handleUpdateRequest(request, serverTransaction);
-//						break;
+					case UPDATE:
+						handleUpdateRequest(request, serverTransaction);
+						break;
 					case UNKNOWN:
 					default:
 						throw new RequestCouldNotBeAddressed();
@@ -447,22 +447,22 @@ public class SipUserAgentServer {
 		throw new RequestCouldNotBeAddressed();
 	}
 
-//	private void handleUpdateRequest(Request request, ServerTransaction serverTransaction) {
-//		List<Header> allowHeaders = new ArrayList<>();
-//		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
-//			try {
-//				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
-//				allowHeaders.add(allowHeader);
-//			} catch (ParseException ignore) {
-//				ignore.printStackTrace();
-//			}
-//		}
-//		if (doSendResponse(Response.OK, RequestMethod.UPDATE, request,
-//			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()])) != null) {
-//			return;
-//		}
-//		throw new RequestCouldNotBeAddressed();
-//	}
+	private void handleUpdateRequest(Request request, ServerTransaction serverTransaction) {
+		List<Header> allowHeaders = new ArrayList<>();
+		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
+			try {
+				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
+				allowHeaders.add(allowHeader);
+			} catch (ParseException ignore) {
+				ignore.printStackTrace();
+			}
+		}
+		if (doSendResponse(Response.OK, RequestMethod.UPDATE, request,
+			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()])) != null) {
+			return;
+		}
+		throw new RequestCouldNotBeAddressed();
+	}
 
 	public void processRetransmission(TimeoutEvent retransmissionEvent) {
 		if (retransmissionEvent.isServerTransaction()) {
@@ -716,8 +716,12 @@ public class SipUserAgentServer {
 				+ "expecting to put offer into PrackRes or put answer into PrackRes! $");
 			return sessionManager.performOfferAnswerExchangeStep(callId,
 				null, null, request, response, null, null);
+		} else if (method == RequestMethod.UPDATE) {
+			logger.debug("$ About to perform OFFER/ANSWER exchange step "
+				+ "expecting to put offer into Res or put answer into Res! $");
+			return sessionManager.performOfferAnswerExchangeStep(callId,
+				request, null, null, null, response, null);
 		}
-		//TODO add case for UPDATE requests.
 		return true;
 	}
 
