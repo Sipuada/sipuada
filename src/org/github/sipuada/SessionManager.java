@@ -857,6 +857,12 @@ public class SessionManager {
 		}
 	}
 
+	public boolean isSessionPrepared(String callId, SessionType type) {
+		RequestMethod requestMethod = RequestMethod.INVITE;
+		SipuadaPlugin sessionPlugin = sessionPlugins.get(requestMethod);
+		return sessionPlugin.isSessionPrepared(callId, type);
+	}
+
 	public boolean isSessionOngoing(String callId, SessionType type) {
 		RequestMethod requestMethod = RequestMethod.INVITE;
 		SipuadaPlugin sessionPlugin = sessionPlugins.get(requestMethod);

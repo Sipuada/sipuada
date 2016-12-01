@@ -1130,6 +1130,32 @@ public class SipUserAgent implements SipListener {
 		return false;
 	}
 
+	public boolean sendReinviteRequest(final String callId) {
+		String eventBusSubscriberId = callIdToEventBusSubscriberId.get(callId);
+		if (eventBusSubscriberId == null) {
+			logger.error("Cannot send reinvite.\nEstablished call with callId " + "'{}' not found.", callId);
+			return false;
+		}
+		synchronized (establishedCalls) {
+			List<Dialog> calls = establishedCalls.get(eventBusSubscriberId);
+			if (calls == null) {
+				logger.error("Cannot send reinvite.\nEstablished call with callId " + "'{}' not found.", callId);
+				return false;
+			}
+			synchronized (calls) {
+				Iterator<Dialog> iterator = calls.iterator();
+				while (iterator.hasNext()) {
+					Dialog dialog = iterator.next();
+					if (dialog.getCallId().getCallId().equals(callId)) {
+						return uac.sendReinviteRequest(dialog);
+					}
+				}
+			}
+		}
+		logger.error("Cannot send reinvite.\nEstablished call with callId " + "'{}' not found.", callId);
+		return false;
+	}
+
 //	@Subscribe
 //	public void onEvent(SendUpdateEvent event) {
 //		final String callId = event.getCallId();

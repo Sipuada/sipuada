@@ -457,6 +457,9 @@ public class SipUserAgentServer {
 				ignore.printStackTrace();
 			}
 		}
+		CallIdHeader callIdHeader = serverTransaction.getDialog().getCallId();
+		final String callId = callIdHeader.getCallId();
+		sessionManager.wipeOfferAnswerExchangeMessages(callId);
 		if (doSendResponse(Response.OK, RequestMethod.UPDATE, request,
 			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()])) != null) {
 			return;
@@ -622,9 +625,11 @@ public class SipUserAgentServer {
 //					type = sessionManager.isSessionOngoing(callId, SessionType.EARLY)
 //						? SessionType.EARLY : SessionType.REGULAR;
 //				}
-				logger.debug("$ About to perform OFFER/ANSWER exchange step "
-					+ "expecting to update existing session! $");
-				if (!putOfferOrAnswerIntoResponseIfApplicable
+				if (responseClass == ResponseClass.SUCCESS
+						&& sessionManager.isSessionPrepared(callId, SessionType.REGULAR)) {
+					addSessionPayload = false;
+				}
+				if (addSessionPayload && !putOfferOrAnswerIntoResponseIfApplicable
 						(callId, request, method, response, responseClass)) {
 					final String errorMessage;
 					if (method == RequestMethod.UPDATE) {

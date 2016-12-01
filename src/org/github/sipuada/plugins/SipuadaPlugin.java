@@ -1515,6 +1515,15 @@ public abstract class SipuadaPlugin {
 	 * Checks if there's an ongoing session of given type associated with given callId.
 	 * @return true if plug-in has an ongoing session associated with given callId and type.
 	 */
+	public boolean isSessionPrepared(String callId, SessionType type) {
+		return preparedStreams.containsKey(getSessionKey(callId, type))
+			&& preparedStreams.get(getSessionKey(callId, type)) != null;
+	}
+
+	/**
+	 * Checks if there's an ongoing session of given type associated with given callId.
+	 * @return true if plug-in has an ongoing session associated with given callId and type.
+	 */
 	public boolean isSessionOngoing(String callId, SessionType type) {
 		return startedStreams.containsKey(getSessionKey(callId, type))
 			&& startedStreams.get(getSessionKey(callId, type));
@@ -1541,7 +1550,7 @@ public abstract class SipuadaPlugin {
 						logger.info("^^ {} postponed session setup to issue additional"
 							+ " Offer/Answer exchange in context of call {}/{}...\n"
 							+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-						pluginClass, type, callId, type, role, offer, answer);
+						pluginClass, callId, type, role, offer, answer);
 						userAgent.sendUpdateRequest(callId);
 					}
 					postponedStreams.put(getSessionKey(callId, type), userAgent);
