@@ -1541,34 +1541,37 @@ public abstract class SipuadaPlugin {
 		logger.debug("===*** performSessionSetup -> {}", getSessionKey(callId, type));
 		synchronized (this) {
 			Record record = records.get(getSessionKey(callId, type));
+			CallRole role = roles.get(getSessionKey(callId, type));
 			SessionDescription offer = record != null ? record.getOffer() : null;
 			SessionDescription answer = record != null ? record.getAnswer() : null;
-			if (record == null || offer == null || answer == null) {
-				CallRole role = roles.get(getSessionKey(callId, type));
-				if (type == SessionType.REGULAR) {
-					if (role == CallRole.CALLEE) {
-						logger.info("^^ {} postponed session setup to issue additional"
-							+ " Offer/Answer exchange in context of call {}/{}...\n"
-							+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-						pluginClass, callId, type, role, offer, answer);
-						userAgent.sendUpdateRequest(callId);
-					}
-					postponedStreams.put(getSessionKey(callId, type), userAgent);
-					return true;
+			if (type == SessionType.REGULAR
+					&& postponedStreams.get(getSessionKey(callId, type)) == null) {
+				if (role == CallRole.CALLEE) {
+					logger.info("^^ {} postponed session setup to issue additional"
+						+ " Offer/Answer exchange in context of call {}/{}...\n"
+						+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
+					pluginClass, callId, type, role, offer, answer);
+					userAgent.sendUpdateRequest(callId);
+				} else {
+					logger.info("^^ {} postponed session setup to wait for additional"
+						+ " Offer/Answer exchange in context of call {}/{}...\n"
+						+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
+					pluginClass, callId, type, role, offer, answer);
 				}
+				postponedStreams.put(getSessionKey(callId, type), userAgent);
+				return true;
+			} else if (record == null || offer == null || answer == null) {
 				return false;
 			} else if (!preparedStreams.containsKey((getSessionKey(callId, type)))) {
 				logger.info("^^ {} postponed session setup in context of call {}/{}...\n"
 					+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-					pluginClass, callId, type, roles.get(getSessionKey
-						(callId, type)), offer, answer);
+					pluginClass, callId, type, role, offer, answer);
 				postponedStreams.put(getSessionKey(callId, type), userAgent);
 				return true;
 			}
 			logger.info("^^ {} performing session setup in context of call {}/{}...\n"
 				+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
-				pluginClass, callId, type, roles.get(getSessionKey
-					(callId, type)), offer, answer);
+				pluginClass, callId, type, role, offer, answer);
 			doSetupPreparedStreams(callId, type, preparedStreams);
 			postponedStreams.remove(getSessionKey(callId, type));
 			startedStreams.put(getSessionKey(callId, type), true);

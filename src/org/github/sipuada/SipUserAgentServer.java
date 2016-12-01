@@ -724,8 +724,13 @@ public class SipUserAgentServer {
 		} else if (method == RequestMethod.UPDATE) {
 			logger.debug("$ About to perform OFFER/ANSWER exchange step "
 				+ "expecting to put offer into Res or put answer into Res! $");
-			return sessionManager.performOfferAnswerExchangeStep(callId,
-				request, null, null, null, response, null);
+			if (sessionManager.isSessionOngoing(callId, SessionType.EARLY)) {
+				return sessionManager.performOfferAnswerExchangeStep(callId,
+					request, response, null, null, null, null);
+			} else {
+				return sessionManager.performOfferAnswerExchangeStep(callId,
+					request, null, null, null, response, null);
+			}
 		}
 		return true;
 	}
