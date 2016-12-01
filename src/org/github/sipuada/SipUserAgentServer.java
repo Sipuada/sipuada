@@ -341,8 +341,7 @@ public class SipUserAgentServer {
 	}
 
 	private void handleReinviteRequest(Request request, ServerTransaction serverTransaction) {
-		//FIXME later implement REINVITE as well.
-		throw new RequestCouldNotBeAddressed();
+		handleUpdateRequest(request, serverTransaction);
 	}
 
 	private void handleAckRequest(Request ackRequest, ServerTransaction serverTransaction) {
@@ -448,11 +447,31 @@ public class SipUserAgentServer {
 	}
 
 	private void handleUpdateRequest(Request request, ServerTransaction serverTransaction) {
-		List<Header> allowHeaders = new ArrayList<>();
+		List<Header> additionalHeaders = new ArrayList<>();
+		SipURI contactUri;
+		try {
+			contactUri = addressMaker.createSipURI(username, localIp);
+		} catch (ParseException parseException) {
+			logger.error("Could not properly create the contact URI for {} at {}." +
+				"[username] must be a valid id, [localIp] must be a valid " +
+				"IP address: {}", username, localIp, parseException.getMessage());
+			//No need for caller to wait for remote responses.
+			throw new RequestCouldNotBeAddressed();
+		}
+		contactUri.setPort(localPort);
+		try {
+			contactUri.setTransportParam(transport.toUpperCase());
+			contactUri.setParameter("ob", null);
+		} catch (ParseException ignore) {
+			ignore.printStackTrace();
+		}
+		Address contactAddress = addressMaker.createAddress(contactUri);
+		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
+		additionalHeaders.add(contactHeader);
 		for (RequestMethod method : SipUserAgent.ACCEPTED_METHODS) {
 			try {
 				AllowHeader allowHeader = headerMaker.createAllowHeader(method.toString());
-				allowHeaders.add(allowHeader);
+				additionalHeaders.add(allowHeader);
 			} catch (ParseException ignore) {
 				ignore.printStackTrace();
 			}
@@ -461,7 +480,8 @@ public class SipUserAgentServer {
 		final String callId = callIdHeader.getCallId();
 		sessionManager.wipeOfferAnswerExchangeMessages(callId);
 		if (doSendResponse(Response.OK, RequestMethod.UPDATE, request,
-			serverTransaction, allowHeaders.toArray(new Header[allowHeaders.size()])) != null) {
+				serverTransaction, additionalHeaders.toArray
+				(new Header[additionalHeaders.size()])) != null) {
 			return;
 		}
 		throw new RequestCouldNotBeAddressed();
@@ -497,11 +517,6 @@ public class SipUserAgentServer {
 		}
 		Address contactAddress = addressMaker.createAddress(contactUri);
 		ContactHeader contactHeader = headerMaker.createContactHeader(contactAddress);
-//		try {
-//			contactHeader.setExpires(60);
-//		} catch (ParseException ignore) {
-//			ignore.printStackTrace();
-//		}
 		additionalHeaders.add(contactHeader);
 
 		for (RequestMethod acceptedMethod : SipUserAgent.ACCEPTED_METHODS) {

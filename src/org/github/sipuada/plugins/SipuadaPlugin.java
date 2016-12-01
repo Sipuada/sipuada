@@ -1551,7 +1551,7 @@ public abstract class SipuadaPlugin {
 						+ " Offer/Answer exchange in context of call {}/{}...\n"
 						+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
 					pluginClass, callId, type, role, offer, answer);
-					userAgent.sendUpdateRequest(callId);
+					userAgent.sendReinviteRequest(callId);
 				} else {
 					logger.info("^^ {} postponed session setup to wait for additional"
 						+ " Offer/Answer exchange in context of call {}/{}...\n"
