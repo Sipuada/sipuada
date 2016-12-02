@@ -1198,6 +1198,7 @@ public class SipUserAgentClient {
 				handleUnsupportedExtension(response, clientTransaction);
 				//No method-specific handling is required.
 				return false;
+			case Response.NOT_ACCEPTABLE_HERE:
 			case Response.UNSUPPORTED_MEDIA_TYPE:
 				logger.debug("Performing necessary media types negotiation.");
 				//TODO missing: filtering any media types without languages listed in
@@ -1323,6 +1324,11 @@ public class SipUserAgentClient {
 				}
 				else {
 					bus.post(new CallInvitationFailed(codeAndReason, callId));
+					bus.post(new EstablishedCallFailed(codeAndReason, callId));
+					Dialog dialog = clientTransaction.getDialog();
+					if (dialog != null && dialog.getState() == DialogState.CONFIRMED) {
+						sendByeRequest(clientTransaction.getDialog());
+					}
 				}
 				break;
 			case CANCEL:

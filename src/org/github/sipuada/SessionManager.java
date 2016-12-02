@@ -155,7 +155,7 @@ public class SessionManager {
 			if (request != null) {
 				boolean contentDispositionMatters = contentDispositionMatters(request);
 				if (role == SipUserAgentRole.UAC) {
-					return generateOffer(sessionPlugin, callId, SessionType.REGULAR,
+					return generateOffer(sessionPlugin, callId, SessionType.EARLY,
 						request, contentDispositionMatters);
 //					CODE BELOW WAS REPLACED BY SNIPPET ABOVE
 //					return generateOffer(sessionPlugin, callId, SessionType.REGULAR, request,

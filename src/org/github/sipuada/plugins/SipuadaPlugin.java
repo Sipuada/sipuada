@@ -107,7 +107,9 @@ public abstract class SipuadaPlugin {
 	public enum SessionType {
 
 		REGULAR("session"),
-		EARLY("early-session");
+		EARLY("early-session"),
+		BOTH("session"); //USED ONLY INTERNALLY (AND BY PLUGIN WRITERS)
+						//FOR SPECIFYING CODECS SPECIFIC TO A SESSION TYPE
 
 		private String disposition;
 
@@ -124,9 +126,9 @@ public abstract class SipuadaPlugin {
 	protected enum SupportedMediaType {
 
         AUDIO("audio"),
-        MESSAGE("message"),
-        VIDEO("video"),
-        DATA("data");
+//        MESSAGE("message"),
+//        DATA("data"),
+        VIDEO("video");
 
     	private final String mediaTypeName;
 
@@ -143,12 +145,12 @@ public abstract class SipuadaPlugin {
             throws IllegalArgumentException {
             if (AUDIO.toString().equals(mediaTypeName)) {
             	return AUDIO;
-            } else if (MESSAGE.toString().equals(mediaTypeName)) {
-            	return MESSAGE;
+//            } else if (MESSAGE.toString().equals(mediaTypeName)) {
+//            	return MESSAGE;
+//            } else if (DATA.toString().equals(mediaTypeName)) {
+//            	return DATA;
             } else if (VIDEO.toString().equals(mediaTypeName)) {
             	return VIDEO;
-            } else if (DATA.toString().equals(mediaTypeName)) {
-            	return DATA;
             }
             throw new IllegalArgumentException
         		(mediaTypeName + " is not a currently supported MediaType");
@@ -166,7 +168,9 @@ public abstract class SipuadaPlugin {
 
     	public SupportedMediaType getMediaType();
 
-    	public boolean isEnabled();
+    	public boolean isEnabledByDefault();
+
+    	public SessionType getAllowedSessionType();
 
 	}
 
@@ -176,6 +180,7 @@ public abstract class SipuadaPlugin {
     	private final int type;
     	private final int clockRate;
     	private final SupportedMediaType mediaType;
+    	private final SessionType allowedSessionType;
     	private boolean isEnabled;
 
     	private MediaCodecInstance(SupportedMediaCodec mediaCodec) {
@@ -183,7 +188,8 @@ public abstract class SipuadaPlugin {
     		this.type = mediaCodec.getType();
     		this.clockRate = mediaCodec.getClockRate();
     		this.mediaType = mediaCodec.getMediaType();
-    		this.isEnabled = mediaCodec.isEnabled();
+    		this.allowedSessionType = mediaCodec.getAllowedSessionType();
+    		this.isEnabled = mediaCodec.isEnabledByDefault();
     	}
 
     	public String getEncoding() {
@@ -205,6 +211,10 @@ public abstract class SipuadaPlugin {
     	public SupportedMediaType getMediaType() {
 			return mediaType;
 		}
+
+    	public SessionType getAllowedSessionType() {
+    		return allowedSessionType;
+    	}
 
     	public boolean isEnabled() {
     		return isEnabled;
@@ -246,8 +256,13 @@ public abstract class SipuadaPlugin {
 				}
 
 				@Override
-				public boolean isEnabled() {
-					return availableMediaCodec.isEnabled();
+				public SessionType getAllowedSessionType() {
+					return availableMediaCodec.getAllowedSessionType();
+				}
+
+				@Override
+				public boolean isEnabledByDefault() {
+					return availableMediaCodec.isEnabledByDefault();
 				}
 
 			});
@@ -391,7 +406,7 @@ public abstract class SipuadaPlugin {
 			logger.info("{} generating {} offer {{}} in context of call invitation {}...",
 				pluginClass, type, offer, callId);
 			try {
-				return includeOfferedMediaTypes(offer, iceAgent);
+				return includeOfferedMediaTypes(type, offer, iceAgent);
 			} catch (Throwable anyIssue) {
     			logger.error("{} could not include supported media types into "
 					+ "offer {{}} in context of call invitation {}...",
@@ -430,6 +445,13 @@ public abstract class SipuadaPlugin {
 			records.put(getSessionKey(callId, SessionType.EARLY), record);
 			iceAgent = iceAgents.remove(getSessionKey(callId, SessionType.REGULAR));
 			iceAgents.put(getSessionKey(callId, SessionType.EARLY), iceAgent);
+		} else if (type == SessionType.REGULAR && offer == null) {
+			logger.info("Promoting EARLY Offer context to REGULAR...");
+			record = records.remove(getSessionKey(callId, SessionType.EARLY));
+			offer = record == null ? null : record.getOffer();
+			records.put(getSessionKey(callId, SessionType.REGULAR), record);
+			iceAgent = iceAgents.remove(getSessionKey(callId, SessionType.EARLY));
+			iceAgents.put(getSessionKey(callId, SessionType.REGULAR), iceAgent);
 		}
 		record.setAnswer(answer);
 		logger.info("{} received {} answer {{}} to {} offer {{}} in context of call "
@@ -549,14 +571,14 @@ public abstract class SipuadaPlugin {
 		return sessionNameField;
 	}
 
-	private SessionDescription includeOfferedMediaTypes(SessionDescription offer,
-			Agent iceAgent) throws SdpException {
+	private SessionDescription includeOfferedMediaTypes(SessionType allowedSessionType,
+			SessionDescription offer, Agent iceAgent) throws SdpException {
 		Vector<String> allMediaFormats = new Vector<>();
 		Vector<MediaDescription> mediaDescriptions = new Vector<>();
 		generateOfferMediaDescriptions(SupportedMediaType.AUDIO,
-			allMediaFormats, mediaDescriptions, iceAgent);
+			allowedSessionType, allMediaFormats, mediaDescriptions, iceAgent);
 		generateOfferMediaDescriptions(SupportedMediaType.VIDEO,
-			allMediaFormats, mediaDescriptions, iceAgent);
+			allowedSessionType, allMediaFormats, mediaDescriptions, iceAgent);
 		offer.setMediaDescriptions(mediaDescriptions);
 		IceSdpUtils.initSessionDescription(offer, iceAgent);
 		if (!iceIsLocallySupported) {
@@ -567,7 +589,8 @@ public abstract class SipuadaPlugin {
 		return offer;
 	}
 
-	private void generateOfferMediaDescriptions(SupportedMediaType mediaType, Vector<String> allMediaFormats,
+	private void generateOfferMediaDescriptions(SupportedMediaType mediaType,
+			SessionType allowedSessionType, Vector<String> allMediaFormats,
 			Vector<MediaDescription> mediaDescriptions, Agent iceAgent)
 			throws SdpException {
 		final Set<MediaCodecInstance> mediaCodecs;
@@ -577,7 +600,8 @@ public abstract class SipuadaPlugin {
 			mediaCodecs = audioCodecs;
 		}
 		for (MediaCodecInstance mediaCodec : mediaCodecs) {
-			if (!mediaCodec.isEnabled) {
+			if (!mediaCodec.isEnabled || (mediaCodec.getAllowedSessionType() != SessionType.BOTH
+					&& mediaCodec.getAllowedSessionType() != allowedSessionType)) {
 				continue;
 			}
 			final String codecType = Integer.toString(mediaCodec.getType());
@@ -628,10 +652,10 @@ public abstract class SipuadaPlugin {
 		}
 		Vector<String> allMediaFormats = new Vector<>();
 		Vector<MediaDescription> answerMediaDescriptions = new Vector<>();
-		generateAnswerMediaDescriptions(SupportedMediaType.AUDIO, offerMediaDescriptions,
-			allMediaFormats, answerMediaDescriptions, iceAgent);
-		generateAnswerMediaDescriptions(SupportedMediaType.VIDEO, offerMediaDescriptions,
-			allMediaFormats, answerMediaDescriptions, iceAgent);
+		generateAnswerMediaDescriptions(SupportedMediaType.AUDIO, sessionType,
+			offerMediaDescriptions, allMediaFormats, answerMediaDescriptions, iceAgent);
+		generateAnswerMediaDescriptions(SupportedMediaType.VIDEO, sessionType,
+			offerMediaDescriptions, allMediaFormats, answerMediaDescriptions, iceAgent);
 		if (answerMediaDescriptions.isEmpty()) {
 			return null;
 		}
@@ -653,7 +677,8 @@ public abstract class SipuadaPlugin {
 	}
 
 	@SuppressWarnings("unchecked")
-	private void generateAnswerMediaDescriptions(SupportedMediaType mediaType,
+	private void generateAnswerMediaDescriptions
+			(SupportedMediaType mediaType, SessionType allowedSessionType,
 			Vector<MediaDescription> offerMediaDescriptions, Vector<String> allMediaFormats,
 			Vector<MediaDescription> answerMediaDescriptions, Agent iceAgent) throws SdpException {
 		final Set<MediaCodecInstance> mediaCodecs;
@@ -663,7 +688,8 @@ public abstract class SipuadaPlugin {
 			mediaCodecs = audioCodecs;
 		}
 		for (MediaCodecInstance mediaCodec : mediaCodecs) {
-			if (!mediaCodec.isEnabled) {
+			if (!mediaCodec.isEnabled || (mediaCodec.getAllowedSessionType() != SessionType.BOTH
+					&& mediaCodec.getAllowedSessionType() != allowedSessionType)) {
 				continue;
 			}
 			//TODO remove those 3 lines above, but not before we update

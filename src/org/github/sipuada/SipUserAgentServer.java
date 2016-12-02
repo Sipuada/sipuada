@@ -647,7 +647,8 @@ public class SipUserAgentServer {
 				if (addSessionPayload && !putOfferOrAnswerIntoResponseIfApplicable
 						(callId, request, method, response, responseClass)) {
 					final String errorMessage;
-					if (method == RequestMethod.UPDATE) {
+					if (method == RequestMethod.UPDATE && request.getMethod().toLowerCase()
+							.equals(RequestMethod.UPDATE.toString().toLowerCase())) {
 						statusCode = Response.NOT_ACCEPTABLE_HERE;
 						errorMessage = "Session update failed because media types negotiation"
 							+ " between callee and caller failed.";
@@ -669,7 +670,11 @@ public class SipUserAgentServer {
 					if (method != RequestMethod.UPDATE
 							|| (!sessionManager.isSessionOngoing(callId, SessionType.REGULAR)
 							&& !sessionManager.isSessionOngoing(callId, SessionType.EARLY))) {
-						bus.post(new CallInvitationCanceled(errorMessage, callId, false));
+//						if (sessionManager.isSessionOngoing(callId, SessionType.REGULAR)) {
+							bus.post(new EstablishedCallFailed(errorMessage, callId));
+//						} else {
+							bus.post(new CallInvitationCanceled(errorMessage, callId, false));
+//						}
 					}
 					return null;
 				} else if (method == RequestMethod.PRACK) {
