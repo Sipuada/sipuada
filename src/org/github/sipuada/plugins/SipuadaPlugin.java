@@ -123,7 +123,7 @@ public abstract class SipuadaPlugin {
 
 	}
 
-	protected enum SupportedMediaType {
+	public enum SupportedMediaType {
 
         AUDIO("audio"),
 //        MESSAGE("message"),
@@ -1598,14 +1598,14 @@ public abstract class SipuadaPlugin {
 			logger.info("^^ {} performing session setup in context of call {}/{}...\n"
 				+ "Role: {{}}\nOffer: {{}}\nAnswer: {{}} ^^",
 				pluginClass, callId, type, role, offer, answer);
-			doSetupPreparedStreams(callId, type, preparedStreams);
+			boolean setupOk = doSetupPreparedStreams(callId, type, preparedStreams);
 			postponedStreams.remove(getSessionKey(callId, type));
 			startedStreams.put(getSessionKey(callId, type), true);
-			return true;
+			return setupOk;
 		}
 	}
 
-	protected abstract void doSetupPreparedStreams(String callId, SessionType type,
+	protected abstract boolean doSetupPreparedStreams(String callId, SessionType type,
 		Map<String, Map<MediaCodecInstance, Session>> preparedStreams);
 
 	/**
@@ -1617,11 +1617,12 @@ public abstract class SipuadaPlugin {
 	public synchronized boolean performSessionTermination(String callId, SessionType type) {
 		logger.debug("===*** performSessionTermination -> {}", getSessionKey(callId, type));
 		synchronized (this) {
+			boolean terminationOk = true;
 //			records.remove(getSessionKey(callId, type));
 			if (preparedStreams.get(getSessionKey(callId, type)) != null) {
 				logger.info("^^ {} performing session tear down in context "
 					+ "of call {}/{}... ^^", pluginClass, callId, type);
-				doTerminateStreams(callId, type, preparedStreams);
+				terminationOk = doTerminateStreams(callId, type, preparedStreams);
 //				preparedStreams.remove(getSessionKey(callId, type));
 			} else {
 				logger.info("^^ {} canceled session setup "
@@ -1630,11 +1631,11 @@ public abstract class SipuadaPlugin {
 			}
 			postponedStreams.remove(getSessionKey(callId, type));
 			startedStreams.put(getSessionKey(callId, type), false);
-			return true;
+			return terminationOk;
 		}
 	}
 
-	protected abstract void doTerminateStreams(String callId, SessionType type,
+	protected abstract boolean doTerminateStreams(String callId, SessionType type,
 		Map<String, Map<MediaCodecInstance, Session>> ongoingStreams);
 
 	protected String getSessionKey(String callId, SessionType type) {

@@ -580,7 +580,9 @@ public class SipUserAgentClient {
 				.getNewClientTransaction(request);
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
-			putOfferIntoRequestIfApplicable(callId, request);
+			putOfferIntoRequestIfApplicable(callId, sessionManager
+				.isSessionOngoing(callId, SessionType.EARLY) ?
+				SessionType.EARLY : SessionType.REGULAR, request);
 			new Thread(new Runnable() {
 
 				@Override
@@ -909,7 +911,9 @@ public class SipUserAgentClient {
 			viaHeader.setBranch(clientTransaction.getBranchId());
 			final String callId = callIdHeader.getCallId();
 			if (isDialogCreatingRequest(method)) {
-				putOfferIntoRequestIfApplicable(callId, request);
+				putOfferIntoRequestIfApplicable(callId, dialog != null
+					&& dialog.getState() != DialogState.EARLY ? SessionType.REGULAR
+					: SessionType.EARLY, request);
 			} else if (isPayloadSenderRequest(method, content, contentTypeHeader)) {
 				request.setContent(content, contentTypeHeader);
 			}
@@ -983,12 +987,12 @@ public class SipUserAgentClient {
 		}
 	}
 
-	private void putOfferIntoRequestIfApplicable(String callId, Request request) {
+	private void putOfferIntoRequestIfApplicable(String callId, SessionType type, Request request) {
 		logger.debug("$ About to perform OFFER/ANSWER exchange step "
 			+ "expecting to put offer into Req! $");
 		sessionManager.wipeOfferAnswerExchangeMessages(callId);
 		sessionManager.performOfferAnswerExchangeStep
-			(callId, request, null, null, null, null, null);
+			(callId, type, request, null, null, null, null, null);
 	}
 
 	public boolean sendCancelRequest(final ClientTransaction clientTransaction) {

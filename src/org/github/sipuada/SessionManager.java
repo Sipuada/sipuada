@@ -60,7 +60,14 @@ public class SessionManager {
 	public boolean performOfferAnswerExchangeStep(String callId,
 			Request request, Response provisionalResponse, Request prackRequest,
 			Response prackResponse, Response finalResponse, Request ackRequest) {
+		return performOfferAnswerExchangeStep(callId, null,
+			request, provisionalResponse, prackRequest,
+			prackResponse, finalResponse, ackRequest);
+	}
 
+	public boolean performOfferAnswerExchangeStep(String callId, SessionType type,
+			Request request, Response provisionalResponse, Request prackRequest,
+			Response prackResponse, Response finalResponse, Request ackRequest) {
 		if (request == null) {
 			request = reqStore.get(callId);
 		}
@@ -80,9 +87,9 @@ public class SessionManager {
 			ackRequest = ackStore.get(callId);
 		}
 
-		boolean output = doPerformOfferAnswerExchangeStep(callId,
-			request, provisionalResponse, prackRequest,
-			prackResponse, finalResponse, ackRequest);
+		boolean output = doPerformOfferAnswerExchangeStep
+			(callId, type, request, provisionalResponse, prackRequest,
+				prackResponse, finalResponse, ackRequest);
 
 		recordOfferAnswerExchangeMessages(callId,
 			request, provisionalResponse, prackRequest,
@@ -90,7 +97,7 @@ public class SessionManager {
 		return output;
 	}
 
-	private boolean doPerformOfferAnswerExchangeStep(String callId,
+	private boolean doPerformOfferAnswerExchangeStep(String callId, SessionType type,
 			Request request, Response provisionalResponse, Request prackRequest,
 			Response prackResponse, Response finalResponse, Request ackRequest) {
 
@@ -155,7 +162,8 @@ public class SessionManager {
 			if (request != null) {
 				boolean contentDispositionMatters = contentDispositionMatters(request);
 				if (role == SipUserAgentRole.UAC) {
-					return generateOffer(sessionPlugin, callId, SessionType.EARLY,
+					return generateOffer(sessionPlugin, callId,
+						type != null ? type : SessionType.EARLY,
 						request, contentDispositionMatters);
 //					CODE BELOW WAS REPLACED BY SNIPPET ABOVE
 //					return generateOffer(sessionPlugin, callId, SessionType.REGULAR, request,
