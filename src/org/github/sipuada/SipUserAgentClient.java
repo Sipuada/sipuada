@@ -811,8 +811,15 @@ public class SipUserAgentClient {
 
 	private boolean sendRequest(RequestMethod method, Dialog dialog,
 			String content, ContentTypeHeader contentTypeHeader, Header... additionalHeaders) {
-		URI addresserUri = dialog.getLocalParty().getURI();
-		URI addresseeUri = dialog.getRemoteParty().getURI();
+		URI addresserUri = dialog.getLocalParty() != null
+			? dialog.getLocalParty().getURI() : null;
+		URI addresseeUri = dialog.getRemoteParty() != null
+			? dialog.getRemoteParty().getURI() : null;
+		if (addresserUri == null || addresseeUri == null) {
+			logger.error("Dialog {} contains invalid state so aborted "
+				+ "sending {} request within dialog.", dialog, method);
+			return false;
+		}
 		URI requestUri = (URI) addresseeUri.clone();
 		CallIdHeader callIdHeader = dialog.getCallId();
 		long cseq = dialog.getLocalSeqNumber();
@@ -2181,41 +2188,50 @@ public class SipUserAgentClient {
 		if (dialog != null) {
 			try {
 				logger.info("Sending {} request within a dialog (from {}:{})...", request.getMethod(),
-						localIp, localPort);
+					localIp, localPort);
 				logger.debug("Request Dump:\n{}\n", request);
 				try {
 					dialog.sendRequest(newClientTransaction);
 				} catch (RuntimeException lowLevelStackFailed) {
 					logger.error("{} request within a dialog could not be sent due to a " +
-							"JAINSIP-level failure.", request.getMethod(),
+						"JAINSIP-level failure.", request.getMethod(),
+						lowLevelStackFailed);
+					if (lowLevelStackFailed != null && lowLevelStackFailed
+						.getMessage().contains("The SIP Stack Timer has been stopped")) {
+						return false;
+					} else {
+						throw new InternalJainSipException("Severe JAINSIP-level failure!",
 							lowLevelStackFailed);
-					throw new InternalJainSipException("Severe JAINSIP-level failure!",
-							lowLevelStackFailed);
+					}
 				}
 				//Caller must expect remote responses.
 				return true;
-			}
-			catch (TransactionDoesNotExistException invalidTransaction) {
+			} catch (TransactionDoesNotExistException invalidTransaction) {
 				//A invalid (probably null) client transaction
 				//can't be used to send this request.
 				logger.debug("{} request could not be sent: {}.",
-						request.getMethod(), invalidTransaction.getMessage());
+					request.getMethod(), invalidTransaction.getMessage());
 				//No need for caller to wait for remote responses.
 				return false;
 			}
 		}
 		else {
 			logger.info("Sending {} request (from {}:{})...", request.getMethod(),
-					localIp, localPort);
+				localIp, localPort);
 			logger.debug("Request Dump:\n{}\n", request);
 			try {
 				newClientTransaction.sendRequest();
 			} catch (RuntimeException lowLevelStackFailed) {
 				logger.error("{} request could not be sent due to a " +
-						"JAINSIP-level failure.", request.getMethod(),
+					"JAINSIP-level failure.", request.getMethod(),
+					lowLevelStackFailed);
+				if (lowLevelStackFailed != null && lowLevelStackFailed
+					.getMessage().contains("The SIP Stack Timer has been stopped")) {
+					return false;
+				} else {
+					throw new InternalJainSipException("Severe JAINSIP-level failure!",
 						lowLevelStackFailed);
-				throw new InternalJainSipException("Severe JAINSIP-level failure!",
-						lowLevelStackFailed);
+				}
 			}
 			//Caller must expect remote responses.
 			return true;
