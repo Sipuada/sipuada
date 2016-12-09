@@ -984,18 +984,26 @@ public abstract class SipuadaPlugin {
 												}
 												logger.debug("ICE processing finalized successfully, "
 													+ "preparing stream using best addresses...");
-												CandidatePair rtpPair = rtpComponent.getSelectedPair();
-												TransportAddress rtpTransportAddress = rtpPair
-													.getRemoteCandidate().getTransportAddress();
-												String remoteDataAddress = rtpTransportAddress
-													.getAddress().getHostAddress();
-												int remoteDataPort = rtpTransportAddress.getPort();
-												CandidatePair rtcpPair = rtcpComponent.getSelectedPair();
-												TransportAddress rtcpTransportAddress = rtcpPair
-													.getRemoteCandidate().getTransportAddress();
-												String remoteControlAddress = rtcpTransportAddress
-													.getAddress().getHostAddress();
-												int remoteControlPort = rtcpTransportAddress.getPort();
+												CandidatePair rtpPair = rtpComponent != null
+													? rtpComponent.getSelectedPair() : null;
+												TransportAddress rtpTransportAddress
+													= rtpPair != null && rtpPair.getRemoteCandidate() != null
+													? rtpPair.getRemoteCandidate().getTransportAddress()
+													: null;
+												String remoteDataAddress = rtpTransportAddress != null
+													? rtpTransportAddress.getAddress().getHostAddress() : null;
+												int remoteDataPort = rtpTransportAddress != null
+													? rtpTransportAddress.getPort() : -1;
+												CandidatePair rtcpPair = rtcpComponent != null
+													? rtcpComponent.getSelectedPair() : null;
+												TransportAddress rtcpTransportAddress
+													= rtcpPair != null && rtcpPair.getRemoteCandidate() != null
+													? rtcpPair.getRemoteCandidate().getTransportAddress()
+													: null;
+												String remoteControlAddress = rtcpTransportAddress != null
+													? rtcpTransportAddress.getAddress().getHostAddress() : null;
+												int remoteControlPort = rtcpTransportAddress != null
+													? rtcpTransportAddress.getPort() : -1;
 												iceAgent.removeStateChangeListener(this);
 												cleanUpIceAgent(callId, type, iceAgent,
 													mediaStream, rtpComponent, rtcpComponent);
