@@ -28,8 +28,10 @@ import org.ice4j.ice.LocalCandidate;
 import org.ice4j.ice.RemoteCandidate;
 import org.ice4j.ice.harvest.CandidateHarvester;
 import org.ice4j.ice.harvest.StunCandidateHarvester;
+import org.ice4j.ice.harvest.TurnCandidateHarvester;
 import org.ice4j.ice.sdp.CandidateAttribute;
 import org.ice4j.ice.sdp.IceSdpUtils;
+import org.ice4j.security.LongTermCredential;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -516,7 +518,14 @@ public abstract class SipuadaPlugin {
 	}
 
 	private CandidateHarvester createTurnHarvester() {
-		return null;
+    	try {
+			return new TurnCandidateHarvester(new TransportAddress
+				(InetAddress.getByName("numb.viagenie.ca"), 3478, Transport.UDP),
+				new LongTermCredential("renandiniza@gmail.com", "renan"));
+		} catch (UnknownHostException turnServerUnavailable) {
+			turnServerUnavailable.printStackTrace();
+	    	return null;
+		}
 	}
 
 	private CandidateHarvester createStunHarvester() {
