@@ -10,7 +10,6 @@ import java.util.Map;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
-import org.github.sipuada.SessionManager.SipUserAgentRole;
 import org.github.sipuada.events.CallInvitationArrived;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.EarlyMediaSessionEstablished;
@@ -21,8 +20,10 @@ import org.github.sipuada.events.FinishEstablishedCall;
 import org.github.sipuada.events.MessageReceived;
 import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.RequestCouldNotBeAddressed;
+import org.github.sipuada.plugins.SessionManager;
+import org.github.sipuada.plugins.SessionType;
+import org.github.sipuada.plugins.SipUserAgentRole;
 import org.github.sipuada.plugins.SipuadaPlugin;
-import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

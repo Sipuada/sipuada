@@ -1,6 +1,6 @@
 package org.github.sipuada.events;
 
-import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
+import org.github.sipuada.plugins.SessionType;
 
 import android.javax.sip.Dialog;
 

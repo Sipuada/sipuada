@@ -36,8 +36,9 @@ import org.github.sipuada.events.MessageSent;
 import org.github.sipuada.events.RegistrationFailed;
 import org.github.sipuada.events.RegistrationSuccess;
 import org.github.sipuada.events.UserAgentNominatedForIncomingRequest;
+import org.github.sipuada.plugins.SessionManager;
+import org.github.sipuada.plugins.SessionType;
 import org.github.sipuada.plugins.SipuadaPlugin;
-import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

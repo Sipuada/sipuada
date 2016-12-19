@@ -17,7 +17,6 @@ import java.util.TimerTask;
 
 import org.github.sipuada.Constants.RequestMethod;
 import org.github.sipuada.Constants.ResponseClass;
-import org.github.sipuada.SessionManager.SipUserAgentRole;
 import org.github.sipuada.events.CallInvitationAccepted;
 import org.github.sipuada.events.CallInvitationCanceled;
 import org.github.sipuada.events.CallInvitationDeclined;
@@ -35,8 +34,10 @@ import org.github.sipuada.exceptions.InternalJainSipException;
 import org.github.sipuada.exceptions.ResponseDiscarded;
 import org.github.sipuada.exceptions.ResponsePostponed;
 import org.github.sipuada.exceptions.SipuadaException;
+import org.github.sipuada.plugins.SessionManager;
+import org.github.sipuada.plugins.SessionType;
+import org.github.sipuada.plugins.SipUserAgentRole;
 import org.github.sipuada.plugins.SipuadaPlugin;
-import org.github.sipuada.plugins.SipuadaPlugin.SessionType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
