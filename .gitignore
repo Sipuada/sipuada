@@ -4,15 +4,6 @@
 .mtj.tmp/
 
 # Package Files #
-*.jar
-!/lib/junit-4.11.jar
-!/lib/guava-19.0.jar
-!/lib/weupnp-0.1.4.jar
-!/lib/sdp-api-1.0.jar
-!/lib/slf4j-api-1.7.13.jar
-!/lib/hamcrest-core-1.3.jar
-!/lib/java-sdp-nist-bridge-1.1.jar
-!/lib/jain-sip-ri-ossonly-1.2.98c7f8c-jitsi-oss1.jar
 *.war
 *.ear
 
